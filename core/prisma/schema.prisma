@@ -1,0 +1,146 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  L1_OBSERVER
+  L2_OPERATOR
+  L3_ADMIN
+}
+
+enum EquipmentType {
+  PFSENSE
+  MIKROTIK
+  PROXMOX
+  ZABBIX
+  GENERIC_SNMP
+}
+
+enum IncidentSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  EXPIRED
+  REJECTED
+}
+
+model Operator {
+  id               String            @id @default(uuid())
+  name             String
+  phone            String            @unique // Número WhatsApp formatado (ex: 5511999999999)
+  email            String?           @unique
+  role             Role              @default(L1_OBSERVER)
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  auditLogs        AuditLog[]
+  approvalRequests ApprovalRequest[]
+
+  @@map("operators")
+}
+
+model Equipment {
+  id                   String        @id @default(uuid())
+  name                 String
+  type                 EquipmentType
+  host                 String        // URL ou IP (ex: https://libra-vivo.awecloudsolution.com:8181)
+  port                 Int?
+  // Cofre Criptográfico AES-256-GCM
+  encryptedCredentials String        // JSON cifrado com tokens, senhas ou API keys
+  iv                   String        // Initialization Vector (12 bytes hex)
+  authTag              String        // GCM Authentication Tag (16 bytes hex)
+  status               String        @default("unknown") // online, degraded, offline, unknown
+  lastLatency          Float?
+  lastLossPercent      Float?
+  lastCheck            DateTime?
+  active               Boolean       @default(true)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  incidents            Incident[]
+  backupAudits         BackupAudit[]
+
+  @@map("equipments")
+}
+
+model AuditLog {
+  id         String    @id @default(uuid())
+  operatorId String?
+  operator   Operator? @relation(fields: [operatorId], references: [id], onDelete: SetNull)
+  action     String    // Ex: "CONSULTAR_GATEWAY", "REINICIAR_VM", "AUDITORIA_BACKUP"
+  target     String?   // Ex: "pfSense Matriz", "VM 105"
+  status     String    // SUCCESS, DENIED, FAILED, TIMEOUT
+  source     String    @default("WHATSAPP") // WHATSAPP, WEB_DASHBOARD, CRON, SYSTEM
+  details    Json?     // Metadados técnicos da execução
+  createdAt  DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model Incident {
+  id          String           @id @default(uuid())
+  equipmentId String?
+  equipment   Equipment?       @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  title       String           // Ex: "Gateway WANGW com 100% de perda"
+  severity    IncidentSeverity @default(WARNING)
+  status      IncidentStatus   @default(OPEN)
+  description String
+  rootCause   String?
+  detectedAt  DateTime         @default(now())
+  resolvedAt  DateTime?
+  metadata    Json?
+
+  @@index([status])
+  @@index([detectedAt])
+  @@map("incidents")
+}
+
+model BackupAudit {
+  id            String     @id @default(uuid())
+  equipmentId   String?
+  equipment     Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  storageBucket String     @default("nocagent")
+  backupFile    String     // Nome do arquivo ou caminho no S3
+  sizeBytes     BigInt?    // Tamanho do arquivo em bytes
+  status        String     // SUCCESS, FAILED, MISSING
+  notes         String?
+  verifiedAt    DateTime   @default(now())
+
+  @@index([verifiedAt])
+  @@index([status])
+  @@map("backup_audits")
+}
+
+model ApprovalRequest {
+  id         String         @id @default(uuid())
+  code       String         @unique // Código temporário de 4 dígitos (ex: "4821")
+  action     String         // Ex: "REINICIAR_VM"
+  target     String         // Ex: "VM 105 no Proxmox"
+  payload    Json           // Parâmetros a executar quando aprovado
+  operatorId String?
+  operator   Operator?      @relation(fields: [operatorId], references: [id], onDelete: SetNull)
+  status     ApprovalStatus @default(PENDING)
+  expiresAt  DateTime
+  createdAt  DateTime       @default(now())
+
+  @@index([code])
+  @@index([status])
+  @@map("approval_requests")
+}

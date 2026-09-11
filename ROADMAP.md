@@ -21,23 +21,23 @@ FASE 4: Validação em Staging, Pre-Flight & Produção
 
 ---
 
-## 📌 FASE 0: FUNDAÇÃO DO REPOSITÓRIO & INFRAESTRUTURA
-- [ ] Criar estrutura base do monorepo / módulos limpos em `Wittemberg/nocagent`.
-- [ ] Configurar `.env.example` com todas as chaves (OpenAI/Anthropic, Chatwoot, Traefik, PostgreSQL, Redis, S3).
-- [ ] Elaborar `docker-compose.yml` da stack com labels completas do Traefik para `nocagent.awecloudsolution.com`.
-- [ ] Criar banco de dados `nocagent` no PostgreSQL existente e bucket `nocagent` no Storage S3 existente.
-- [ ] Criar schema inicial Prisma/SQL para persistência de operadores, equipamentos e logs de auditoria.
+## 📌 FASE 0: FUNDAÇÃO DO REPOSITÓRIO & INFRAESTRUTURA ✅
+- [x] Criar estrutura base do monorepo / módulos limpos em `Wittemberg/nocagent` (`core/`, `web/`).
+- [x] Configurar `.env.example` com todas as chaves (OpenAI/Anthropic, Chatwoot, Traefik, PostgreSQL, Redis, S3, Vault).
+- [x] Elaborar `docker-compose.yml` da stack com labels completas do Traefik para `nocagent.awecloudsolution.com`.
+- [x] Criar banco de dados `nocagent` no PostgreSQL existente e bucket `nocagent` no Storage S3 existente.
+- [x] Criar schema inicial Prisma/SQL para persistência de operadores, equipamentos, auditoria e backups.
 
 ---
 
-## 📌 FASE 1: RUNTIME HERMES AGENT & CHATWOOT BRIDGE
-- [ ] Configurar container do Hermes Agent adaptado como serviço central de IA.
-- [ ] Implementar a **Chatwoot Bridge**:
+## 📌 FASE 1: RUNTIME HERMES AGENT & CHATWOOT BRIDGE ✅
+- [x] Configurar container do Hermes Agent adaptado como serviço central de IA (`core/src/agent/hermes.js`).
+- [x] Implementar a **Chatwoot Bridge** (`core/src/chatwoot/bridge.js`):
   - Webhook listener para eventos `message_created` do Chatwoot (Public API).
-  - Client REST para a Account API do Chatwoot (gerenciamento de conversas, envio de mensagens e escalonamento para humano).
-- [ ] Injetar o **System Prompt do NOC-Agent** com as 10 Invariantes Éticas de IA (sem alucinação, sem shell livre).
-- [ ] Configurar canal WhatsApp via Hermes / Chatwoot.
-- [ ] Habilitar o sistema de aprovações Human-in-the-Loop (`approval.py`) para pausar comandos críticos.
+  - Client REST para a Account API do Chatwoot (gerenciamento de conversas e despacho).
+- [x] Injetar o **System Prompt do NOC-Agent** com as 10 Invariantes Éticas de IA (`core/src/agent/prompts.js`).
+- [x] Implementar o Cofre Criptográfico de Credenciais AES-256-GCM (`core/src/security/vault.js`).
+- [x] Habilitar o sistema de aprovações Human-in-the-Loop (`core/src/agent/approvals.js`) com código em 2 etapas.
 
 ---
 
