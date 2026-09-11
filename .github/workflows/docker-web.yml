@@ -5,6 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'web/**'
+      - 'docker-compose.web.yml'
       - '.github/workflows/docker-web.yml'
   workflow_dispatch:
 
@@ -37,12 +38,12 @@ jobs:
           push: true
           tags: ghcr.io/wittemberg/nocagent-web:latest
 
-      - name: Notificar Portainer via Webhook da Stack
+      - name: Notificar Portainer via Webhook da Stack Web
         env:
-          STACK_WEBHOOK: ${{ secrets.PORTAINER_STACK_WEBHOOK_URL }}
-          SERVICE_WEBHOOK: ${{ secrets.PORTAINER_WEB_WEBHOOK_URL }}
+          WEB_WEBHOOK: ${{ secrets.PORTAINER_WEB_WEBHOOK_URL }}
+          LEGACY_STACK_WEBHOOK: ${{ secrets.PORTAINER_STACK_WEBHOOK_URL }}
         run: |
-          WEBHOOK_URL="${STACK_WEBHOOK:-$SERVICE_WEBHOOK}"
+          WEBHOOK_URL="${WEB_WEBHOOK:-$LEGACY_STACK_WEBHOOK}"
           if [ -n "$WEBHOOK_URL" ]; then
             echo "🚀 Disparando webhook do Portainer..."
             RESPONSE=$(curl -sk -w "\nHTTP_STATUS:%{http_code}" -X POST "$WEBHOOK_URL")

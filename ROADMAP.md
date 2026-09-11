@@ -25,13 +25,15 @@ FASE 4: Validação em Staging, Pre-Flight & Produção
 - **API Healthcheck:** `https://nocagent.awecloudsolution.com/api/health` → ✅ `HTTP 200 OK` (Core operacional)
 - **Dashboard Web:** `https://nocagent.awecloudsolution.com` → ✅ `HTTP 200 OK` (Web Nginx operacional com SSL Traefik)
 - **Regra Imutável:** **Zero Dados Fictícios** — todas as telas consom dados 100% reais do banco e das APIs.
+- **Cofre Criptográfico Exclusivo:** Chaves de equipamentos gerenciadas 100% no PostgreSQL com criptografia AES-256-GCM.
+- **Stacks Dedicadas (Portainer):** `docker-compose.core.yml` e `docker-compose.web.yml` para deploys atômicos e zero downtime cruzado.
 
 ---
 
 ## 📌 FASE 0: FUNDAÇÃO DO REPOSITÓRIO & INFRAESTRUTURA ✅ (Deploy Validado)
 - [x] Criar estrutura base do monorepo / módulos limpos em `Wittemberg/nocagent` (`core/`, `web/`).
 - [x] Configurar `.env.example` com todas as chaves (OpenAI/Anthropic, Chatwoot, Traefik, PostgreSQL, Redis, S3, Vault).
-- [x] Elaborar `docker-compose.yml` da stack com labels completas do Traefik para `nocagent.awecloudsolution.com`.
+- [x] Elaborar especificações modulares: `docker-compose.core.yml` e `docker-compose.web.yml` com labels Traefik.
 - [x] Criar banco de dados `nocagent` no PostgreSQL e bucket `nocagent` no Storage S3.
 - [x] Criar schema inicial Prisma com suporte a OpenSSL 3 no Alpine (`binaryTargets = ["native", "linux-musl-openssl-3.0.x"]`).
 - [x] Deploy realizado com sucesso no Portainer da infraestrutura.

@@ -1,0 +1,27 @@
+services:
+  # =================================================================
+  # NOC-AGENT WEB (STACK DEDICADA: nocagent-web)
+  # Painel de Operações de Rede React + Vite + Nginx
+  # =================================================================
+  web:
+    image: ghcr.io/wittemberg/nocagent-web:latest
+    restart: unless-stopped
+    networks:
+      - interna
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.nocagent-web.rule=Host(`nocagent.awecloudsolution.com`)"
+        - "traefik.http.routers.nocagent-web.entrypoints=websecure"
+        - "traefik.http.routers.nocagent-web.tls.certresolver=letsencryptresolver"
+        - "traefik.http.services.nocagent-web.loadbalancer.server.port=80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  interna:
+    external: true
