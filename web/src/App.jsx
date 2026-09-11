@@ -246,7 +246,7 @@ export default function App() {
             </div>
             <div className="hidden sm:flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
               <HardDrive className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-slate-300">Storage S3</span>
+              <span className="text-slate-300">Storage</span>
             </div>
             <div className="flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
               <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
@@ -261,7 +261,7 @@ export default function App() {
             { id: 'overview', label: 'Visão Geral (NOC)', icon: Activity },
             { id: 'chat', label: 'Terminal IA (Chat)', icon: MessageSquare },
             { id: 'vault', label: 'Cofre de Equipamentos', icon: Lock },
-            { id: 'backups', label: 'Auditoria de Backups S3', icon: HardDrive },
+            { id: 'backups', label: 'Auditoria de Backups', icon: HardDrive },
           ].map(tab => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -463,7 +463,7 @@ export default function App() {
                   📡 Testar Conectividade via Chat
                 </button>
                 <button 
-                  onClick={() => { setActiveTab('chat'); setInputMsg('auditar backups de hoje no S3'); }}
+                  onClick={() => { setActiveTab('chat'); setInputMsg('auditar backups recentes dos equipamentos'); }}
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
                 >
                   💾 Consultar Backups via Chat
@@ -773,16 +773,16 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 4: AUDITORIA DE BACKUPS S3 (DADOS REAIS) */}
+        {/* TAB 4: AUDITORIA DE BACKUPS (DADOS REAIS) */}
         {activeTab === 'backups' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base font-semibold text-white flex items-center gap-2">
                   <HardDrive className="w-4 h-4 text-emerald-400" />
-                  Auditoria de Backups e Snapshots no Storage S3
+                  Auditoria e Histórico de Backups
                 </h2>
-                <p className="text-xs text-slate-400">Verificação contínua de rotinas diárias e retenção no bucket S3 `nocagent`.</p>
+                <p className="text-xs text-slate-400">Verificação contínua de rotinas diárias e retenção nos repositórios de storage configurados.</p>
               </div>
               <button 
                 onClick={fetchBackups}
@@ -790,20 +790,20 @@ export default function App() {
                 className="text-xs text-slate-400 hover:text-sky-400 flex items-center gap-1 transition"
               >
                 <RefreshCw className={`w-3 h-3 ${loadingBackups ? 'animate-spin' : ''}`} />
-                Atualizar S3
+                Atualizar Backups
               </button>
             </div>
 
             {loadingBackups ? (
               <div className="p-8 text-center bg-slate-900/40 border border-slate-800 rounded-2xl text-xs text-slate-400">
-                Consultando bucket de backups no S3...
+                Consultando registros de backups nos storages...
               </div>
             ) : backups.length === 0 ? (
               <div className="p-12 text-center bg-slate-900/30 border border-dashed border-slate-800 rounded-2xl">
                 <HardDrive className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-                <h4 className="text-sm font-semibold text-slate-300">Nenhum snapshot catalogado no Storage S3 ainda</h4>
+                <h4 className="text-sm font-semibold text-slate-300">Nenhum snapshot ou backup catalogado ainda</h4>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-                  As rotinas de backup diárias dos nós Proxmox, Mikrotik e pfSense gravarão os metadados de auditoria neste painel.
+                  As rotinas de backup dos equipamentos gerenciados (Mikrotik, pfSense, Proxmox) registrarão os metadados e status de auditoria neste painel.
                 </p>
               </div>
             ) : (
