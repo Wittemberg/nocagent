@@ -67,8 +67,8 @@
 - `[x]` Repositório `Wittemberg/nocagent` criado no GitHub
 - `[x]` GitHub Container Registry (GHCR) habilitado
 - `[x]` Primeira sincronização inicial concluída (`main` sincronizada com sucesso)
-- `[ ]` Webhook da Stack `nocagent-core` no Portainer → `PORTAINER_CORE_WEBHOOK_URL`
-- `[ ]` Webhook da Stack `nocagent-web` no Portainer → `PORTAINER_WEB_WEBHOOK_URL`
+- `[x]` Webhook da Stack `nocagent-core` no Portainer → `PORTAINER_CORE_WEBHOOK_URL`
+- `[x]` Webhook da Stack `nocagent-web` no Portainer → `PORTAINER_WEB_WEBHOOK_URL`
 
 ---
 
