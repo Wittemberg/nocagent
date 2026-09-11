@@ -92,11 +92,117 @@ app.post('/api/chat', async (req, res) => {
 });
 
 /**
- * Status REAL dos Gateways da Rede consultados no pfSense cadastrado no Cofre
+ * Status REAL dos Equipamentos da Rede consultados via Cofre Criptográfico
+ */
+app.get('/api/equipments/status', async (req, res) => {
+  try {
+    const equipments = await prisma.equipment.findMany({
+      where: { active: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (equipments.length === 0) {
+      return res.json({
+        status: 'empty',
+        message: 'Nenhum equipamento cadastrado no cofre.',
+        data: [],
+      });
+    }
+
+    const processed = await Promise.all(
+      equipments.map(async (eq) => {
+        const item = {
+          id: eq.id,
+          name: eq.name,
+          type: eq.type,
+          host: eq.host,
+          port: eq.port,
+          status: eq.status || 'unknown',
+          lastLatency: eq.lastLatency,
+          lastLossPercent: eq.lastLossPercent,
+          lastCheck: eq.lastCheck,
+          subItems: [],
+        };
+
+        // Se for pfSense, consulta status real dos links/gateways via API
+        if (eq.type === 'PFSENSE') {
+          try {
+            const creds = decryptCredentials(eq.encryptedCredentials, eq.iv, eq.authTag);
+            const apiKey = typeof creds === 'object' ? (creds.apiKey || creds.key || creds.token || '') : String(creds);
+
+            if (apiKey) {
+              const targetUrl = eq.host.replace(/\/+$/, '');
+              let gwRes;
+              try {
+                gwRes = await axios.get(`${targetUrl}/api/v2/status/gateways`, {
+                  headers: { 'X-API-Key': apiKey },
+                  timeout: 6000,
+                  httpsAgent,
+                });
+              } catch {
+                gwRes = await axios.get(`${targetUrl}/api/v2/status/gateway`, {
+                  headers: { 'X-API-Key': apiKey },
+                  timeout: 6000,
+                  httpsAgent,
+                });
+              }
+
+              const gws = gwRes.data?.data || [];
+              item.subItems = gws;
+
+              // Calcula médias reais de latência e perda
+              if (gws.length > 0) {
+                const onlineGws = gws.filter(g => g.status === 'online');
+                item.status = onlineGws.length > 0 ? (onlineGws.length === gws.length ? 'online' : 'degraded') : 'offline';
+                const totalDelay = gws.reduce((acc, g) => acc + (parseFloat(g.delay) || 0), 0);
+                const totalLoss = gws.reduce((acc, g) => acc + (parseFloat(g.loss) || 0), 0);
+                item.lastLatency = Math.round((totalDelay / gws.length) * 10) / 10;
+                item.lastLossPercent = Math.round((totalLoss / gws.length) * 10) / 10;
+                item.lastCheck = new Date();
+
+                // Atualiza no banco em background
+                prisma.equipment.update({
+                  where: { id: eq.id },
+                  data: {
+                    status: item.status,
+                    lastLatency: item.lastLatency,
+                    lastLossPercent: item.lastLossPercent,
+                    lastCheck: item.lastCheck,
+                  },
+                }).catch(() => {});
+              }
+            }
+          } catch (err) {
+            console.warn(`Aviso ao consultar pfSense ${eq.name}:`, err.message);
+            item.status = 'offline';
+          }
+        }
+
+        return item;
+      })
+    );
+
+    return res.json({
+      status: 'ok',
+      count: processed.length,
+      data: processed,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Erro ao consultar status dos equipamentos:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Falha ao consultar status dos equipamentos no cofre.',
+      data: [],
+    });
+  }
+});
+
+/**
+ * Status REAL dos Gateways da Rede (Compatibilidade com endpoints legados)
  */
 app.get('/api/gateways', async (req, res) => {
   try {
-    // 1. Busca o primeiro pfSense ativo cadastrado no Cofre Criptográfico
     const pfsense = await prisma.equipment.findFirst({
       where: {
         type: 'PFSENSE',
@@ -106,35 +212,24 @@ app.get('/api/gateways', async (req, res) => {
 
     if (!pfsense) {
       return res.json({
-        status: 'no_equipment',
-        message: 'Nenhum firewall pfSense cadastrado no Cofre de Equipamentos.',
+        status: 'empty',
+        message: 'Nenhum equipamento cadastrado no cofre.',
         data: [],
       });
     }
 
-    // 2. Decifra a credencial estritamente em memória
     let apiKey = '';
     try {
       const creds = decryptCredentials(pfsense.encryptedCredentials, pfsense.iv, pfsense.authTag);
       apiKey = typeof creds === 'object' ? (creds.apiKey || creds.key || creds.token || '') : String(creds);
     } catch (decErr) {
-      console.error(`Erro ao decifrar credenciais do equipamento ${pfsense.name}:`, decErr.message);
       return res.status(500).json({
         status: 'error',
-        message: `Falha ao descriptografar credenciais do equipamento ${pfsense.name} no cofre.`,
+        message: `Falha ao descriptografar credenciais do equipamento ${pfsense.name}.`,
         data: [],
       });
     }
 
-    if (!apiKey) {
-      return res.json({
-        status: 'no_key',
-        message: `Equipamento ${pfsense.name} não possui API Key válida armazenada no cofre.`,
-        data: [],
-      });
-    }
-
-    // 3. Consulta o endpoint oficial do pfSense REST API
     const targetUrl = pfsense.host.replace(/\/+$/, '');
     let response;
     try {
@@ -143,8 +238,7 @@ app.get('/api/gateways', async (req, res) => {
         timeout: 8000,
         httpsAgent,
       });
-    } catch (firstErr) {
-      // Fallback para rota singular caso versão do pacote seja diferente
+    } catch {
       response = await axios.get(`${targetUrl}/api/v2/status/gateway`, {
         headers: { 'X-API-Key': apiKey },
         timeout: 8000,
@@ -153,13 +247,6 @@ app.get('/api/gateways', async (req, res) => {
     }
 
     const gateways = response.data?.data || [];
-
-    // 4. Atualiza timestamp da última verificação no banco
-    prisma.equipment.update({
-      where: { id: pfsense.id },
-      data: { status: 'online', lastCheck: new Date() },
-    }).catch(e => console.warn('Aviso: falha ao atualizar lastCheck:', e.message));
-
     return res.json({
       status: 'ok',
       equipment: {
@@ -171,10 +258,9 @@ app.get('/api/gateways', async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Erro ao consultar pfSense via cofre:', error.message);
     return res.status(502).json({
       status: 'error',
-      message: `Falha na comunicação com o pfSense: ${error.message}`,
+      message: `Falha na comunicação com o equipamento: ${error.message}`,
       data: [],
     });
   }

@@ -71,57 +71,62 @@ async function processMessage({ text, senderPhone, senderName }) {
   // 3. Fallback inteligente local / chamada direta para consultas frequentes
   const normalized = text.toLowerCase();
 
-  // Consulta de Gateways / pfSense
-  if (normalized.includes('link') || normalized.includes('gateway') || normalized.includes('pfsense') || normalized.includes('internet')) {
+  // Consulta geral de Status dos Equipamentos / Links / Rede
+  if (normalized.includes('equipamento') || normalized.includes('status') || normalized.includes('link') || normalized.includes('gateway') || normalized.includes('pfsense') || normalized.includes('rede') || normalized.includes('internet')) {
     try {
-      const pfsense = await prisma.equipment.findFirst({
-        where: { type: 'PFSENSE', active: true },
+      const equipments = await prisma.equipment.findMany({
+        where: { active: true },
+        orderBy: { createdAt: 'desc' },
       });
 
-      if (!pfsense) {
-        return `ℹ️ *Nenhum firewall pfSense cadastrado no Cofre:*\nPara consultar o status de links em tempo real, cadastre o equipamento na aba *Cofre de Equipamentos* no painel web.`;
+      if (equipments.length === 0) {
+        return `ℹ️ *Nenhum equipamento cadastrado no cofre:*\nPara que eu possa monitorar a infraestrutura em tempo real, cadastre os equipamentos (pfSense, Mikrotik, Proxmox, Zabbix) na aba *Cofre de Equipamentos* no painel web.`;
       }
 
-      let apiKey = '';
-      try {
-        const creds = decryptCredentials(pfsense.encryptedCredentials, pfsense.iv, pfsense.authTag);
-        apiKey = typeof creds === 'object' ? (creds.apiKey || creds.key || creds.token || '') : String(creds);
-      } catch (e) {
-        return `⚠️ *Erro de Criptografia:* Falha ao decifrar a chave do ${pfsense.name} no cofre.`;
+      let summary = `📡 *STATUS DOS EQUIPAMENTOS DA REDE*\n\n`;
+
+      for (const eq of equipments) {
+        const icon = eq.status === 'online' ? '🟢' : eq.status === 'degraded' ? '🟡' : '🔴';
+        summary += `${icon} *${eq.name}* (${eq.type})\n`;
+        summary += `• *Host:* \`${eq.host}\`\n`;
+        summary += `• *Status:* ${(eq.status || 'Ativo').toUpperCase()}\n`;
+
+        // Se for pfSense, detalha gateways de internet
+        if (eq.type === 'PFSENSE') {
+          try {
+            const creds = decryptCredentials(eq.encryptedCredentials, eq.iv, eq.authTag);
+            const apiKey = typeof creds === 'object' ? (creds.apiKey || creds.key || creds.token || '') : String(creds);
+            if (apiKey) {
+              const targetUrl = eq.host.replace(/\/+$/, '');
+              let res;
+              try {
+                res = await axios.get(`${targetUrl}/api/v2/status/gateways`, {
+                  headers: { 'X-API-Key': apiKey },
+                  timeout: 5000,
+                  httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }),
+                });
+              } catch {
+                res = await axios.get(`${targetUrl}/api/v2/status/gateway`, {
+                  headers: { 'X-API-Key': apiKey },
+                  timeout: 5000,
+                  httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }),
+                });
+              }
+              const gateways = res.data?.data || [];
+              gateways.forEach((gw) => {
+                const gwIcon = gw.status === 'online' ? '🟢' : '🔴';
+                summary += `  └ ${gwIcon} *${gw.name}:* ${gw.status.toUpperCase()} | RTT: ${gw.delay}ms | Perda: ${gw.loss}%\n`;
+              });
+            }
+          } catch {}
+        }
+        summary += `\n`;
       }
 
-      const targetUrl = pfsense.host.replace(/\/+$/, '');
-      let res;
-      try {
-        res = await axios.get(`${targetUrl}/api/v2/status/gateways`, {
-          headers: { 'X-API-Key': apiKey },
-          timeout: 8000,
-          httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }),
-        });
-      } catch {
-        res = await axios.get(`${targetUrl}/api/v2/status/gateway`, {
-          headers: { 'X-API-Key': apiKey },
-          timeout: 8000,
-          httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }),
-        });
-      }
-
-      const gateways = res.data?.data || [];
-      let summary = `📡 *STATUS DOS LINKS DE INTERNET (${pfsense.name})*\n\n`;
-
-      gateways.forEach((gw) => {
-        const isOnline = gw.status === 'online';
-        const icon = isOnline ? '🟢' : '🔴';
-        summary += `${icon} *${gw.name}*\n`;
-        summary += `• *Status:* ${gw.status.toUpperCase()}\n`;
-        summary += `• *Latência:* ${gw.delay} ms | *Perda:* ${gw.loss}%\n`;
-        summary += `• *IP Monitor:* \`${gw.monitorip || 'N/A'}\`\n\n`;
-      });
-
-      summary += `_Dados obtidos em tempo real via Cofre às ${new Date().toLocaleTimeString('pt-BR')}._`;
+      summary += `_Dados consultados no Cofre às ${new Date().toLocaleTimeString('pt-BR')}._`;
       return summary;
     } catch (err) {
-      return `⚠️ *Erro ao consultar o pfSense:* Não foi possível conectar ao endpoint (${err.message}).`;
+      return `⚠️ *Erro ao consultar status dos equipamentos:* Não foi possível conectar ao cofre (${err.message}).`;
     }
   }
 

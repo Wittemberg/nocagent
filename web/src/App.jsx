@@ -36,11 +36,10 @@ export default function App() {
   const [loadingChat, setLoadingChat] = useState(false);
 
   // Estados de Dados 100% Reais
-  const [gateways, setGateways] = useState([]);
-  const [gatewaysEquipment, setGatewaysEquipment] = useState(null);
-  const [gatewaysNoEquipment, setGatewaysNoEquipment] = useState(false);
-  const [loadingGateways, setLoadingGateways] = useState(true);
-  const [gatewaysError, setGatewaysError] = useState(null);
+  const [equipmentList, setEquipmentList] = useState([]);
+  const [noEquipment, setNoEquipment] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState(true);
+  const [statusError, setStatusError] = useState(null);
 
   const [equipments, setEquipments] = useState([]);
   const [loadingEquipments, setLoadingEquipments] = useState(false);
@@ -62,27 +61,35 @@ export default function App() {
     apiKey: '',
   });
 
-  // Busca dados reais dos Gateways diretamente do pfSense ativo no Cofre
-  const fetchGateways = async () => {
+  // Busca status real de todos os equipamentos cadastrados no Cofre
+  const fetchEquipmentsStatus = async () => {
     setRefreshing(true);
-    setGatewaysError(null);
-    setGatewaysNoEquipment(false);
+    setStatusError(null);
+    setNoEquipment(false);
     try {
-      const res = await axios.get('/api/gateways');
+      const res = await axios.get('/api/equipments/status');
       if (res.data?.status === 'ok') {
-        setGateways(res.data.data || []);
-        setGatewaysEquipment(res.data.equipment || null);
-      } else if (res.data?.status === 'no_equipment') {
-        setGatewaysNoEquipment(true);
-        setGateways([]);
-      } else if (res.data?.status === 'no_key') {
-        setGatewaysError(res.data.message);
-        setGateways([]);
+        const list = res.data.data || [];
+        setEquipmentList(list);
+        setNoEquipment(list.length === 0);
+      } else if (res.data?.status === 'empty') {
+        setNoEquipment(true);
+        setEquipmentList([]);
+      } else {
+        setStatusError(res.data?.message || 'Falha ao consultar status dos equipamentos.');
+        setEquipmentList([]);
       }
     } catch (err) {
-      setGatewaysError(err.response?.data?.message || 'Falha ao conectar com o serviço do pfSense.');
+      try {
+        const fallbackRes = await axios.get('/api/equipments');
+        const eqData = fallbackRes.data?.data || [];
+        setEquipmentList(eqData);
+        setNoEquipment(eqData.length === 0);
+      } catch {
+        setStatusError(err.response?.data?.message || 'Falha ao conectar com o serviço do NOC-Agent.');
+      }
     } finally {
-      setLoadingGateways(false);
+      setLoadingStatus(false);
       setTimeout(() => setRefreshing(false), 500);
     }
   };
@@ -130,7 +137,7 @@ export default function App() {
 
       // Recarrega cofre e gateways
       await fetchEquipments();
-      await fetchGateways();
+      await fetchEquipmentsStatus();
     } catch (err) {
       setSaveError(err.response?.data?.error || 'Erro ao cadastrar equipamento no cofre.');
     } finally {
@@ -147,7 +154,7 @@ export default function App() {
     try {
       await axios.delete(`/api/equipments/${id}`);
       await fetchEquipments();
-      await fetchGateways();
+      await fetchEquipmentsStatus();
     } catch (err) {
       alert(`Falha ao remover: ${err.response?.data?.error || err.message}`);
     }
@@ -167,7 +174,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchGateways();
+    fetchEquipmentsStatus();
   }, []);
 
   useEffect(() => {
@@ -307,31 +314,34 @@ export default function App() {
         {activeTab === 'overview' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                <Radio className="w-4 h-4 text-sky-400" />
-                Status dos Gateways de Internet {gatewaysEquipment ? `• ${gatewaysEquipment.name}` : ''}
-              </h2>
+              <div>
+                <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                  <Radio className="w-4 h-4 text-sky-400" />
+                  Status dos Equipamentos
+                </h2>
+                <p className="text-xs text-slate-400">Visão operacional em tempo real dos ativos de rede gerenciados no Cofre.</p>
+              </div>
               <button 
-                onClick={fetchGateways}
+                onClick={fetchEquipmentsStatus}
                 disabled={refreshing}
-                className="text-xs text-slate-400 hover:text-sky-400 flex items-center gap-1 transition"
+                className="text-xs text-slate-400 hover:text-sky-400 flex items-center gap-1 transition px-3 py-1.5 border border-slate-800 rounded-xl bg-slate-900/60"
               >
                 <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
                 Atualizar Dados
               </button>
             </div>
 
-            {loadingGateways ? (
+            {loadingStatus ? (
               <div className="p-8 text-center bg-slate-900/40 border border-slate-800 rounded-2xl">
                 <RefreshCw className="w-6 h-6 text-sky-400 animate-spin mx-auto mb-2" />
-                <p className="text-xs text-slate-400">Consultando status dos gateways no pfSense via Cofre...</p>
+                <p className="text-xs text-slate-400">Consultando status dos equipamentos via Cofre...</p>
               </div>
-            ) : gatewaysNoEquipment ? (
-              <div className="p-8 rounded-2xl bg-slate-900/40 border border-slate-800 text-center">
+            ) : noEquipment ? (
+              <div className="p-10 rounded-2xl bg-slate-900/40 border border-slate-800 text-center">
                 <ShieldCheck className="w-10 h-10 text-amber-400 mx-auto mb-3" />
-                <h4 className="text-sm font-semibold text-white">Nenhum firewall pfSense cadastrado no Cofre</h4>
+                <h4 className="text-sm font-semibold text-white">Nenhum equipamento cadastrado no cofre.</h4>
                 <p className="text-xs text-slate-400 max-w-md mx-auto mt-1 mb-4">
-                  Para monitorar gateways e links em tempo real, cadastre o pfSense no Cofre de Equipamentos com as credenciais criptografadas em AES-256.
+                  Cadastre seus equipamentos (Mikrotik, pfSense, Proxmox, Zabbix) no Cofre de Equipamentos para habilitar o monitoramento e ações autônomas do NOC-Agent.
                 </p>
                 <button
                   onClick={() => {
@@ -341,71 +351,99 @@ export default function App() {
                   className="px-4 py-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-sky-950/30 transition inline-flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
-                  Cadastrar pfSense no Cofre
+                  Cadastrar Equipamento no Cofre
                 </button>
               </div>
-            ) : gatewaysError ? (
+            ) : statusError ? (
               <div className="p-6 rounded-2xl bg-amber-950/30 border border-amber-800/60 text-amber-200 text-xs flex items-center gap-3">
                 <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
                 <div>
-                  <p className="font-semibold">{gatewaysError}</p>
-                  <p className="text-amber-300/80 mt-0.5">Verifique as credenciais ou a conectividade do equipamento no Cofre.</p>
+                  <p className="font-semibold">{statusError}</p>
+                  <p className="text-amber-300/80 mt-0.5">Verifique a conectividade com o banco ou com os equipamentos no Cofre.</p>
                 </div>
               </div>
-            ) : gateways.length === 0 ? (
+            ) : equipmentList.length === 0 ? (
               <div className="p-8 text-center bg-slate-900/40 border border-slate-800 rounded-2xl text-xs text-slate-400">
-                Nenhum gateway retornado pelo pfSense.
+                Nenhum equipamento retornado pelo cofre.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {gateways.map(gw => {
-                  const isOnline = gw.status === 'online';
+                {equipmentList.map(eq => {
+                  const isOnline = eq.status === 'online';
+                  const isDegraded = eq.status === 'degraded';
+                  const borderClass = isOnline 
+                    ? 'border-emerald-900/60 hover:border-emerald-700/80 shadow-lg shadow-emerald-950/20' 
+                    : isDegraded 
+                    ? 'border-amber-900/60 hover:border-amber-700/80 shadow-lg shadow-amber-950/20' 
+                    : 'border-red-900/60 hover:border-red-700/80 shadow-lg shadow-red-950/20';
+                  const badgeClass = isOnline 
+                    ? 'bg-emerald-950 text-emerald-400 border-emerald-800' 
+                    : isDegraded 
+                    ? 'bg-amber-950 text-amber-400 border-amber-800' 
+                    : 'bg-red-950 text-red-400 border-red-800';
+                  const dotClass = isOnline ? 'bg-emerald-400 animate-pulse' : isDegraded ? 'bg-amber-400 animate-pulse' : 'bg-red-500';
+
                   return (
                     <div 
-                      key={gw.id} 
-                      className={`p-5 rounded-2xl border transition-all duration-300 ${
-                        isOnline 
-                          ? 'bg-slate-900/70 border-emerald-900/60 hover:border-emerald-700/80 shadow-lg shadow-emerald-950/20' 
-                          : 'bg-slate-900/70 border-red-900/60 hover:border-red-700/80 shadow-lg shadow-red-950/20'
-                      }`}
+                      key={eq.id} 
+                      className={`p-5 rounded-2xl border bg-slate-900/70 transition-all duration-300 ${borderClass}`}
                     >
-                      <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
-                          <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-red-500'}`} />
-                          <h3 className="font-bold text-lg text-white">{gw.name}</h3>
+                          <div className={`w-3 h-3 rounded-full ${dotClass}`} />
+                          <h3 className="font-bold text-lg text-white">{eq.name}</h3>
                         </div>
-                        <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${
-                          isOnline ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-red-950 text-red-400 border border-red-800'
-                        }`}>
-                          {gw.status}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 text-xs bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 mb-3">
-                        <div>
-                          <span className="text-slate-400 block">IP da Interface:</span>
-                          <span className="font-mono text-slate-200 font-semibold">{gw.srcip || 'N/A'}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block">IP de Teste (Monitor):</span>
-                          <span className="font-mono text-slate-200 font-semibold">{gw.monitorip || 'N/A'}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-mono bg-slate-800 text-sky-400 border border-slate-700">
+                            {eq.type}
+                          </span>
+                          <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider border ${badgeClass}`}>
+                            {eq.status}
+                          </span>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4 pt-1">
+                      <div className="text-xs bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 mb-3 font-mono text-slate-300 truncate">
+                        <span className="text-slate-500 block text-[11px]">Endpoint / Host:</span>
+                        {eq.host}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 pt-1 mb-2">
                         <div>
-                          <span className="text-xs text-slate-400">Latência (RTT):</span>
+                          <span className="text-xs text-slate-400">Latência Média (RTT):</span>
                           <p className={`text-xl font-mono font-bold ${isOnline ? 'text-emerald-400' : 'text-slate-500'}`}>
-                            {gw.delay > 0 ? `${gw.delay} ms` : '—'}
+                            {eq.lastLatency != null && eq.lastLatency > 0 ? `${eq.lastLatency} ms` : '—'}
                           </p>
                         </div>
                         <div>
                           <span className="text-xs text-slate-400">Perda de Pacotes:</span>
-                          <p className={`text-xl font-mono font-bold ${gw.loss === 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {gw.loss}%
+                          <p className={`text-xl font-mono font-bold ${eq.lastLossPercent === 0 ? 'text-emerald-400' : eq.lastLossPercent > 0 ? 'text-red-400' : 'text-slate-500'}`}>
+                            {eq.lastLossPercent != null ? `${eq.lastLossPercent}%` : '0%'}
                           </p>
                         </div>
                       </div>
+
+                      {eq.subItems && eq.subItems.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-slate-800 space-y-2">
+                          <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Links / Gateways Monitorados:</span>
+                          <div className="space-y-1.5">
+                            {eq.subItems.map((sub, idx) => (
+                              <div key={idx} className="flex items-center justify-between text-xs bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/60">
+                                <div className="flex items-center gap-2">
+                                  <span className={`w-2 h-2 rounded-full ${sub.status === 'online' ? 'bg-emerald-400' : 'bg-red-500'}`} />
+                                  <span className="font-semibold text-white">{sub.name}</span>
+                                  <span className="text-slate-500 text-[11px]">({sub.srcip || sub.monitorip || 'WAN'})</span>
+                                </div>
+                                <div className="flex items-center gap-3 font-mono text-[11px]">
+                                  <span className={sub.status === 'online' ? 'text-emerald-400' : 'text-red-400'}>{sub.status.toUpperCase()}</span>
+                                  <span className="text-slate-400">{sub.delay}ms</span>
+                                  <span className={sub.loss === 0 ? 'text-slate-400' : 'text-red-400'}>{sub.loss}% perda</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
