@@ -4,21 +4,31 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96 bits recomendado para GCM
 
 /**
- * Obtém a chave mestra de 32 bytes a partir da variável de ambiente VAULT_MASTER_KEY
+ * Obtém a chave mestra de 32 bytes (256 bits) a partir da variável de ambiente VAULT_MASTER_KEY.
+ * Garante compatibilidade estrita com chaves hexadecimais, UTF-8 diretas ou passphrases.
  */
 function getMasterKey() {
-  const masterKeyHex = process.env.VAULT_MASTER_KEY;
-  if (!masterKeyHex) {
+  const rawKey = (process.env.VAULT_MASTER_KEY || '').trim().replace(/^["']|["']$/g, '');
+  if (!rawKey) {
     throw new Error('FATAL: VAULT_MASTER_KEY não configurada no ambiente. O cofre não pode operar sem chave mestra.');
   }
 
-  // Se a chave estiver em hex (64 chars), converte para buffer de 32 bytes
-  if (masterKeyHex.length === 64) {
-    return Buffer.from(masterKeyHex, 'hex');
+  // Se for uma sequência de 64 caracteres hexadecimais válidos
+  if (/^[0-9a-fA-F]{64}$/.test(rawKey)) {
+    const hexBuf = Buffer.from(rawKey, 'hex');
+    if (hexBuf.length === 32) {
+      return hexBuf;
+    }
   }
 
-  // Fallback: deriva 32 bytes via SHA-256 se for uma string arbitrária
-  return crypto.createHash('sha256').update(masterKeyHex).digest();
+  // Se já for uma string UTF-8 de exatamente 32 bytes
+  const utf8Buf = Buffer.from(rawKey, 'utf8');
+  if (utf8Buf.length === 32) {
+    return utf8Buf;
+  }
+
+  // Fallback universal e determinístico: deriva 32 bytes exatos (256 bits) via SHA-256
+  return crypto.createHash('sha256').update(rawKey, 'utf8').digest();
 }
 
 /**

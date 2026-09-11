@@ -56,6 +56,34 @@ model Operator {
   @@map("operators")
 }
 
+enum StorageType {
+  S3_COMPATIBLE   // MinIO, AWS S3, Wasabi, Cloudflare R2, Backblaze B2
+  SFTP            // Servidor Linux / NAS via SFTP
+  LOCAL_NFS       // Diretório montado / NFS
+}
+
+model Storage {
+  id                   String        @id @default(uuid())
+  name                 String        // Ex: "MinIO Local", "Wasabi Offsite", "NAS Matriz"
+  type                 StorageType   @default(S3_COMPATIBLE)
+  endpoint             String        // Ex: "https://minio.awecloudsolution.com" ou "sftp.empresa.com"
+  bucketOrPath         String        // Ex: "nocagent-backups" ou "/var/backups"
+  region               String?       @default("us-east-1")
+  // Cofre Criptográfico AES-256-GCM para credenciais do Storage
+  encryptedCredentials String
+  iv                   String
+  authTag              String
+  isDefault            Boolean       @default(false)
+  active               Boolean       @default(true)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  equipments           Equipment[]
+  backupAudits         BackupAudit[]
+
+  @@map("storages")
+}
+
 model Equipment {
   id                   String        @id @default(uuid())
   name                 String
@@ -71,6 +99,12 @@ model Equipment {
   lastLossPercent      Float?
   lastCheck            DateTime?
   active               Boolean       @default(true)
+  
+  // Vínculo com Storage de Destino para Backups
+  backupStorageId      String?
+  backupStorage        Storage?      @relation(fields: [backupStorageId], references: [id], onDelete: SetNull)
+  backupSchedule       String?       @default("DAILY") // DAILY, WEEKLY, MANUAL
+
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
   incidents            Incident[]
@@ -117,8 +151,10 @@ model BackupAudit {
   id            String     @id @default(uuid())
   equipmentId   String?
   equipment     Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  storageId     String?
+  storage       Storage?   @relation(fields: [storageId], references: [id], onDelete: SetNull)
   storageBucket String     @default("nocagent")
-  backupFile    String     // Nome do arquivo ou caminho no S3
+  backupFile    String     // Nome do arquivo ou caminho no Storage
   sizeBytes     BigInt?    // Tamanho do arquivo em bytes
   status        String     // SUCCESS, FAILED, MISSING
   notes         String?
