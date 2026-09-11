@@ -212,8 +212,10 @@ export default function App() {
     }
   };
 
-  // Identifica se há gateways caídos no momento
-  const downGateways = gateways.filter(gw => gw.status !== 'online');
+  // Identifica se há equipamentos ou itens monitorados caídos/degradados no momento
+  const downEquipments = Array.isArray(equipmentList)
+    ? equipmentList.filter(eq => eq.status === 'offline' || eq.status === 'error' || (eq.lastLossPercent != null && eq.lastLossPercent > 0))
+    : [];
 
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col font-sans">
@@ -284,7 +286,7 @@ export default function App() {
       {/* CONTEÚDO PRINCIPAL */}
       <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
         {/* BANNER DINÂMICO DE INCIDENTES (APENAS SE HOUVER QUEDA REAL) */}
-        {downGateways.length > 0 && (
+        {downEquipments.length > 0 && (
           <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-red-950/60 to-slate-900 border border-red-900/80 flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
               <div className="p-2 rounded-lg bg-red-900/50 text-red-400 border border-red-700/50">
@@ -292,15 +294,15 @@ export default function App() {
               </div>
               <div>
                 <h3 className="font-semibold text-red-200 text-sm">
-                  🚨 INCIDENTE REAL ATIVO: {downGateways.map(g => g.name).join(', ')} com Perda de Pacotes
+                  🚨 INCIDENTE REAL ATIVO: {downEquipments.map(e => e.name).join(', ')}
                 </h3>
                 <p className="text-xs text-red-300/80 mt-0.5">
-                  {downGateways.map(g => `Gateway ${g.name} (${g.srcip}) monitorando ${g.monitorip} está com ${g.loss}% de perda.`).join(' • ')}
+                  {downEquipments.map(e => `Equipamento ${e.name} (${e.host || e.type}) status: ${e.status || 'indisponível'}${e.lastLossPercent != null ? ` com ${e.lastLossPercent}% de perda` : ''}.`).join(' • ')}
                 </p>
               </div>
             </div>
             <button 
-              onClick={fetchGateways}
+              onClick={fetchEquipmentsStatus}
               disabled={refreshing}
               className="px-3 py-1.5 rounded-lg bg-red-900/40 hover:bg-red-900/70 border border-red-700/60 text-xs font-medium text-red-200 flex items-center gap-1.5 transition"
             >
@@ -435,9 +437,9 @@ export default function App() {
                                   <span className="text-slate-500 text-[11px]">({sub.srcip || sub.monitorip || 'WAN'})</span>
                                 </div>
                                 <div className="flex items-center gap-3 font-mono text-[11px]">
-                                  <span className={sub.status === 'online' ? 'text-emerald-400' : 'text-red-400'}>{sub.status.toUpperCase()}</span>
-                                  <span className="text-slate-400">{sub.delay}ms</span>
-                                  <span className={sub.loss === 0 ? 'text-slate-400' : 'text-red-400'}>{sub.loss}% perda</span>
+                                  <span className={sub.status === 'online' ? 'text-emerald-400' : 'text-red-400'}>{(sub.status || 'UNKNOWN').toUpperCase()}</span>
+                                  <span className="text-slate-400">{sub.delay ?? 0}ms</span>
+                                  <span className={sub.loss === 0 ? 'text-slate-400' : 'text-red-400'}>{sub.loss ?? 0}% perda</span>
                                 </div>
                               </div>
                             ))}
