@@ -14,7 +14,12 @@ import {
   Radio,
   Clock,
   RefreshCw,
-  Info
+  Info,
+  Plus,
+  Trash2,
+  Key,
+  X,
+  AlertCircle
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -32,6 +37,8 @@ export default function App() {
 
   // Estados de Dados 100% Reais
   const [gateways, setGateways] = useState([]);
+  const [gatewaysEquipment, setGatewaysEquipment] = useState(null);
+  const [gatewaysNoEquipment, setGatewaysNoEquipment] = useState(false);
   const [loadingGateways, setLoadingGateways] = useState(true);
   const [gatewaysError, setGatewaysError] = useState(null);
 
@@ -43,16 +50,33 @@ export default function App() {
 
   const [refreshing, setRefreshing] = useState(false);
 
-  // Busca dados reais dos Gateways
+  // Modal de Cadastro no Cofre
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [savingEquipment, setSavingEquipment] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [newEquipment, setNewEquipment] = useState({
+    name: '',
+    type: 'PFSENSE',
+    host: 'https://libra-vivo.awecloudsolution.com:8181',
+    port: '',
+    apiKey: '',
+  });
+
+  // Busca dados reais dos Gateways diretamente do pfSense ativo no Cofre
   const fetchGateways = async () => {
     setRefreshing(true);
     setGatewaysError(null);
+    setGatewaysNoEquipment(false);
     try {
       const res = await axios.get('/api/gateways');
       if (res.data?.status === 'ok') {
         setGateways(res.data.data || []);
-      } else if (res.data?.status === 'unconfigured') {
-        setGatewaysError(res.data.message || 'PFSENSE_API_KEY não configurada.');
+        setGatewaysEquipment(res.data.equipment || null);
+      } else if (res.data?.status === 'no_equipment') {
+        setGatewaysNoEquipment(true);
+        setGateways([]);
+      } else if (res.data?.status === 'no_key') {
+        setGatewaysError(res.data.message);
         setGateways([]);
       }
     } catch (err) {
@@ -73,6 +97,59 @@ export default function App() {
       console.error('Erro ao buscar equipamentos:', err);
     } finally {
       setLoadingEquipments(false);
+    }
+  };
+
+  // Cria novo equipamento no Cofre (AES-256-GCM)
+  const handleCreateEquipment = async (e) => {
+    e.preventDefault();
+    if (!newEquipment.name || !newEquipment.host || !newEquipment.apiKey) {
+      setSaveError('Preencha todos os campos obrigatórios (Nome, Host e Chave/Credencial).');
+      return;
+    }
+
+    setSavingEquipment(true);
+    setSaveError(null);
+    try {
+      await axios.post('/api/equipments', {
+        name: newEquipment.name,
+        type: newEquipment.type,
+        host: newEquipment.host,
+        port: newEquipment.port ? parseInt(newEquipment.port, 10) : null,
+        credentials: { apiKey: newEquipment.apiKey.trim() },
+      });
+
+      setIsModalOpen(false);
+      setNewEquipment({
+        name: '',
+        type: 'PFSENSE',
+        host: 'https://libra-vivo.awecloudsolution.com:8181',
+        port: '',
+        apiKey: '',
+      });
+
+      // Recarrega cofre e gateways
+      await fetchEquipments();
+      await fetchGateways();
+    } catch (err) {
+      setSaveError(err.response?.data?.error || 'Erro ao cadastrar equipamento no cofre.');
+    } finally {
+      setSavingEquipment(false);
+    }
+  };
+
+  // Remove equipamento do Cofre
+  const handleDeleteEquipment = async (id, name) => {
+    if (!window.confirm(`Deseja realmente remover o equipamento "${name}" do cofre criptográfico?`)) {
+      return;
+    }
+
+    try {
+      await axios.delete(`/api/equipments/${id}`);
+      await fetchEquipments();
+      await fetchGateways();
+    } catch (err) {
+      alert(`Falha ao remover: ${err.response?.data?.error || err.message}`);
     }
   };
 
@@ -232,7 +309,7 @@ export default function App() {
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-white flex items-center gap-2">
                 <Radio className="w-4 h-4 text-sky-400" />
-                Status dos Gateways de Internet (pfSense Oficial)
+                Status dos Gateways de Internet {gatewaysEquipment ? `• ${gatewaysEquipment.name}` : ''}
               </h2>
               <button 
                 onClick={fetchGateways}
@@ -247,14 +324,32 @@ export default function App() {
             {loadingGateways ? (
               <div className="p-8 text-center bg-slate-900/40 border border-slate-800 rounded-2xl">
                 <RefreshCw className="w-6 h-6 text-sky-400 animate-spin mx-auto mb-2" />
-                <p className="text-xs text-slate-400">Consultando status dos gateways no pfSense via REST API...</p>
+                <p className="text-xs text-slate-400">Consultando status dos gateways no pfSense via Cofre...</p>
+              </div>
+            ) : gatewaysNoEquipment ? (
+              <div className="p-8 rounded-2xl bg-slate-900/40 border border-slate-800 text-center">
+                <ShieldCheck className="w-10 h-10 text-amber-400 mx-auto mb-3" />
+                <h4 className="text-sm font-semibold text-white">Nenhum firewall pfSense cadastrado no Cofre</h4>
+                <p className="text-xs text-slate-400 max-w-md mx-auto mt-1 mb-4">
+                  Para monitorar gateways e links em tempo real, cadastre o pfSense no Cofre de Equipamentos com as credenciais criptografadas em AES-256.
+                </p>
+                <button
+                  onClick={() => {
+                    setActiveTab('vault');
+                    setIsModalOpen(true);
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-sky-950/30 transition inline-flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Cadastrar pfSense no Cofre
+                </button>
               </div>
             ) : gatewaysError ? (
               <div className="p-6 rounded-2xl bg-amber-950/30 border border-amber-800/60 text-amber-200 text-xs flex items-center gap-3">
-                <Info className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
                 <div>
                   <p className="font-semibold">{gatewaysError}</p>
-                  <p className="text-amber-300/80 mt-0.5">Certifique-se de que a variável PFSENSE_API_KEY está configurada no .env do servidor.</p>
+                  <p className="text-amber-300/80 mt-0.5">Verifique as credenciais ou a conectividade do equipamento no Cofre.</p>
                 </div>
               </div>
             ) : gateways.length === 0 ? (
@@ -408,22 +503,34 @@ export default function App() {
         {/* TAB 3: COFRE DE EQUIPAMENTOS (DADOS REAIS DO BANCO) */}
         {activeTab === 'vault' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
                 <h2 className="text-base font-semibold text-white flex items-center gap-2">
                   <Lock className="w-4 h-4 text-amber-400" />
                   Cofre Criptográfico de Equipamentos
                 </h2>
-                <p className="text-xs text-slate-400">Tokens e senhas protegidos com padrão AES-256-GCM. Dados reais gravados no banco PostgreSQL.</p>
+                <p className="text-xs text-slate-400">Tokens e chaves protegidos com AES-256-GCM no PostgreSQL. Nenhuma credencial trafega desprotegida.</p>
               </div>
-              <button 
-                onClick={fetchEquipments}
-                disabled={loadingEquipments}
-                className="text-xs text-slate-400 hover:text-sky-400 flex items-center gap-1 transition"
-              >
-                <RefreshCw className={`w-3 h-3 ${loadingEquipments ? 'animate-spin' : ''}`} />
-                Atualizar Cofre
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    setSaveError(null);
+                    setIsModalOpen(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-sky-950/20 transition flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Novo Equipamento
+                </button>
+                <button 
+                  onClick={fetchEquipments}
+                  disabled={loadingEquipments}
+                  className="text-xs text-slate-400 hover:text-sky-400 flex items-center gap-1 transition px-2.5 py-1.5 border border-slate-800 rounded-xl bg-slate-900/60"
+                >
+                  <RefreshCw className={`w-3 h-3 ${loadingEquipments ? 'animate-spin' : ''}`} />
+                  Atualizar
+                </button>
+              </div>
             </div>
 
             {loadingEquipments ? (
@@ -434,9 +541,19 @@ export default function App() {
               <div className="p-12 text-center bg-slate-900/30 border border-dashed border-slate-800 rounded-2xl">
                 <Lock className="w-8 h-8 text-slate-600 mx-auto mb-3" />
                 <h4 className="text-sm font-semibold text-slate-300">Nenhum equipamento cadastrado no cofre ainda</h4>
-                <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-                  Os equipamentos cadastrados pelo painel ou sincronizados via drivers aparecerão aqui de forma protegida com criptografia militar.
+                <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-4">
+                  Cadastre seu firewall pfSense, roteador Mikrotik ou nó Proxmox. As credenciais serão armazenadas com criptografia AES-256-GCM no PostgreSQL.
                 </p>
+                <button
+                  onClick={() => {
+                    setSaveError(null);
+                    setIsModalOpen(true);
+                  }}
+                  className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold transition inline-flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  Cadastrar Primeiro Equipamento
+                </button>
               </div>
             ) : (
               <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl">
@@ -446,21 +563,36 @@ export default function App() {
                       <th className="px-5 py-3.5">Equipamento</th>
                       <th className="px-5 py-3.5">Driver / Tipo</th>
                       <th className="px-5 py-3.5">Host / Endpoint</th>
-                      <th className="px-5 py-3.5">Credencial no Cofre</th>
+                      <th className="px-5 py-3.5">Cofre de Credenciais</th>
                       <th className="px-5 py-3.5">Status</th>
+                      <th className="px-5 py-3.5 text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/70 text-slate-200">
                     {equipments.map(eq => (
-                      <tr key={eq.id} className="hover:bg-slate-800/30">
+                      <tr key={eq.id} className="hover:bg-slate-800/30 transition">
                         <td className="px-5 py-4 font-semibold text-white">{eq.name}</td>
                         <td className="px-5 py-4 text-xs font-mono text-sky-400">{eq.type}</td>
                         <td className="px-5 py-4 text-xs font-mono text-slate-300">{eq.host}</td>
-                        <td className="px-5 py-4 text-xs font-mono text-slate-500">•••••••••••••••• (AES-256)</td>
+                        <td className="px-5 py-4 text-xs">
+                          <span className="px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-300 border border-amber-800/80 font-mono text-[11px] inline-flex items-center gap-1">
+                            <Lock className="w-2.5 h-2.5" />
+                            AES-256-GCM
+                          </span>
+                        </td>
                         <td className="px-5 py-4">
                           <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 font-medium">
                             {eq.status || 'Ativo'}
                           </span>
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          <button
+                            onClick={() => handleDeleteEquipment(eq.id, eq.name)}
+                            title="Remover do Cofre"
+                            className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -468,6 +600,136 @@ export default function App() {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* MODAL DE CADASTRO NO COFRE */}
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-sky-950 text-sky-400 rounded-xl border border-sky-800">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Cadastrar no Cofre Criptográfico</h3>
+                    <p className="text-xs text-slate-400">Credenciais cifradas com chave AES-256 antes da gravação.</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {saveError && (
+                <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  <span>{saveError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCreateEquipment} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Nome do Equipamento *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: pfSense Libra Matriz"
+                    value={newEquipment.name}
+                    onChange={e => setNewEquipment({ ...newEquipment, name: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Tipo de Equipamento *</label>
+                    <select
+                      value={newEquipment.type}
+                      onChange={e => setNewEquipment({ ...newEquipment, type: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
+                    >
+                      <option value="PFSENSE">pfSense Firewall</option>
+                      <option value="MIKROTIK">Mikrotik RouterOS</option>
+                      <option value="PROXMOX">Proxmox VE Cluster</option>
+                      <option value="ZABBIX">Zabbix Server</option>
+                      <option value="GENERIC_SNMP">SNMP Genérico</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Porta (Opcional)</label>
+                    <input
+                      type="number"
+                      placeholder="Ex: 8181"
+                      value={newEquipment.port}
+                      onChange={e => setNewEquipment({ ...newEquipment, port: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Host / URL Base *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: https://libra-vivo.awecloudsolution.com:8181"
+                    value={newEquipment.host}
+                    onChange={e => setNewEquipment({ ...newEquipment, host: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 font-mono text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Chave de API / Token / Credencial *</label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      required
+                      placeholder="Cole aqui a API Key ou token do equipamento"
+                      value={newEquipment.apiKey}
+                      onChange={e => setNewEquipment({ ...newEquipment, apiKey: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 font-mono text-xs"
+                    />
+                  </div>
+                  <p className="text-[11px] text-amber-400/80 mt-1 flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    Esta chave será criptografada com AES-256-GCM antes de ser salva no PostgreSQL.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingEquipment}
+                    className="px-4 py-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-lg shadow-sky-950/30 transition flex items-center gap-1.5"
+                  >
+                    {savingEquipment ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Criptografando...
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        Salvar no Cofre
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 

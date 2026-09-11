@@ -6,6 +6,7 @@ const https = require('https');
 const { PrismaClient } = require('@prisma/client');
 const { handleChatwootWebhook } = require('./chatwoot/bridge');
 const { processMessage } = require('./agent/hermes');
+const { encryptCredentials, decryptCredentials } = require('./security/vault');
 
 const prisma = new PrismaClient();
 const app = express();
@@ -91,36 +92,86 @@ app.post('/api/chat', async (req, res) => {
 });
 
 /**
- * Status REAL dos Gateways da Rede consultados no pfSense
+ * Status REAL dos Gateways da Rede consultados no pfSense cadastrado no Cofre
  */
 app.get('/api/gateways', async (req, res) => {
-  const pfsenseUrl = process.env.PFSENSE_BASE_URL || 'https://libra-vivo.awecloudsolution.com:8181';
-  const apiKey = process.env.PFSENSE_API_KEY;
-
-  if (!apiKey) {
-    return res.json({
-      status: 'unconfigured',
-      message: 'PFSENSE_API_KEY não configurada no ambiente.',
-      data: [],
-    });
-  }
-
   try {
-    const response = await axios.get(`${pfsenseUrl}/api/v2/status/gateways`, {
-      headers: { 'X-API-Key': apiKey },
-      timeout: 8000,
-      httpsAgent,
+    // 1. Busca o primeiro pfSense ativo cadastrado no Cofre Criptográfico
+    const pfsense = await prisma.equipment.findFirst({
+      where: {
+        type: 'PFSENSE',
+        active: true,
+      },
     });
+
+    if (!pfsense) {
+      return res.json({
+        status: 'no_equipment',
+        message: 'Nenhum firewall pfSense cadastrado no Cofre de Equipamentos.',
+        data: [],
+      });
+    }
+
+    // 2. Decifra a credencial estritamente em memória
+    let apiKey = '';
+    try {
+      const creds = decryptCredentials(pfsense.encryptedCredentials, pfsense.iv, pfsense.authTag);
+      apiKey = typeof creds === 'object' ? (creds.apiKey || creds.key || creds.token || '') : String(creds);
+    } catch (decErr) {
+      console.error(`Erro ao decifrar credenciais do equipamento ${pfsense.name}:`, decErr.message);
+      return res.status(500).json({
+        status: 'error',
+        message: `Falha ao descriptografar credenciais do equipamento ${pfsense.name} no cofre.`,
+        data: [],
+      });
+    }
+
+    if (!apiKey) {
+      return res.json({
+        status: 'no_key',
+        message: `Equipamento ${pfsense.name} não possui API Key válida armazenada no cofre.`,
+        data: [],
+      });
+    }
+
+    // 3. Consulta o endpoint oficial do pfSense REST API
+    const targetUrl = pfsense.host.replace(/\/+$/, '');
+    let response;
+    try {
+      response = await axios.get(`${targetUrl}/api/v2/status/gateways`, {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 8000,
+        httpsAgent,
+      });
+    } catch (firstErr) {
+      // Fallback para rota singular caso versão do pacote seja diferente
+      response = await axios.get(`${targetUrl}/api/v2/status/gateway`, {
+        headers: { 'X-API-Key': apiKey },
+        timeout: 8000,
+        httpsAgent,
+      });
+    }
 
     const gateways = response.data?.data || [];
+
+    // 4. Atualiza timestamp da última verificação no banco
+    prisma.equipment.update({
+      where: { id: pfsense.id },
+      data: { status: 'online', lastCheck: new Date() },
+    }).catch(e => console.warn('Aviso: falha ao atualizar lastCheck:', e.message));
+
     return res.json({
       status: 'ok',
-      endpoint: `${pfsenseUrl}/api/v2/status/gateways`,
+      equipment: {
+        id: pfsense.id,
+        name: pfsense.name,
+        host: pfsense.host,
+      },
       data: gateways,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Erro ao consultar pfSense:', error.message);
+    console.error('Erro ao consultar pfSense via cofre:', error.message);
     return res.status(502).json({
       status: 'error',
       message: `Falha na comunicação com o pfSense: ${error.message}`,
@@ -148,7 +199,7 @@ app.get('/api/equipments', async (req, res) => {
         lastCheck: true,
         active: true,
         createdAt: true,
-        // Credenciais NUNCA retornadas em texto puro
+        // Credenciais NUNCA retornadas em texto puro para a web
       },
     });
 
@@ -160,6 +211,115 @@ app.get('/api/equipments', async (req, res) => {
   } catch (error) {
     console.error('Erro ao listar equipamentos:', error);
     return res.status(500).json({ error: 'Erro ao consultar cofre de equipamentos.' });
+  }
+});
+
+/**
+ * Cadastro de NOVO Equipamento no Cofre com Criptografia AES-256-GCM
+ */
+app.post('/api/equipments', async (req, res) => {
+  try {
+    const { name, type, host, port, credentials } = req.body;
+
+    if (!name || !type || !host || !credentials) {
+      return res.status(400).json({
+        error: 'Campos obrigatórios ausentes: name, type, host e credentials.',
+      });
+    }
+
+    const validTypes = ['PFSENSE', 'MIKROTIK', 'PROXMOX', 'ZABBIX', 'GENERIC_SNMP'];
+    const upperType = String(type).toUpperCase();
+    if (!validTypes.includes(upperType)) {
+      return res.status(400).json({
+        error: `Tipo de equipamento inválido. Tipos aceitos: ${validTypes.join(', ')}`,
+      });
+    }
+
+    // Normaliza credenciais: se string, converte em objeto
+    const credsObj = typeof credentials === 'object' ? credentials : { apiKey: String(credentials).trim() };
+
+    // Criptografa estritamente com a chave mestra AES-256-GCM
+    const { encryptedCredentials, iv, authTag } = encryptCredentials(credsObj);
+
+    const created = await prisma.equipment.create({
+      data: {
+        name: String(name).trim(),
+        type: upperType,
+        host: String(host).trim(),
+        port: port ? parseInt(port, 10) : null,
+        encryptedCredentials,
+        iv,
+        authTag,
+        status: 'online',
+        active: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        host: true,
+        port: true,
+        status: true,
+        active: true,
+        createdAt: true,
+      },
+    });
+
+    // Registra auditoria imutável
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: 'CADASTRAR_EQUIPAMENTO',
+          target: `${created.name} (${created.type})`,
+          status: 'SUCCESS',
+          source: 'WEB_DASHBOARD',
+          details: { equipmentId: created.id, host: created.host },
+        },
+      });
+    } catch (auditErr) {
+      console.warn('Aviso ao registrar log de auditoria:', auditErr.message);
+    }
+
+    return res.status(201).json({
+      status: 'created',
+      data: created,
+    });
+  } catch (error) {
+    console.error('Erro ao cadastrar equipamento no cofre:', error);
+    return res.status(500).json({ error: `Falha ao salvar no cofre: ${error.message}` });
+  }
+});
+
+/**
+ * Remoção de Equipamento do Cofre
+ */
+app.delete('/api/equipments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.equipment.findUnique({ where: { id } });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Equipamento não encontrado no cofre.' });
+    }
+
+    await prisma.equipment.delete({ where: { id } });
+
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: 'REMOVER_EQUIPAMENTO',
+          target: `${existing.name} (${existing.type})`,
+          status: 'SUCCESS',
+          source: 'WEB_DASHBOARD',
+          details: { equipmentId: id },
+        },
+      });
+    } catch {}
+
+    return res.json({ status: 'deleted', id });
+  } catch (error) {
+    console.error('Erro ao remover equipamento do cofre:', error);
+    return res.status(500).json({ error: `Falha ao remover equipamento: ${error.message}` });
   }
 });
 

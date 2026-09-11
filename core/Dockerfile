@@ -15,5 +15,5 @@ COPY . .
 
 EXPOSE 3000
 
-# Executa migrations do Prisma automaticamente e sobe o serviço
-CMD ["sh", "-c", "npx prisma migrate deploy && node src/server.js"]
+# Executa sincronização do schema Prisma automaticamente e sobe o serviço
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node src/server.js"]

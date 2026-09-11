@@ -38,9 +38,6 @@ services:
       CHATWOOT_INBOX_ID: "${CHATWOOT_INBOX_ID}"
       CHATWOOT_INBOX_API_KEY: "${CHATWOOT_INBOX_API_KEY}"
       CHATWOOT_WEBHOOK_SECRET: "${CHATWOOT_WEBHOOK_SECRET}"
-      # pfSense Integration
-      PFSENSE_BASE_URL: "${PFSENSE_BASE_URL:-https://libra-vivo.awecloudsolution.com:8181}"
-      PFSENSE_API_KEY: "${PFSENSE_API_KEY:-}"
       # Zabbix Integration
       ZABBIX_API_URL: "${ZABBIX_API_URL:-}"
       ZABBIX_API_TOKEN: "${ZABBIX_API_TOKEN:-}"

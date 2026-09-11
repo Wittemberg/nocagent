@@ -1,6 +1,10 @@
 const { SYSTEM_PROMPT } = require('./prompts');
 const { createApprovalRequest, verifyApproval } = require('./approvals');
+const { decryptCredentials } = require('../security/vault');
+const { PrismaClient } = require('@prisma/client');
 const axios = require('axios');
+
+const prisma = new PrismaClient();
 
 // Ferramentas disponíveis para a IA
 const TOOLS_DEFINITIONS = [
@@ -70,34 +74,54 @@ async function processMessage({ text, senderPhone, senderName }) {
   // Consulta de Gateways / pfSense
   if (normalized.includes('link') || normalized.includes('gateway') || normalized.includes('pfsense') || normalized.includes('internet')) {
     try {
-      // Exemplo usando URL e Key configuradas ou chamando driver
-      const pfsenseUrl = process.env.PFSENSE_BASE_URL || 'https://libra-vivo.awecloudsolution.com:8181';
-      const apiKey = process.env.PFSENSE_API_KEY;
+      const pfsense = await prisma.equipment.findFirst({
+        where: { type: 'PFSENSE', active: true },
+      });
 
-      if (apiKey) {
-        const res = await axios.get(`${pfsenseUrl}/api/v2/status/gateways`, {
+      if (!pfsense) {
+        return `ℹ️ *Nenhum firewall pfSense cadastrado no Cofre:*\nPara consultar o status de links em tempo real, cadastre o equipamento na aba *Cofre de Equipamentos* no painel web.`;
+      }
+
+      let apiKey = '';
+      try {
+        const creds = decryptCredentials(pfsense.encryptedCredentials, pfsense.iv, pfsense.authTag);
+        apiKey = typeof creds === 'object' ? (creds.apiKey || creds.key || creds.token || '') : String(creds);
+      } catch (e) {
+        return `⚠️ *Erro de Criptografia:* Falha ao decifrar a chave do ${pfsense.name} no cofre.`;
+      }
+
+      const targetUrl = pfsense.host.replace(/\/+$/, '');
+      let res;
+      try {
+        res = await axios.get(`${targetUrl}/api/v2/status/gateways`, {
           headers: { 'X-API-Key': apiKey },
           timeout: 8000,
           httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }),
         });
-
-        const gateways = res.data?.data || [];
-        let summary = `📡 *STATUS DOS LINKS DE INTERNET (pfSense)*\n\n`;
-
-        gateways.forEach((gw) => {
-          const isOnline = gw.status === 'online';
-          const icon = isOnline ? '🟢' : '🔴';
-          summary += `${icon} *${gw.name}*\n`;
-          summary += `• *Status:* ${gw.status.toUpperCase()}\n`;
-          summary += `• *Latência:* ${gw.delay} ms | *Perda:* ${gw.loss}%\n`;
-          summary += `• *IP Monitor:* \`${gw.monitorip || 'N/A'}\`\n\n`;
+      } catch {
+        res = await axios.get(`${targetUrl}/api/v2/status/gateway`, {
+          headers: { 'X-API-Key': apiKey },
+          timeout: 8000,
+          httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }),
         });
-
-        summary += `_Dados obtidos via pfrest API às ${new Date().toLocaleTimeString('pt-BR')}._`;
-        return summary;
       }
+
+      const gateways = res.data?.data || [];
+      let summary = `📡 *STATUS DOS LINKS DE INTERNET (${pfsense.name})*\n\n`;
+
+      gateways.forEach((gw) => {
+        const isOnline = gw.status === 'online';
+        const icon = isOnline ? '🟢' : '🔴';
+        summary += `${icon} *${gw.name}*\n`;
+        summary += `• *Status:* ${gw.status.toUpperCase()}\n`;
+        summary += `• *Latência:* ${gw.delay} ms | *Perda:* ${gw.loss}%\n`;
+        summary += `• *IP Monitor:* \`${gw.monitorip || 'N/A'}\`\n\n`;
+      });
+
+      summary += `_Dados obtidos em tempo real via Cofre às ${new Date().toLocaleTimeString('pt-BR')}._`;
+      return summary;
     } catch (err) {
-      return `⚠️ *Erro ao consultar o pfSense:* Não foi possível conectar ao endpoint (${err.message}). Verifique a conectividade de rede da porta 8181.`;
+      return `⚠️ *Erro ao consultar o pfSense:* Não foi possível conectar ao endpoint (${err.message}).`;
     }
   }
 
