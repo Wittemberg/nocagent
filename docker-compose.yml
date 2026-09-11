@@ -4,46 +4,46 @@ services:
   # --- 1. CORE / RUNTIME & GATEWAY DE IA (HERMES AGENT + CHATWOOT BRIDGE) ---
   core:
     image: ghcr.io/wittemberg/nocagent-core:latest
-    build:
-      context: ./core
-      dockerfile: Dockerfile
     restart: unless-stopped
     networks:
       - interna
     environment:
-      - NODE_ENV=production
-      - PORT=3000
+      NODE_ENV: "production"
+      PORT: "3000"
       # LLM Providers
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
       # Banco de dados existente na rede interna
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nocagent}?schema=public
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nocagent}?schema=public"
       # Redis existente na rede interna
-      - REDIS_URL=redis://redis:6379/0
-      - REDIS_KEY_PREFIX=nocagent:
+      REDIS_URL: "redis://redis:6379/0"
+      REDIS_KEY_PREFIX: "nocagent:"
       # Storage S3 (Backups & Snapshots)
-      - S3_ENDPOINT=${S3_ENDPOINT}
-      - S3_REGION=${S3_REGION:-us-east-1}
-      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
-      - S3_SECRET_KEY=${S3_SECRET_KEY}
-      - S3_BUCKET=${S3_BUCKET:-nocagent}
-      - S3_PUBLIC_URL=${S3_PUBLIC_URL:-https://storage.awecloudsolution.com/nocagent}
+      S3_ENDPOINT: "${S3_ENDPOINT}"
+      S3_REGION: "${S3_REGION:-us-east-1}"
+      S3_ACCESS_KEY: "${S3_ACCESS_KEY}"
+      S3_SECRET_KEY: "${S3_SECRET_KEY}"
+      S3_BUCKET: "${S3_BUCKET:-nocagent}"
+      S3_PUBLIC_URL: "${S3_PUBLIC_URL:-https://storage.awecloudsolution.com/nocagent}"
       # Cofre Criptográfico de Credenciais
-      - VAULT_MASTER_KEY=${VAULT_MASTER_KEY}
+      VAULT_MASTER_KEY: "${VAULT_MASTER_KEY}"
       # DCC — Developer Control Channel (Superadmin & 2FA)
-      - DCC_ENABLED=${DCC_ENABLED:-true}
-      - DCC_DEVELOPER_USERNAME=${DCC_DEVELOPER_USERNAME}
-      - DCC_TOTP_SECRET=${DCC_TOTP_SECRET}
+      DCC_ENABLED: "${DCC_ENABLED:-true}"
+      DCC_DEVELOPER_USERNAME: "${DCC_DEVELOPER_USERNAME}"
+      DCC_TOTP_SECRET: "${DCC_TOTP_SECRET}"
       # Chatwoot Dual-API Bridge
-      - CHATWOOT_BASE_URL=${CHATWOOT_BASE_URL}
-      - CHATWOOT_ACCOUNT_ID=${CHATWOOT_ACCOUNT_ID}
-      - CHATWOOT_ACCOUNT_API_KEY=${CHATWOOT_ACCOUNT_API_KEY}
-      - CHATWOOT_INBOX_ID=${CHATWOOT_INBOX_ID}
-      - CHATWOOT_INBOX_API_KEY=${CHATWOOT_INBOX_API_KEY}
-      - CHATWOOT_WEBHOOK_SECRET=${CHATWOOT_WEBHOOK_SECRET}
+      CHATWOOT_BASE_URL: "${CHATWOOT_BASE_URL}"
+      CHATWOOT_ACCOUNT_ID: "${CHATWOOT_ACCOUNT_ID}"
+      CHATWOOT_ACCOUNT_API_KEY: "${CHATWOOT_ACCOUNT_API_KEY}"
+      CHATWOOT_INBOX_ID: "${CHATWOOT_INBOX_ID}"
+      CHATWOOT_INBOX_API_KEY: "${CHATWOOT_INBOX_API_KEY}"
+      CHATWOOT_WEBHOOK_SECRET: "${CHATWOOT_WEBHOOK_SECRET}"
+      # pfSense Integration
+      PFSENSE_BASE_URL: "${PFSENSE_BASE_URL:-https://libra-vivo.awecloudsolution.com:8181}"
+      PFSENSE_API_KEY: "${PFSENSE_API_KEY:-}"
       # Zabbix Integration
-      - ZABBIX_API_URL=${ZABBIX_API_URL:-}
-      - ZABBIX_API_TOKEN=${ZABBIX_API_TOKEN:-}
+      ZABBIX_API_URL: "${ZABBIX_API_URL:-}"
+      ZABBIX_API_TOKEN: "${ZABBIX_API_TOKEN:-}"
     volumes:
       # Persistência de sessões locais, logs e dados do Hermes no host
       - /var/data/nocagent/core:/app/data
@@ -64,9 +64,6 @@ services:
   # --- 2. DASHBOARD WEB (REACT + VITE + NGINX) ---
   web:
     image: ghcr.io/wittemberg/nocagent-web:latest
-    build:
-      context: ./web
-      dockerfile: Dockerfile
     restart: unless-stopped
     networks:
       - interna
@@ -79,7 +76,7 @@ services:
         - "traefik.http.routers.nocagent-web.tls.certresolver=letsencryptresolver"
         - "traefik.http.services.nocagent-web.loadbalancer.server.port=80"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
       timeout: 10s
       retries: 3
