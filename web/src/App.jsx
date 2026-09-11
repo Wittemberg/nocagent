@@ -148,7 +148,7 @@ export default function App() {
                   SISTEMA ONLINE
                 </span>
               </div>
-              <p className="text-xs text-slate-400">nocagent.awecloudsolution.com • IA Operacional 24/7</p>
+              <p className="text-xs text-slate-400">nocagent.awecloudsolution.com • IA Operacional 24/7 (v1.1.1)</p>
             </div>
           </div>
 

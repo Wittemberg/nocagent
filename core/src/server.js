@@ -34,7 +34,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'nocagent-core',
-    version: '1.1.0',
+    version: '1.1.1',
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
     features: {

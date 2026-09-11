@@ -34,9 +34,14 @@ jobs:
           push: true
           tags: ghcr.io/wittemberg/nocagent-core:latest
 
-      - name: Notificar Portainer via Webhook (quando configurado)
-        if: env.PORTAINER_WEBHOOK != ''
+      - name: Notificar Portainer via Webhook
         env:
           PORTAINER_WEBHOOK: ${{ secrets.PORTAINER_CORE_WEBHOOK_URL }}
         run: |
-          curl -X POST "$PORTAINER_WEBHOOK" || echo "Webhook não configurado ou offline"
+          if [ -n "$PORTAINER_WEBHOOK" ]; then
+            echo "🚀 Disparando webhook do Portainer para o serviço CORE..."
+            curl -sk -X POST "$PORTAINER_WEBHOOK"
+            echo -e "\n✅ Webhook do CORE disparado com sucesso!"
+          else
+            echo "⚠️ PORTAINER_CORE_WEBHOOK_URL não configurado nos secrets do repositório."
+          fi
