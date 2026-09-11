@@ -60,7 +60,7 @@ model Equipment {
   id                   String        @id @default(uuid())
   name                 String
   type                 EquipmentType
-  host                 String        // URL ou IP (ex: https://libra-vivo.awecloudsolution.com:8181)
+  host                 String        // URL ou IP (ex: https://pfsense.seudominio.com.br:8181)
   port                 Int?
   // Cofre Criptográfico AES-256-GCM
   encryptedCredentials String        // JSON cifrado com tokens, senhas ou API keys

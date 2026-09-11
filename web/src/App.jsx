@@ -56,7 +56,7 @@ export default function App() {
   const [newEquipment, setNewEquipment] = useState({
     name: '',
     type: 'PFSENSE',
-    host: 'https://libra-vivo.awecloudsolution.com:8181',
+    host: '',
     port: '',
     apiKey: '',
   });
@@ -130,7 +130,7 @@ export default function App() {
       setNewEquipment({
         name: '',
         type: 'PFSENSE',
-        host: 'https://libra-vivo.awecloudsolution.com:8181',
+        host: '',
         port: '',
         apiKey: '',
       });
@@ -676,7 +676,7 @@ export default function App() {
                   <input
                     type="text"
                     required
-                    placeholder="Ex: pfSense Libra Matriz"
+                    placeholder="Ex: pfSense Matriz"
                     value={newEquipment.name}
                     onChange={e => setNewEquipment({ ...newEquipment, name: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
@@ -715,7 +715,7 @@ export default function App() {
                   <input
                     type="text"
                     required
-                    placeholder="Ex: https://libra-vivo.awecloudsolution.com:8181"
+                    placeholder="Ex: https://pfsense.seudominio.com.br:8181"
                     value={newEquipment.host}
                     onChange={e => setNewEquipment({ ...newEquipment, host: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 font-mono text-xs"
