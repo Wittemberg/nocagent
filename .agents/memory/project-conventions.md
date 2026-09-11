@@ -18,3 +18,4 @@ updated: 2026-07-12
   - Idioma de interface e mensagens ao operador: **Português (PT-BR)** por padrão.
   - Mensagens de erro devem responder: O que houve, Qual o impacto, O que fazer, Quem age.
   - Mudanças de infraestrutura física/lógica sempre exigem aprovação explícita antes de execução.
+  - **Zero Dados Fictícios (Regra Absoluta):** É terminantemente proibido exibir dados fictícios, mocks, placeholders ou simulações em qualquer tela ou resposta do NOC-Agent. Todo dado deve vir de consultas reais às APIs, banco de dados ou equipamentos de rede. Se não houver dados, exiba um empty state informativo e claro.

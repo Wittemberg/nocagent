@@ -121,3 +121,4 @@ Para permitir atendimento unificado entre a equipe humana de NOC e o agente IA:
 2. **Aprovação Obrigatória para Ações Críticas**: Ações que interrompam tráfego (ex: reiniciar roteador de borda, desligar VM de produção) disparam fluxo de aprovação no WhatsApp/Chatwoot via `approval.py` do Hermes Agent.
 3. **Credenciais Cifradas**: Tokens e senhas armazenados com criptografia AES-256 no banco de dados.
 4. **Audit Log Criptográfico**: Toda ação solicitada por operador e executada pela IA é registrada com timestamp, identificador do operador e resultado telemetry.
+5. **Zero Dados Fictícios (Integridade Operacional)**: É estritamente proibido exibir dados fictícios, mocks, placeholders ou simulações em qualquer tela ou resposta do NOC-Agent. Toda informação deve vir de consultas reais às APIs oficiais, PostgreSQL, Storage S3 ou equipamentos de rede. Se não houver dados cadastrados, exibe-se empty state explícito.

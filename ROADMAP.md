@@ -21,16 +21,24 @@ FASE 4: Validação em Staging, Pre-Flight & Produção
 
 ---
 
-## 📌 FASE 0: FUNDAÇÃO DO REPOSITÓRIO & INFRAESTRUTURA ✅
-- [x] Criar estrutura base do monorepo / módulos limpos em `Wittemberg/nocagent` (`core/`, `web/`).
-- [x] Configurar `.env.example` com todas as chaves (OpenAI/Anthropic, Chatwoot, Traefik, PostgreSQL, Redis, S3, Vault).
-- [x] Elaborar `docker-compose.yml` da stack com labels completas do Traefik para `nocagent.awecloudsolution.com`.
-- [x] Criar banco de dados `nocagent` no PostgreSQL existente e bucket `nocagent` no Storage S3 existente.
-- [x] Criar schema inicial Prisma/SQL para persistência de operadores, equipamentos, auditoria e backups.
+## 📌 STATUS ATUAL: FASES 0 E 1 CONCLUÍDAS E EM OPERAÇÃO 🚀
+- **API Healthcheck:** `https://nocagent.awecloudsolution.com/api/health` → ✅ `HTTP 200 OK` (Core operacional)
+- **Dashboard Web:** `https://nocagent.awecloudsolution.com` → ✅ `HTTP 200 OK` (Web Nginx operacional com SSL Traefik)
+- **Regra Imutável:** **Zero Dados Fictícios** — todas as telas consom dados 100% reais do banco e das APIs.
 
 ---
 
-## 📌 FASE 1: RUNTIME HERMES AGENT & CHATWOOT BRIDGE ✅
+## 📌 FASE 0: FUNDAÇÃO DO REPOSITÓRIO & INFRAESTRUTURA ✅ (Deploy Validado)
+- [x] Criar estrutura base do monorepo / módulos limpos em `Wittemberg/nocagent` (`core/`, `web/`).
+- [x] Configurar `.env.example` com todas as chaves (OpenAI/Anthropic, Chatwoot, Traefik, PostgreSQL, Redis, S3, Vault).
+- [x] Elaborar `docker-compose.yml` da stack com labels completas do Traefik para `nocagent.awecloudsolution.com`.
+- [x] Criar banco de dados `nocagent` no PostgreSQL e bucket `nocagent` no Storage S3.
+- [x] Criar schema inicial Prisma com suporte a OpenSSL 3 no Alpine (`binaryTargets = ["native", "linux-musl-openssl-3.0.x"]`).
+- [x] Deploy realizado com sucesso no Portainer da infraestrutura.
+
+---
+
+## 📌 FASE 1: RUNTIME HERMES AGENT & CHATWOOT BRIDGE ✅ (Deploy Validado)
 - [x] Configurar container do Hermes Agent adaptado como serviço central de IA (`core/src/agent/hermes.js`).
 - [x] Implementar a **Chatwoot Bridge** (`core/src/chatwoot/bridge.js`):
   - Webhook listener para eventos `message_created` do Chatwoot (Public API).
@@ -38,6 +46,7 @@ FASE 4: Validação em Staging, Pre-Flight & Produção
 - [x] Injetar o **System Prompt do NOC-Agent** com as 10 Invariantes Éticas de IA (`core/src/agent/prompts.js`).
 - [x] Implementar o Cofre Criptográfico de Credenciais AES-256-GCM (`core/src/security/vault.js`).
 - [x] Habilitar o sistema de aprovações Human-in-the-Loop (`core/src/agent/approvals.js`) com código em 2 etapas.
+- [x] Criar Favicon oficial SVG e purgar todos os dados fictícios do frontend (`Zero Dados Fictícios`).
 
 ---
 

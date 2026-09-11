@@ -1,11 +1,18 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
+const https = require('https');
+const { PrismaClient } = require('@prisma/client');
 const { handleChatwootWebhook } = require('./chatwoot/bridge');
 const { processMessage } = require('./agent/hermes');
 
+const prisma = new PrismaClient();
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Agente HTTPS para ignorar certificados autoassinados em firewalls locais
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 // Middlewares
 app.use(cors());
@@ -18,7 +25,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// --- ROTAS DA API ---
+// --- ROTAS DA API (DADOS 100% REAIS) ---
 
 /**
  * Healthcheck para Traefik / Docker / Monitoramento
@@ -84,34 +91,127 @@ app.post('/api/chat', async (req, res) => {
 });
 
 /**
- * Status dos Gateways da Rede (pfSense)
+ * Status REAL dos Gateways da Rede consultados no pfSense
  */
 app.get('/api/gateways', async (req, res) => {
-  try {
-    const reply = await processMessage({
-      text: 'como estão os gateways do pfsense',
-      senderPhone: 'api-call',
-      senderName: 'Sistema',
+  const pfsenseUrl = process.env.PFSENSE_BASE_URL || 'https://libra-vivo.awecloudsolution.com:8181';
+  const apiKey = process.env.PFSENSE_API_KEY;
+
+  if (!apiKey) {
+    return res.json({
+      status: 'unconfigured',
+      message: 'PFSENSE_API_KEY não configurada no ambiente.',
+      data: [],
     });
-    return res.json({ status: 'ok', summary: reply });
+  }
+
+  try {
+    const response = await axios.get(`${pfsenseUrl}/api/v2/status/gateways`, {
+      headers: { 'X-API-Key': apiKey },
+      timeout: 8000,
+      httpsAgent,
+    });
+
+    const gateways = response.data?.data || [];
+    return res.json({
+      status: 'ok',
+      endpoint: `${pfsenseUrl}/api/v2/status/gateways`,
+      data: gateways,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error('Erro ao consultar pfSense:', error.message);
+    return res.status(502).json({
+      status: 'error',
+      message: `Falha na comunicação com o pfSense: ${error.message}`,
+      data: [],
+    });
   }
 });
 
 /**
- * Auditoria de Backups no Storage S3
+ * Lista REAL de Equipamentos Cadastrados no Cofre (sem dados fictícios)
+ */
+app.get('/api/equipments', async (req, res) => {
+  try {
+    const equipments = await prisma.equipment.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        host: true,
+        port: true,
+        status: true,
+        lastLatency: true,
+        lastLossPercent: true,
+        lastCheck: true,
+        active: true,
+        createdAt: true,
+        // Credenciais NUNCA retornadas em texto puro
+      },
+    });
+
+    return res.json({
+      status: 'ok',
+      count: equipments.length,
+      data: equipments,
+    });
+  } catch (error) {
+    console.error('Erro ao listar equipamentos:', error);
+    return res.status(500).json({ error: 'Erro ao consultar cofre de equipamentos.' });
+  }
+});
+
+/**
+ * Auditoria REAL de Backups salvos no Storage S3 (sem dados fictícios)
  */
 app.get('/api/backups', async (req, res) => {
   try {
-    const reply = await processMessage({
-      text: 'como estão os backups de hoje no s3',
-      senderPhone: 'api-call',
-      senderName: 'Sistema',
+    const audits = await prisma.backupAudit.findMany({
+      orderBy: { verifiedAt: 'desc' },
+      take: 20,
+      include: {
+        equipment: {
+          select: { name: true, type: true },
+        },
+      },
     });
-    return res.json({ status: 'ok', summary: reply });
+
+    return res.json({
+      status: 'ok',
+      count: audits.length,
+      data: audits,
+    });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error('Erro ao listar auditorias de backup:', error);
+    return res.status(500).json({ error: 'Erro ao consultar auditorias de backup.' });
+  }
+});
+
+/**
+ * Lista REAL de Logs de Auditoria (Audit Trail)
+ */
+app.get('/api/audit-logs', async (req, res) => {
+  try {
+    const logs = await prisma.auditLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        operator: {
+          select: { name: true, phone: true },
+        },
+      },
+    });
+
+    return res.json({
+      status: 'ok',
+      count: logs.length,
+      data: logs,
+    });
+  } catch (error) {
+    console.error('Erro ao listar audit logs:', error);
+    return res.status(500).json({ error: 'Erro ao consultar logs de auditoria.' });
   }
 });
 
@@ -121,5 +221,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 NOC-Agent Core Runtime rodando na porta ${PORT}`);
   console.log(`🌐 Healthcheck: http://localhost:${PORT}/api/health`);
   console.log(`💬 Chatwoot Webhook: http://localhost:${PORT}/api/webhooks/chatwoot`);
+  console.log(`📡 Endpoints reais: /api/gateways, /api/equipments, /api/backups`);
   console.log(`====================================================`);
 });

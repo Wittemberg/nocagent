@@ -18,3 +18,4 @@ updated: 2026-07-18
   7. **Zabbix:** Conexão via Webhook + API REST oficial assim que o host estiver provisionado.
   8. **Zero Shell Arbitrário:** IA restrita estritamente a ferramentas tipadas MCP (Proxmox, Mikrotik RouterOS, pfSense, Zabbix).
   9. **Frontend Web:** Conforme `witteberg-development-standards` (zoom 100%, 4 breakpoints responsivos, PT-BR, zero secrets no client).
+  10. **Zero Dados Fictícios (Regra Fundamental):** Todo o painel web e respostas do agente devem refletir 100% de dados reais consumidos das APIs oficiais e banco de dados. Qualquer estado sem dados deve ser apresentado como empty state limpo.
