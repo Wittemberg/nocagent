@@ -1,0 +1,42 @@
+name: Build and Deploy NOC-Agent Core
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'core/**'
+      - '.github/workflows/docker-core.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repositório
+        uses: actions/checkout@v4
+
+      - name: Login no GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Imagem Core
+        uses: docker/build-push-action@v6
+        with:
+          context: ./core
+          file: ./core/Dockerfile
+          push: true
+          tags: ghcr.io/wittemberg/nocagent-core:latest
+
+      - name: Notificar Portainer via Webhook (quando configurado)
+        if: env.PORTAINER_WEBHOOK != ''
+        env:
+          PORTAINER_WEBHOOK: ${{ secrets.PORTAINER_CORE_WEBHOOK_URL }}
+        run: |
+          curl -X POST "$PORTAINER_WEBHOOK" || echo "Webhook não configurado ou offline"
