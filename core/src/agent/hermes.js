@@ -8,12 +8,560 @@ const axios = require('axios');
 const prisma = new PrismaClient();
 
 /**
- * Processador principal de mensagens do Hermes AI Engine com suporte a MCP
+ * Localiza equipamento no cofre baseado em menções no texto do usuário
+ */
+async function resolveTargetEquipment(text) {
+  try {
+    const equipments = await prisma.equipment.findMany({
+      where: { active: true },
+      include: { backupStorage: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!equipments || equipments.length === 0) return { matched: null, all: [] };
+
+    const lower = text.toLowerCase();
+
+    // 1. Busca correspondência direta pelo nome do equipamento (ex: "supertop", "calvi", "libra")
+    for (const eq of equipments) {
+      const eqNameLower = eq.name.toLowerCase();
+      // Match pelo nome completo ou partes significativas do nome
+      if (lower.includes(eqNameLower)) {
+        return { matched: eq, all: equipments };
+      }
+      const parts = eqNameLower.split(/[\s_-]+/).filter((p) => p.length >= 3);
+      if (parts.some((p) => lower.includes(p))) {
+        return { matched: eq, all: equipments };
+      }
+    }
+
+    // 2. Se mencionou tipo específico de tecnologia
+    if (lower.includes('proxmox') || lower.includes('hypervisor') || lower.includes('pve')) {
+      const pve = equipments.find((e) => e.type === 'PROXMOX');
+      if (pve) return { matched: pve, all: equipments };
+    }
+    if (lower.includes('pfsense') || lower.includes('firewall') || lower.includes('gateway')) {
+      const pfs = equipments.find((e) => e.type === 'PFSENSE');
+      if (pfs) return { matched: pfs, all: equipments };
+    }
+    if (lower.includes('mikrotik') || lower.includes('routeros') || lower.includes('roteador')) {
+      const mkt = equipments.find((e) => e.type === 'MIKROTIK');
+      if (mkt) return { matched: mkt, all: equipments };
+    }
+    if (lower.includes('zabbix') || lower.includes('alarme') || lower.includes('trigger')) {
+      const zbx = equipments.find((e) => e.type === 'ZABBIX');
+      if (zbx) return { matched: zbx, all: equipments };
+    }
+
+    return { matched: null, all: equipments };
+  } catch (err) {
+    console.warn('Erro ao resolver equipamento no Hermes:', err.message);
+    return { matched: null, all: [] };
+  }
+}
+
+/**
+ * Coleta telemetria viva e estruturada do equipamento alvo
+ */
+async function fetchLiveTelemetry(equipment) {
+  if (!equipment) return null;
+  try {
+    switch (equipment.type) {
+      case 'PROXMOX': {
+        const [nodeStatus, workloads] = await Promise.allSettled([
+          executeMcpTool('proxmox_get_node_status', { equipmentId: equipment.id }),
+          executeMcpTool('proxmox_list_workloads', { equipmentId: equipment.id }),
+        ]);
+
+        return {
+          type: 'PROXMOX',
+          equipment: equipment.name,
+          host: equipment.host,
+          nodeStatus: nodeStatus.status === 'fulfilled' ? nodeStatus.value : null,
+          workloads: workloads.status === 'fulfilled' ? workloads.value : null,
+          error: nodeStatus.status === 'rejected' ? nodeStatus.reason.message : null,
+        };
+      }
+      case 'PFSENSE': {
+        const gateways = await executeMcpTool('pfsense_get_gateways', { equipmentId: equipment.id }).catch((e) => null);
+        return {
+          type: 'PFSENSE',
+          equipment: equipment.name,
+          host: equipment.host,
+          gateways: gateways?.gateways || [],
+        };
+      }
+      case 'MIKROTIK': {
+        const mkt = await executeMcpTool('mikrotik_get_status', { equipmentId: equipment.id }).catch((e) => null);
+        return {
+          type: 'MIKROTIK',
+          equipment: equipment.name,
+          host: equipment.host,
+          mktData: mkt,
+        };
+      }
+      case 'ZABBIX': {
+        const zbx = await executeMcpTool('zabbix_get_active_triggers', { equipmentId: equipment.id }).catch((e) => null);
+        return {
+          type: 'ZABBIX',
+          equipment: equipment.name,
+          triggers: zbx?.triggers || [],
+          count: zbx?.count || 0,
+        };
+      }
+      default:
+        return null;
+    }
+  } catch (err) {
+    console.warn(`Erro ao obter telemetria de ${equipment.name}:`, err.message);
+    return null;
+  }
+}
+
+/**
+ * Constrói bloco de contexto operacional para injeção no prompt das IAs
+ */
+function buildTelemetryContextText(matchedEquipment, telemetry, allEquipments) {
+  let context = `[INVENTÁRIO ATIVO DE EQUIPAMENTOS NO COFRE]\n`;
+  if (allEquipments && allEquipments.length > 0) {
+    allEquipments.forEach((eq) => {
+      context += `- ${eq.name} (Tipo: ${eq.type}, Host: ${eq.host}, Status: ${eq.status})\n`;
+    });
+  } else {
+    context += `Nenhum equipamento registrado.\n`;
+  }
+
+  if (!telemetry || !matchedEquipment) {
+    return context;
+  }
+
+  context += `\n[TELEMETRIA EM TEMPO REAL DO EQUIPAMENTO ALVO: ${matchedEquipment.name}]\n`;
+
+  if (telemetry.type === 'PROXMOX' && telemetry.nodeStatus) {
+    const ns = telemetry.nodeStatus;
+    context += `• Servidor: ${ns.equipment} (Nó: ${ns.node})\n`;
+    context += `• Uso de CPU: ${ns.cpuPercent}\n`;
+    context += `• Memória RAM: ${ns.memoryUsage}\n`;
+    context += `• Uptime do Host: ${ns.uptime}\n`;
+
+    if (ns.storages && ns.storages.length > 0) {
+      context += `• Storages do Nó:\n`;
+      ns.storages.forEach((st) => {
+        context += `  - Pool: "${st.name}" | Tipo: ${st.type} | Uso: ${st.usedPercent}%\n`;
+      });
+    }
+
+    if (telemetry.workloads) {
+      const w = telemetry.workloads;
+      context += `• Workloads: ${w.vms.running} VMs ativas de ${w.vms.total} total; ${w.lxcs.running} Containers LXC ativos.\n`;
+      if (w.vms.list && w.vms.list.length > 0) {
+        w.vms.list.slice(0, 6).forEach((vm) => {
+          context += `  - VM [${vm.vmid}] ${vm.name}: Status=${vm.status}, CPU=${vm.cpuPercent}%, RAM=${vm.memUsedMB}MB\n`;
+        });
+      }
+    }
+  } else if (telemetry.type === 'PFSENSE') {
+    context += `• Gateways de Internet:\n`;
+    if (telemetry.gateways && telemetry.gateways.length > 0) {
+      telemetry.gateways.forEach((gw) => {
+        context += `  - Gateway "${gw.name}": Status=${gw.status}, RTT=${gw.delay}ms, Perda=${gw.loss}%\n`;
+      });
+    } else {
+      context += `  (Sem gateways reportados ou API indisponível)\n`;
+    }
+  } else if (telemetry.type === 'MIKROTIK' && telemetry.mktData) {
+    const m = telemetry.mktData;
+    context += `• RouterOS: ${m.version || 'N/A'}, CPU: ${m.cpuLoad}, RTT: ${m.latency}, Link Loss: ${m.loss}\n`;
+    if (m.interfaces && m.interfaces.length > 0) {
+      context += `• Interfaces:\n`;
+      m.interfaces.slice(0, 6).forEach((i) => {
+        context += `  - ${i.name} (${i.type}): ${i.running ? 'LINK UP' : 'DOWN'}\n`;
+      });
+    }
+  } else if (telemetry.type === 'ZABBIX') {
+    context += `• Incidentes Ativos: ${telemetry.count}\n`;
+    if (telemetry.triggers && telemetry.triggers.length > 0) {
+      telemetry.triggers.slice(0, 6).forEach((t) => {
+        context += `  - [${t.priority}] ${t.host}: ${t.description}\n`;
+      });
+    }
+  }
+
+  return context;
+}
+
+/**
+ * Classifica a intenção da mensagem do usuário
+ */
+function classifyIntent(text) {
+  const normalized = text.toLowerCase().trim();
+
+  // 1. Aprovação Humana 2FA L2
+  if (/APROVAR\s+\d{4}/i.test(text)) {
+    return { type: 'APPROVAL_VERIFY' };
+  }
+
+  // 2. Cancelamento Explícito
+  if (/^CANCELAR$/i.test(normalized)) {
+    return { type: 'CANCEL' };
+  }
+
+  // 3. Ações destrutivas / executáveis explícitas (exclui perguntas consultivas como "como reiniciar", "posso reiniciar?", etc.)
+  const isQuestion = /(\?|como|devo|posso|quando|sugest|qual|o que|porque|por que)/i.test(normalized);
+  const isDestructiveCommand = /(^|\s)(reiniciar|reboot|desligar|derrubar|parar|resetar)\s+(o|a|os|as)?\s*(servidor|equipamento|vm|host|pve|pfsense|mikrotik|interface|roteador|porta|\w+)/i.test(normalized);
+
+  if (isDestructiveCommand && !isQuestion) {
+    return { type: 'DESTRUCTIVE_EXECUTION' };
+  }
+
+  // 4. Pergunta consultiva ou de diagnóstico técnico (O operador quer saber O QUE FAZER, COMO OTIMIZAR, DIAGNOSTICAR)
+  const isConsultative = /(como|por que|porque|por quê|sugest|otimiz|diminu|reduz|economiz|ajuda|recomenda|causa|o que fazer|analis|diagnostic|explic|motivo|o que significa|resolver|melhorar|aumentar|limpar|corrigir|problema|gargalo|lento|travando|memoria|ram|disco|storage|cpu)/i.test(normalized);
+
+  if (isConsultative) {
+    return { type: 'CONSULTATIVE_REASONING' };
+  }
+
+  // 5. Solicitação pura de leitura de status ou inventário (ex: "status do proxmox", "listar vms")
+  const isPureStatusRequest = /^(qual\s+(é|e)\s+o\s+)?status(\s+de|\s+do|\s+da)?\s*[\w\s]*$|^listar\s+(vms|containers|workloads|interfaces|gateways)|^ver\s+(status|interfaces|alarmes|gateways|backups)$/i.test(normalized);
+
+  if (isPureStatusRequest) {
+    return { type: 'PURE_STATUS_READOUT' };
+  }
+
+  // Padrão: Tratamento conversacional inteligente / analítico
+  return { type: 'CONSULTATIVE_REASONING' };
+}
+
+/**
+ * Formata um relatório direto de status caso o usuário tenha pedido expressamente apenas leitura
+ */
+async function formatPureStatusReadout(matchedEquipment, telemetry, normalized, allEquipments) {
+  const tzBrasilia = { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+
+  if (telemetry?.type === 'PROXMOX') {
+    if (normalized.includes('vm') || normalized.includes('lxc') || normalized.includes('workload')) {
+      const workloads = telemetry.workloads;
+      if (!workloads) return `⚠️ *Proxmox:* Não foi possível carregar a lista de VMs no momento.`;
+      let msg = `🖥️ *INVENTÁRIO DE WORKLOADS PROXMOX VE*\n\n`;
+      msg += `• *Servidor:* ${workloads.equipment} (Nó: \`${workloads.node}\`)\n`;
+      msg += `• *VMs QEMU:* ${workloads.vms.running} ativas / ${workloads.vms.stopped} paradas (Total: ${workloads.vms.total})\n`;
+      if (workloads.vms.list && workloads.vms.list.length > 0) {
+        workloads.vms.list.slice(0, 8).forEach((v) => {
+          const icon = v.status === 'running' ? '🟢' : '⚪';
+          msg += `  └ ${icon} *[VM ${v.vmid}] ${v.name}*: ${v.status.toUpperCase()} | CPU: ${v.cpuPercent}% | RAM: ${v.memUsedMB}MB\n`;
+        });
+      }
+      return msg;
+    }
+
+    const nodeStatus = telemetry.nodeStatus;
+    if (!nodeStatus) return `⚠️ *Proxmox:* Não foi possível carregar o status do nó no momento.`;
+    let msg = `⚡ *STATUS DO HYPERVISOR PROXMOX VE*\n\n`;
+    msg += `• *Servidor:* ${nodeStatus.equipment} (Nó: \`${nodeStatus.node}\`)\n`;
+    msg += `• *Uso de CPU:* ${nodeStatus.cpuPercent}\n`;
+    msg += `• *Memória RAM:* ${nodeStatus.memoryUsage}\n`;
+    msg += `• *Uptime do Host:* ${nodeStatus.uptime}\n`;
+    if (nodeStatus.storages && nodeStatus.storages.length > 0) {
+      msg += `\n💾 *Pools de Storage:*\n`;
+      nodeStatus.storages.forEach((st) => {
+        msg += `  └ *${st.name}* (${st.type}): ${st.usedPercent}% usado\n`;
+      });
+    }
+    return msg;
+  }
+
+  if (telemetry?.type === 'PFSENSE') {
+    let msg = `🛡️ *STATUS DO FIREWALL PFSENSE*\n\n`;
+    msg += `• *Servidor:* ${telemetry.equipment} (\`${telemetry.host}\`)\n`;
+    if (telemetry.gateways && telemetry.gateways.length > 0) {
+      const onlineCount = telemetry.gateways.filter((g) => g.status === 'online').length;
+      const dynamicStatus = onlineCount === telemetry.gateways.length ? 'ONLINE (100% dos links ativos)' : onlineCount > 0 ? 'DEGRADADO (link redundante em falha)' : 'OFFLINE';
+      msg += `• *Status dos Gateways:* ${dynamicStatus}\n\n`;
+      telemetry.gateways.forEach((gw) => {
+        const gwIcon = gw.status === 'online' ? '🟢' : '🔴';
+        msg += `${gwIcon} *${gw.name}:* ${gw.status.toUpperCase()} | RTT: ${gw.delay}ms | Perda: ${gw.loss}%\n`;
+      });
+    } else {
+      msg += `• Nenhum gateway ativo reportado pela API.\n`;
+    }
+    return msg;
+  }
+
+  if (telemetry?.type === 'MIKROTIK') {
+    const m = telemetry.mktData;
+    if (!m) return `⚠️ *Mikrotik:* Não foi possível conectar ao RouterOS.`;
+    let msg = `📶 *STATUS MIKROTIK ROUTEROS*\n\n`;
+    msg += `• *Equipamento:* ${m.equipment}\n`;
+    msg += `• *Status:* ${m.status.toUpperCase()}\n`;
+    msg += `• *Latência RTT:* ${m.latency}\n`;
+    msg += `• *Uso de CPU:* ${m.cpuLoad}\n`;
+    if (m.version) msg += `• *RouterOS:* ${m.version}\n`;
+    if (m.interfaces && m.interfaces.length > 0) {
+      msg += `\n🔌 *Interfaces Principais:*\n`;
+      m.interfaces.slice(0, 6).forEach((iface) => {
+        const icon = iface.running ? '🟢' : '⚪';
+        msg += `  └ ${icon} *${iface.name}* (${iface.type}): ${iface.running ? 'LINK UP' : 'DOWN'}\n`;
+      });
+    }
+    return msg;
+  }
+
+  if (telemetry?.type === 'ZABBIX') {
+    let msg = `🚨 *ALARMES CRÍTICOS DO ZABBIX*\n\n`;
+    msg += `• *Servidor:* ${telemetry.equipment}\n`;
+    msg += `• *Total de Incidentes Ativos:* ${telemetry.count}\n\n`;
+    if (telemetry.triggers && telemetry.triggers.length > 0) {
+      telemetry.triggers.slice(0, 6).forEach((trig) => {
+        const icon = trig.priority === 'DISASTER' ? '🔥' : '⚠️';
+        msg += `${icon} *[${trig.priority}] ${trig.host}:* ${trig.description}\n`;
+      });
+    } else {
+      msg += `✅ Nenhum incidente crítico ou desastre ativo no Zabbix no momento!`;
+    }
+    return msg;
+  }
+
+  // Visão geral de todos os equipamentos
+  let summary = `📡 *STATUS GERAL DA INFRAESTRUTURA*\n\n`;
+  if (!allEquipments || allEquipments.length === 0) {
+    return `ℹ️ *Nenhum equipamento cadastrado:* Cadastre roteadores, firewalls e hypervisors no Cofre de Equipamentos.`;
+  }
+  allEquipments.forEach((eq) => {
+    const icon = eq.status === 'online' ? '🟢' : eq.status === 'degraded' ? '🟡' : '🔴';
+    summary += `${icon} *${eq.name}* (${eq.type}) - Host: \`${eq.host}\`\n`;
+  });
+  summary += `\n_Consultado às ${new Date().toLocaleTimeString('pt-BR', tzBrasilia)}._`;
+  return summary;
+}
+
+/**
+ * Motor de Raciocínio Diagnóstico Autônomo (Offline / Zero-Key Fallback)
+ * Garante que o Hermes "pense" criticamente sobre a telemetria mesmo sem chaves de LLM externas.
+ */
+function autonomousDiagnosticReasoner({ text, normalized, matchedEquipment, telemetry, allEquipments }) {
+  // CASO 1: Otimização e redução de uso de RAM no Proxmox VE
+  if (
+    (telemetry?.type === 'PROXMOX' || normalized.includes('proxmox') || normalized.includes('supertop') || normalized.includes('calvi')) &&
+    (normalized.includes('ram') || normalized.includes('memoria') || normalized.includes('diminuir') || normalized.includes('reduzir') || normalized.includes('otimizar') || normalized.includes('consumo'))
+  ) {
+    const nodeStatus = telemetry?.nodeStatus;
+    const serverName = matchedEquipment?.name || nodeStatus?.equipment || 'ProxMox VE';
+    const ramInfo = nodeStatus?.memoryUsage || 'elevada';
+    const storages = nodeStatus?.storages || [];
+    const zfsStorage = storages.find((s) => s.type === 'zfspool' || s.name.toLowerCase().includes('zfs') || s.name.toLowerCase().includes('nvme'));
+
+    let resp = `🧠 *ANÁLISE DIAGNÓSTICA NOC • OTIMIZAÇÃO DE MEMÓRIA RAM*\n\n`;
+    resp += `Analisando a telemetria em tempo real do servidor *${serverName}*:\n`;
+    if (nodeStatus) {
+      resp += `• *Uso Atual de RAM:* ${nodeStatus.memoryUsage}\n`;
+      resp += `• *Carga de CPU:* ${nodeStatus.cpuPercent} | *Uptime:* ${nodeStatus.uptime}\n`;
+      if (zfsStorage) {
+        resp += `• *Pool ZFS Detectado:* \`${zfsStorage.name}\` (${zfsStorage.usedPercent}% alocado)\n`;
+      }
+    }
+    resp += `\n🔍 *Causa Raiz Mais Provável no Proxmox:*`;
+    resp += `\nNo Proxmox VE, o **ZFS ARC (Adaptive Replacement Cache)** por padrão consome até **50% da memória RAM física** para cache em disco (em um host com 256 GB, o ARC pode reservar sozinho ~125 GB!). O Proxmox reporta isso como "RAM em uso", mesmo que parte seja liberável sob pressão.\n`;
+
+    resp += `\n🛠️ *Plano de Ação Recomendado (Passo a Passo):*\n\n`;
+
+    resp += `1️⃣ *Limitar o ZFS ARC Max (Economia imediata de 50GB a 100GB)*\n`;
+    resp += `Defina um teto máximo para o ARC (ex: 32 GB ou 48 GB) criando o arquivo no nó do Proxmox:\n`;
+    resp += `\`\`\`bash\n`;
+    resp += `# Criar/editar configuração do ZFS:\n`;
+    resp += `echo "options zfs zfs_arc_max=34359738368" > /etc/modprobe.d/zfs.conf\n\n`;
+    resp += `# Atualizar initramfs para persistir nos reboots:\n`;
+    resp += `update-initramfs -u\n\n`;
+    resp += `# Aplicar IMEDIATAMENTE em runtime sem reiniciar:\n`;
+    resp += `echo 34359738368 > /sys/module/zfs/parameters/zfs_arc_max\n`;
+    resp += `\`\`\`\n`;
+    resp += `_(O valor \`34359738368\` limita o ARC a 32 GB. Se quiser 48 GB, use \`51539607552\`)._\n\n`;
+
+    resp += `2️⃣ *Habilitar Memory Ballooning e QEMU Guest Agent nas VMs*\n`;
+    resp += `Nas VMs que estiverem ociosas, certifique-se de que:\n`;
+    resp += `• O **QEMU Guest Agent** está instalado dentro do SO convidado.\n`;
+    resp += `• A opção **Ballooning Device** está ativa nas opções de Hardware da VM no Proxmox, permitindo que a RAM livre do guest seja devolvida ao host.\n\n`;
+
+    resp += `3️⃣ *Ativar Kernel Samepage Merging (KSM)*\n`;
+    resp += `Se houver várias VMs com o mesmo sistema operacional (ex: múltiplos Linux ou Windows), o KSM desduplica páginas idênticas na memória física:\n`;
+    resp += `\`\`\`bash\n`;
+    resp += `systemctl enable --now ksm\n`;
+    resp += `\`\`\`\n`;
+
+    if (zfsStorage && zfsStorage.usedPercent >= 85) {
+      resp += `⚠️ *Atenção Crítica ao Storage:* O pool ZFS \`${zfsStorage.name}\` está com *${zfsStorage.usedPercent}% de ocupação*. No ZFS, pools acima de 80% geram alta fragmentação de blocos e aumentam a pressão de metadados na memória RAM. Recomendo rodar \`fstrim\` nas VMs e expurgar snapshots antigos.\n`;
+    }
+
+    resp += `\nDeseja que eu detalhe o procedimento de redução de ARC ou liste as VMs que estão consumindo mais RAM?`;
+    return resp;
+  }
+
+  // CASO 2: Diagnóstico de Gateway e Queda de Link no pfSense
+  if (
+    (telemetry?.type === 'PFSENSE' || normalized.includes('pfsense') || normalized.includes('gateway') || normalized.includes('link') || normalized.includes('perda')) &&
+    (normalized.includes('queda') || normalized.includes('degradado') || normalized.includes('perda') || normalized.includes('offline') || normalized.includes('lento') || normalized.includes('como') || normalized.includes('resolver'))
+  ) {
+    let resp = `🧠 *ANÁLISE DIAGNÓSTICA NOC • RESILIÊNCIA DE GATEWAY PFSENSE*\n\n`;
+    resp += `• *Equipamento:* ${matchedEquipment?.name || 'Firewall pfSense'}\n`;
+    if (telemetry?.gateways && telemetry.gateways.length > 0) {
+      resp += `• *Status dos Links Detectados:*\n`;
+      telemetry.gateways.forEach((g) => {
+        const icon = g.status === 'online' ? '🟢' : '🔴';
+        resp += `  ${icon} *${g.name}:* ${g.status.toUpperCase()} (RTT: ${g.delay}ms, Perda: ${g.loss}%)\n`;
+      });
+    }
+
+    resp += `\n🔍 *Diagnóstico de Causas de Flapping ou Perda de Pacotes:*\n`;
+    resp += `1. **Monitor IP do dpinger Saturado:** Se o Gateway estiver usando o DNS da própria operadora como IP de monitoramento, ele pode descartar pacotes ICMP sob carga. Recomendado alterar para \`1.1.1.1\` ou \`8.8.8.8\` em *System > Routing > Gateways*.\n`;
+    resp += `2. **Thresholds de Latência Muito Estritos:** Ajuste a sensibilidade do dpinger (*Latency Threshold: 200/500ms*, *Packet Loss: 20%/50%*) para evitar chaveamento falso de failover.\n`;
+    resp += `3. **Tier de Prioridade de Gateway Groups:** Verifique se as rotas de contingência estão no Tier 2 para garantir que o tráfego retorne automaticamente ao restabelecer o link principal.\n`;
+    return resp;
+  }
+
+  // CASO 3: Diagnóstico de CPU, Saturação ou Interfaces Mikrotik
+  if (
+    (telemetry?.type === 'MIKROTIK' || normalized.includes('mikrotik') || normalized.includes('routeros')) &&
+    (normalized.includes('cpu') || normalized.includes('gargalo') || normalized.includes('lento') || normalized.includes('trafego') || normalized.includes('como') || normalized.includes('otimizar'))
+  ) {
+    const m = telemetry?.mktData;
+    let resp = `🧠 *ANÁLISE DIAGNÓSTICA NOC • ROTEAMENTO MIKROTIK*\n\n`;
+    resp += `• *Roteador:* ${matchedEquipment?.name || 'Mikrotik RouterOS'}\n`;
+    if (m) {
+      resp += `• *Uso de CPU:* ${m.cpuLoad} | *Latência RTT:* ${m.latency} | *Versão:* ${m.version || 'v7'}\n`;
+    }
+    resp += `\n🔍 *Boas Práticas para Alívio de CPU e Throughput:*\n`;
+    resp += `1. **Ativar FastTrack no Firewall:** Certifique-se de que a regra \`action=fasttrack-connection\` está ativa em \`/ip firewall filter\` para conexões estabelecidas/relacionadas (reduz o uso de CPU em até 70%).\n`;
+    resp += `2. **Inspecionar Conntrack Table:** Verifique a tabela de conexões com \`/ip firewall connection print count-only\`. Conexões zumbis ou ataques SYN Flood podem esgotar a CPU.\n`;
+    resp += `3. **Desativar Ferramentas de Profiling/Torch:** Certifique-se de que ferramentas como Torch, Packet Sniffer ou Graphing não estejam rodando em background.\n`;
+    return resp;
+  }
+
+  // CASO 4: Auditoria e Consistência de Backups
+  if (normalized.includes('backup') || normalized.includes('auditar') || normalized.includes('s3') || normalized.includes('snapshot')) {
+    let resp = `🧠 *ANÁLISE DIAGNÓSTICA NOC • GESTÃO E RETENÇÃO DE BACKUPS*\n\n`;
+    resp += `• *Política Recomendada de Continuidade de Negócios:*\n`;
+    resp += `1. **Estratégia 3-2-1:** 3 cópias dos dados, em 2 mídias distintas, com pelo menos 1 cópia externa no Storage S3/MinIO criptografado.\n`;
+    resp += `2. **Auditoria Automatizada:** O NOC-Agent valida periodicamente o hash MD5, integridade de tamanho e data do último snapshot no bucket S3 configurado.\n`;
+    resp += `3. **Janela de Execução:** Configure snapshots para horários de menor tráfego (01:00 às 04:00) para evitar picos de I/O de disco nos pools de produção.\n`;
+    return resp;
+  }
+
+  // CASO 5: Resposta Técnica Geral
+  let resp = `🤖 *NOC-Agent • Análise de Operações de Rede*\n\n`;
+  resp += `Entendi sua consulta sobre a infraestrutura:\n> "${text}"\n\n`;
+  if (matchedEquipment) {
+    resp += `Contextualizado para o equipamento *${matchedEquipment.name}* (${matchedEquipment.type}).\n\n`;
+  }
+  resp += `📋 *Orientações Técnicas:*\n`;
+  resp += `• Para diagnósticos aprofundados, você pode consultar métricas específicas de CPU, RAM, Latência RTT e Integridade de Backups.\n`;
+  resp += `• Todas as recomendações seguem as 10 Invariantes de Infraestrutura (segurança, evidência numérica e proteção de disponibilidade).\n`;
+  resp += `• Para comandos de impacto operacional (reboot, failover forçado), lembre-se de que é exigida autorização em 2 etapas (Human-in-the-Loop).`;
+  return resp;
+}
+
+/**
+ * Roteamento para Provedores LLM com RAG de Telemetria
+ */
+async function callLlmReasoning({ systemPrompt, telemetryContext, userPrompt, senderName }) {
+  const enrichedUserPrompt = `${telemetryContext}\n\n[SOLICITAÇÃO DO OPERADOR (${senderName || 'Técnico'})]\n${userPrompt}`;
+
+  // 1. Anthropic Claude
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  if (anthropicKey && anthropicKey.startsWith('sk-ant')) {
+    try {
+      const Anthropic = require('@anthropic-ai/sdk');
+      const anthropic = new Anthropic({ apiKey: anthropicKey });
+
+      const response = await anthropic.messages.create({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 1500,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: enrichedUserPrompt }],
+      });
+
+      const reply = response.content[0]?.text;
+      if (reply) return reply;
+    } catch (llmErr) {
+      console.warn('[Hermes LLM] Falha ao chamar Anthropic Claude:', llmErr.message);
+    }
+  }
+
+  // 2. OpenAI GPT-4o
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey && openaiKey.startsWith('sk-')) {
+    try {
+      const OpenAI = require('openai');
+      const openai = new OpenAI({ apiKey: openaiKey });
+
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: enrichedUserPrompt },
+        ],
+        max_tokens: 1500,
+      });
+
+      const reply = response.choices[0]?.message?.content;
+      if (reply) return reply;
+    } catch (llmErr) {
+      console.warn('[Hermes LLM] Falha ao chamar OpenAI:', llmErr.message);
+    }
+  }
+
+  // 3. Google Gemini via REST API
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (geminiKey) {
+    try {
+      const geminiRes = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+        {
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: `${systemPrompt}\n\n${enrichedUserPrompt}` }],
+            },
+          ],
+        },
+        { timeout: 12000 }
+      );
+      const reply = geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (reply) return reply;
+    } catch (geminiErr) {
+      console.warn('[Hermes LLM] Falha ao chamar Gemini API:', geminiErr.message);
+    }
+  }
+
+  // 4. Ollama Local LLM (se configurado)
+  const ollamaUrl = process.env.OLLAMA_BASE_URL;
+  if (ollamaUrl) {
+    try {
+      const cleanOllama = ollamaUrl.replace(/\/+$/, '');
+      const ollamaRes = await axios.post(
+        `${cleanOllama}/api/generate`,
+        {
+          model: process.env.OLLAMA_MODEL || 'llama3',
+          prompt: `${systemPrompt}\n\n${enrichedUserPrompt}`,
+          stream: false,
+        },
+        { timeout: 15000 }
+      );
+      const reply = ollamaRes.data?.response;
+      if (reply) return reply;
+    } catch (ollamaErr) {
+      console.warn('[Hermes LLM] Falha ao chamar Ollama:', ollamaErr.message);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Processador principal de mensagens do Hermes AI Engine com Telemetria RAG e Raciocínio Diagnóstico
  */
 async function processMessage({ text, senderPhone, senderName }) {
   const normalized = (text || '').toLowerCase().trim();
 
-  // 1. Checa se é uma resposta de aprovação humana (ex: "APROVAR 4821")
+  // 1. Validação de Aprovação Humana 2FA (ex: "APROVAR 4821")
   if (/APROVAR\s+\d{4}/i.test(text)) {
     const verification = verifyApproval(text, senderPhone);
     if (verification.valid) {
@@ -24,306 +572,63 @@ async function processMessage({ text, senderPhone, senderName }) {
     }
   }
 
-  // 2. Se for cancelamento explícito
+  // 2. Cancelamento Explícito de Ação
   if (/^CANCELAR$/i.test(text.trim())) {
     return `🛑 *Ação cancelada pelo operador.* Nenhuma modificação foi realizada nos equipamentos de rede.`;
   }
 
-  // 3. Ações de impacto solicitadas em linguagem natural (exige 2FA / aprovação humana L2)
-  if (normalized.includes('reiniciar') || normalized.includes('desligar') || normalized.includes('reboot') || normalized.includes('derrubar')) {
+  // 3. Classificação de Intenção da Mensagem
+  const intent = classifyIntent(text);
+
+  // 4. Se for comando de impacto/destrutivo direto (ex: "reiniciar proxmox agora") -> Dispara 2FA
+  if (intent.type === 'DESTRUCTIVE_EXECUTION') {
     const action = 'REINICIAR_EQUIPAMENTO';
     const target = text;
     const approval = createApprovalRequest(action, target, { requestedBy: senderPhone }, senderPhone);
     return approval.challengeMessage;
   }
 
-  // 4. Proxmox VE (Nós, CPU, RAM, VMs QEMU e Containers LXC via MCP)
-  if (
-    normalized.includes('proxmox') ||
-    normalized.includes('hypervisor') ||
-    normalized.includes('vm') ||
-    normalized.includes('vms') ||
-    normalized.includes('lxc') ||
-    normalized.includes('qemu')
-  ) {
-    try {
-      if (normalized.includes('vm') || normalized.includes('lxc') || normalized.includes('workload') || normalized.includes('maquina')) {
-        const workloads = await executeMcpTool('proxmox_list_workloads');
-        let msg = `🖥️ *INVENTÁRIO DE WORKLOADS PROXMOX VE*\n\n`;
-        msg += `• *Servidor:* ${workloads.equipment} (Nó: \`${workloads.node}\`)\n`;
-        msg += `• *VMs QEMU:* ${workloads.vms.running} ativas / ${workloads.vms.stopped} paradas (Total: ${workloads.vms.total})\n`;
-        if (workloads.vms.list.length > 0) {
-          workloads.vms.list.slice(0, 8).forEach((v) => {
-            const icon = v.status === 'running' ? '🟢' : '⚪';
-            msg += `  └ ${icon} *[VM ${v.vmid}] ${v.name}*: ${v.status.toUpperCase()} | CPU: ${v.cpuPercent}% | RAM: ${v.memUsedMB}MB\n`;
-          });
-        }
-        msg += `\n• *Containers LXC:* ${workloads.lxcs.running} ativos / ${workloads.lxcs.stopped} parados (Total: ${workloads.lxcs.total})\n`;
-        if (workloads.lxcs.list.length > 0) {
-          workloads.lxcs.list.slice(0, 5).forEach((c) => {
-            const icon = c.status === 'running' ? '🟢' : '⚪';
-            msg += `  └ ${icon} *[CT ${c.vmid}] ${c.name}*: ${c.status.toUpperCase()}\n`;
-          });
-        }
-        return msg;
-      }
+  // 5. Resolução do Equipamento em questão e Coleta da Telemetria em Tempo Real (RAG)
+  const { matched: matchedEquipment, all: allEquipments } = await resolveTargetEquipment(text);
+  const telemetry = await fetchLiveTelemetry(matchedEquipment);
 
-      const nodeStatus = await executeMcpTool('proxmox_get_node_status');
-      let msg = `⚡ *STATUS DO HYPERVISOR PROXMOX VE*\n\n`;
-      msg += `• *Servidor:* ${nodeStatus.equipment} (Nó: \`${nodeStatus.node}\`)\n`;
-      msg += `• *Uso de CPU:* ${nodeStatus.cpuPercent}\n`;
-      msg += `• *Memória RAM:* ${nodeStatus.memoryUsage}\n`;
-      msg += `• *Uptime do Host:* ${nodeStatus.uptime}\n`;
-      if (nodeStatus.storages && nodeStatus.storages.length > 0) {
-        msg += `\n💾 *Pools de Storage:*\n`;
-        nodeStatus.storages.forEach((st) => {
-          msg += `  └ *${st.name}* (${st.type}): ${st.usedPercent}% usado\n`;
-        });
-      }
-      return msg;
-    } catch (pveErr) {
-      return `⚠️ *Aviso Proxmox:* ${pveErr.message}`;
-    }
+  // 6. Se o usuário pediu expressamente APENAS uma leitura de status/inventário sem dúvidas ou perguntas
+  if (intent.type === 'PURE_STATUS_READOUT') {
+    return await formatPureStatusReadout(matchedEquipment, telemetry, normalized, allEquipments);
   }
 
-  // 5. Mikrotik RouterOS (Interfaces, CPU, RTT via MCP)
-  if (normalized.includes('mikrotik') || normalized.includes('routeros')) {
-    try {
-      const mkt = await executeMcpTool('mikrotik_get_status');
-      let msg = `📶 *STATUS MIKROTIK ROUTEROS*\n\n`;
-      msg += `• *Equipamento:* ${mkt.equipment}\n`;
-      msg += `• *Status da Conexão:* ${mkt.status.toUpperCase()}\n`;
-      msg += `• *Latência RTT:* ${mkt.latency}\n`;
-      msg += `• *Uso de CPU:* ${mkt.cpuLoad}\n`;
-      if (mkt.version) msg += `• *RouterOS:* ${mkt.version}\n`;
-      if (mkt.interfaces && mkt.interfaces.length > 0) {
-        msg += `\n🔌 *Interfaces Principais:*\n`;
-        mkt.interfaces.slice(0, 6).forEach((iface) => {
-          const icon = iface.running ? '🟢' : '⚪';
-          msg += `  └ ${icon} *${iface.name}* (${iface.type}): ${iface.running ? 'LINK UP' : 'DOWN'}\n`;
-        });
-      }
-      return msg;
-    } catch (mktErr) {
-      return `⚠️ *Aviso Mikrotik:* ${mktErr.message}`;
-    }
+  // 7. MODO DE RACIOCÍNIO E PENSAMENTO DIAGNÓSTICO (CONSULTATIVE_REASONING)
+  // Monta o contexto operacional de telemetria
+  const telemetryContext = buildTelemetryContextText(matchedEquipment, telemetry, allEquipments);
+
+  // Tenta processar com as LLMs configuradas (Claude 3.5 Sonnet, GPT-4o, Gemini ou Ollama)
+  const llmResponse = await callLlmReasoning({
+    systemPrompt: SYSTEM_PROMPT,
+    telemetryContext,
+    userPrompt: text,
+    senderName,
+  });
+
+  if (llmResponse) {
+    return llmResponse;
   }
 
-  // 6. Zabbix (Alarmes e Triggers via MCP)
-  if (normalized.includes('zabbix') || normalized.includes('alarme') || normalized.includes('trigger')) {
-    try {
-      const zbx = await executeMcpTool('zabbix_get_active_triggers');
-      let msg = `🚨 *ALARMES CRÍTICOS DO ZABBIX*\n\n`;
-      msg += `• *Servidor:* ${zbx.equipment}\n`;
-      msg += `• *Total de Incidentes Ativos:* ${zbx.count}\n\n`;
-      if (zbx.triggers && zbx.triggers.length > 0) {
-        zbx.triggers.slice(0, 6).forEach((trig) => {
-          const icon = trig.priority === 'DISASTER' ? '🔥' : '⚠️';
-          msg += `${icon} *[${trig.priority}] ${trig.host}:* ${trig.description}\n`;
-        });
-      } else {
-        msg += `✅ Nenhum incidente crítico ou desastre ativo no Zabbix no momento!`;
-      }
-      return msg;
-    } catch (zbxErr) {
-      return `⚠️ *Aviso Zabbix:* ${zbxErr.message}`;
-    }
-  }
-
-  // 7. Auditoria REAL de Backups nos Storages e Equipamentos
-  if (
-    normalized.includes('backup') ||
-    normalized.includes('auditar') ||
-    normalized.includes('auditoria') ||
-    normalized.includes('snapshot')
-  ) {
-    try {
-      const tzBrasilia = { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' };
-      const [equipments, audits, storages] = await Promise.all([
-        prisma.equipment.findMany({
-          where: { active: true },
-          include: { backupStorage: true },
-          orderBy: { createdAt: 'desc' },
-        }),
-        prisma.backupAudit.findMany({
-          take: 10,
-          orderBy: { verifiedAt: 'desc' },
-          include: {
-            equipment: { select: { name: true, type: true } },
-            storage: { select: { name: true, type: true } },
-          },
-        }),
-        prisma.storage.findMany({
-          where: { active: true },
-        }),
-      ]);
-
-      if (equipments.length === 0) {
-        return `ℹ️ *Nenhum equipamento cadastrado no Cofre:*\nCadastre os equipamentos na aba *Cofre de Equipamentos* para habilitar a auditoria e gestão de backups.`;
-      }
-
-      let summary = `💾 *AUDITORIA DE BACKUPS DOS EQUIPAMENTOS*\n\n`;
-
-      if (audits.length > 0) {
-        summary += `📋 *Últimos Backups Auditados no Storage:*\n`;
-        audits.forEach((aud) => {
-          const statusIcon = aud.status === 'SUCCESS' ? '🟢' : aud.status === 'FAILED' ? '🔴' : '🟡';
-          const eqName = aud.equipment?.name || 'Equipamento';
-          const stName = aud.storage?.name || aud.storageBucket || 'Storage';
-          const sizeKb = aud.sizeBytes ? `${Math.round(Number(aud.sizeBytes) / 1024)} KB` : 'N/A';
-          const dataHora = new Date(aud.verifiedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-          summary += `${statusIcon} *${eqName}:* \`${aud.backupFile}\` (${sizeKb})\n`;
-          summary += `  └ *Storage:* ${stName} | *Auditado em:* ${dataHora}\n`;
-        });
-      } else {
-        summary += `📋 *Status de Backup por Equipamento:*\n`;
-        equipments.forEach((eq) => {
-          const hasStorage = !!eq.backupStorage;
-          const storageName = hasStorage ? eq.backupStorage.name : 'Nenhum Storage vinculado';
-          const schedule = eq.backupSchedule || 'MANUAL';
-          summary += `• *${eq.name}* (${eq.type}):\n`;
-          summary += `  └ *Storage Destino:* ${storageName}\n`;
-          summary += `  └ *Rotina Agendada:* ${schedule}\n`;
-          summary += `  └ *Último Arquivo:* Nenhum backup auditado registrado no banco ainda.\n`;
-        });
-
-        summary += `\nℹ️ *Storages Cadastrados:* ${storages.length > 0 ? storages.map((s) => s.name).join(', ') : 'Nenhum storage cadastrado (configure MinIO, S3 ou SFTP no Cofre de Storages)'}.\n`;
-      }
-
-      summary += `\n_Auditoria consultada no Cofre às ${new Date().toLocaleTimeString('pt-BR', tzBrasilia)}._`;
-      return summary;
-    } catch (err) {
-      console.error('Erro ao auditar backups no Hermes:', err);
-      return `⚠️ *Erro ao consultar auditoria de backups:* Não foi possível conectar ao banco (${err.message}).`;
-    }
-  }
-
-  // 8. Consulta geral de Status dos Equipamentos / Links / Conectividade
-  if (
-    normalized.includes('equipamento') ||
-    normalized.includes('status') ||
-    normalized.includes('link') ||
-    normalized.includes('gateway') ||
-    normalized.includes('pfsense') ||
-    normalized.includes('rede') ||
-    normalized.includes('internet') ||
-    normalized.includes('conectividade')
-  ) {
-    try {
-      const equipments = await prisma.equipment.findMany({
-        where: { active: true },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      if (equipments.length === 0) {
-        return `ℹ️ *Nenhum equipamento cadastrado no cofre:*\nPara que eu possa monitorar a infraestrutura em tempo real, cadastre os equipamentos (pfSense, Mikrotik, Proxmox, Zabbix) na aba *Cofre de Equipamentos* no painel web.`;
-      }
-
-      const tzBrasilia = { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' };
-      let summary = `📡 *STATUS DOS EQUIPAMENTOS DA REDE*\n\n`;
-
-      for (const eq of equipments) {
-        const icon = eq.status === 'online' ? '🟢' : eq.status === 'degraded' ? '🟡' : '🔴';
-        summary += `${icon} *${eq.name}* (${eq.type})\n`;
-        summary += `• *Host:* \`${eq.host}\`\n`;
-        summary += `• *Status:* ${(eq.status || 'Ativo').toUpperCase()}\n`;
-
-        // Se for pfSense, detalha gateways de internet
-        if (eq.type === 'PFSENSE') {
-          try {
-            const creds = decryptCredentials(eq.encryptedCredentials, eq.iv, eq.authTag);
-            const apiKey = typeof creds === 'object' ? (creds.apiKey || creds.key || creds.token || '') : String(creds);
-            if (apiKey) {
-              const targetUrl = eq.host.replace(/\/+$/, '');
-              const res = await axios.get(`${targetUrl}/api/v2/status/gateways`, {
-                headers: {
-                  'X-API-Key': apiKey,
-                  'Accept': 'application/json',
-                },
-                timeout: 6000,
-                httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }),
-              });
-              const gateways = res.data?.data || [];
-              if (gateways.length > 0) {
-                const onlineCount = gateways.filter((g) => g.status === 'online').length;
-                const dynamicStatus = onlineCount === gateways.length ? 'ONLINE (100% dos links ativos)' : onlineCount > 0 ? 'DEGRADADO (link redundante em falha)' : 'OFFLINE';
-                summary += `• *Links de Internet:* ${dynamicStatus}\n`;
-                gateways.forEach((gw) => {
-                  const gwIcon = gw.status === 'online' ? '🟢' : '🔴';
-                  summary += `  └ ${gwIcon} *${gw.name}:* ${gw.status.toUpperCase()} | RTT: ${gw.delay}ms | Perda: ${gw.loss}%\n`;
-                });
-              }
-            }
-          } catch (pfsenseErr) {
-            console.warn('Erro ao consultar gateways pfSense no Hermes:', pfsenseErr.message);
-          }
-        }
-        summary += `\n`;
-      }
-
-      summary += `_Dados consultados no Cofre às ${new Date().toLocaleTimeString('pt-BR', tzBrasilia)}._`;
-      return summary;
-    } catch (err) {
-      return `⚠️ *Erro ao consultar status dos equipamentos:* Não foi possível conectar ao cofre (${err.message}).`;
-    }
-  }
-
-  // 9. Integração com LLM (Anthropic Claude ou OpenAI) com MCP Tools
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  if (anthropicKey && anthropicKey.startsWith('sk-ant')) {
-    try {
-      const Anthropic = require('@anthropic-ai/sdk');
-      const anthropic = new Anthropic({ apiKey: anthropicKey });
-
-      const response = await anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1024,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: text }],
-      });
-
-      return response.content[0]?.text || 'NOC-Agent operacional.';
-    } catch (llmErr) {
-      console.error('Erro na chamada Anthropic:', llmErr.message);
-    }
-  }
-
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (openaiKey && openaiKey.startsWith('sk-')) {
-    try {
-      const OpenAI = require('openai');
-      const openai = new OpenAI({ apiKey: openaiKey });
-
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: text },
-        ],
-        max_tokens: 1024,
-      });
-
-      return response.choices[0]?.message?.content || 'NOC-Agent operacional.';
-    } catch (llmErr) {
-      console.error('Erro na chamada OpenAI:', llmErr.message);
-    }
-  }
-
-  // 10. Resposta padrão caso nenhuma LLM responda
-  return (
-    `🤖 *NOC-Agent operacional (Modo Resiliente)*\n\n` +
-    `Olá, *${senderName || 'Operador'}*! Recebi sua solicitação:\n` +
-    `> "${text}"\n\n` +
-    `Você pode consultar via MCP:\n` +
-    `• *"Qual é o status do Proxmox e uso de CPU/RAM?"*\n` +
-    `• *"Listar VMs e containers do Proxmox"*\n` +
-    `• *"Como estão as interfaces e CPU do Mikrotik?"*\n` +
-    `• *"Como estão os gateways do pfSense?"*\n` +
-    `• *"Auditar backups recentes dos equipamentos"*\n` +
-    `• *"Listar alarmes ativos do Zabbix"*`
-  );
+  // 8. Se nenhuma LLM externa estiver com chave ativa no momento, ativa o Motor Diagnóstico Autônomo
+  // que "pensa" e formula a resposta técnica exata baseada na telemetria coletada
+  return autonomousDiagnosticReasoner({
+    text,
+    normalized,
+    matchedEquipment,
+    telemetry,
+    allEquipments,
+  });
 }
 
 module.exports = {
   processMessage,
+  resolveTargetEquipment,
+  fetchLiveTelemetry,
+  classifyIntent,
+  autonomousDiagnosticReasoner,
+  buildTelemetryContextText,
 };
