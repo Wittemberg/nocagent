@@ -72,8 +72,8 @@
 
 ---
 
-## 🗄️ 6. Próximos Passos de Operação
+## 🗄️ 6. Operação & Cofre de Equipamentos ✅ CONCLUÍDO
 
-- `[ ]` Testar o cadastro do primeiro equipamento no Cofre (com a chave AES-256 corrigida)
-- `[ ]` Criar primeiro Storage no Cofre de Storages (MinIO/S3/SFTP)
-- `[ ]` Vincular equipamento ao Storage de backup
+- `[x]` Primeiro equipamento cadastrado no Cofre com chave AES-256 (pfSense Libra)
+- `[x]` Validação de conectividade real via API do pfSense
+- `[x]` Cofre criptográfico operacional e integrado ao Hermes AI Engine

@@ -264,9 +264,12 @@ export default function App() {
     }
   };
 
-  // Identifica se há equipamentos caídos ou com erro de autenticação de credencial
+  // Identifica se há equipamentos caídos, links degradados ou com erro de autenticação
   const downEquipments = Array.isArray(equipmentList)
-    ? equipmentList.filter(eq => eq.status === 'offline' || (eq.lastLossPercent != null && eq.lastLossPercent > 0))
+    ? equipmentList.filter(eq => eq.status === 'offline')
+    : [];
+  const degradedEquipments = Array.isArray(equipmentList)
+    ? equipmentList.filter(eq => eq.status === 'degraded')
     : [];
   const authErrorEquipments = Array.isArray(equipmentList)
     ? equipmentList.filter(eq => eq.status === 'auth_error')
@@ -360,6 +363,33 @@ export default function App() {
               onClick={fetchEquipmentsStatus}
               disabled={refreshing}
               className="px-3 py-1.5 rounded-lg bg-red-900/40 hover:bg-red-900/70 border border-red-700/60 text-xs font-medium text-red-200 flex items-center gap-1.5 transition"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+              Revalidar
+            </button>
+          </div>
+        )}
+ 
+        {/* BANNER DE ALERTA DE LINK REDUNDANTE DEGRADADO */}
+        {degradedEquipments.length > 0 && downEquipments.length === 0 && (
+          <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-amber-950/60 to-slate-900 border border-amber-900/80 flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-amber-900/50 text-amber-400 border border-amber-700/50">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-amber-200 text-sm">
+                  ⚠️ ALERTA DE REDUNDÂNCIA DE LINK: {degradedEquipments.map(e => e.name).join(', ')}
+                </h3>
+                <p className="text-xs text-amber-300/80 mt-0.5">
+                  {degradedEquipments.map(e => `Equipamento ${e.name} está online, mas possui 1 ou mais links com perda de pacotes ou inativos (${e.lastLossPercent != null ? `${e.lastLossPercent}% de perda média` : 'link inativo'}).`).join(' • ')}
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={fetchEquipmentsStatus}
+              disabled={refreshing}
+              className="px-3 py-1.5 rounded-lg bg-amber-900/40 hover:bg-amber-900/70 border border-amber-700/60 text-xs font-medium text-amber-200 flex items-center gap-1.5 transition"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
               Revalidar
@@ -532,13 +562,13 @@ export default function App() {
                       <div className="grid grid-cols-2 gap-4 pt-1 mb-2">
                         <div>
                           <span className="text-xs text-slate-400">Latência Média (RTT):</span>
-                          <p className={`text-xl font-mono font-bold ${isOnline ? 'text-emerald-400' : 'text-slate-500'}`}>
+                          <p className={`text-xl font-mono font-bold ${isOnline ? 'text-emerald-400' : isDegraded ? 'text-amber-400' : 'text-slate-500'}`}>
                             {eq.lastLatency != null && eq.lastLatency > 0 ? `${eq.lastLatency} ms` : '—'}
                           </p>
                         </div>
                         <div>
                           <span className="text-xs text-slate-400">Perda de Pacotes:</span>
-                          <p className={`text-xl font-mono font-bold ${eq.lastLossPercent === 0 ? 'text-emerald-400' : eq.lastLossPercent > 0 ? 'text-red-400' : 'text-slate-500'}`}>
+                          <p className={`text-xl font-mono font-bold ${eq.lastLossPercent === 0 ? 'text-emerald-400' : eq.lastLossPercent > 0 && eq.lastLossPercent < 100 ? 'text-amber-400' : eq.lastLossPercent === 100 ? 'text-red-400' : 'text-slate-500'}`}>
                             {eq.lastLossPercent != null ? `${eq.lastLossPercent}%` : '0%'}
                           </p>
                         </div>

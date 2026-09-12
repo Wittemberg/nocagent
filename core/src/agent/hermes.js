@@ -57,7 +57,7 @@ async function processMessage({ text, senderPhone, senderName }) {
     const verification = verifyApproval(text, senderPhone);
     if (verification.valid) {
       const { action, target } = verification.request;
-      return `✅ *AÇÃO AUTORIZADA COM SUCESSO!*\n\n• *Operador:* ${senderName || 'Técnico'}\n• *Ação:* ${action}\n• *Alvo:* ${target}\n• *Horário:* ${new Date().toLocaleTimeString('pt-BR')}\n\nO comando foi encaminhado para a API oficial do equipamento e gravado no *Audit Log*.`;
+      return `✅ *AÇÃO AUTORIZADA COM SUCESSO!*\n\n• *Operador:* ${senderName || 'Técnico'}\n• *Ação:* ${action}\n• *Alvo:* ${target}\n• *Horário:* ${new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' })}\n\nO comando foi encaminhado para a API oficial do equipamento e gravado no *Audit Log*.`;
     } else {
       return `❌ *FALHA NA AUTORIZAÇÃO:*\n${verification.reason}`;
     }
@@ -83,6 +83,7 @@ async function processMessage({ text, senderPhone, senderName }) {
         return `ℹ️ *Nenhum equipamento cadastrado no cofre:*\nPara que eu possa monitorar a infraestrutura em tempo real, cadastre os equipamentos (pfSense, Mikrotik, Proxmox, Zabbix) na aba *Cofre de Equipamentos* no painel web.`;
       }
 
+      const tzBrasilia = { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' };
       let summary = `📡 *STATUS DOS EQUIPAMENTOS DA REDE*\n\n`;
 
       for (const eq of equipments) {
@@ -98,32 +99,33 @@ async function processMessage({ text, senderPhone, senderName }) {
             const apiKey = typeof creds === 'object' ? (creds.apiKey || creds.key || creds.token || '') : String(creds);
             if (apiKey) {
               const targetUrl = eq.host.replace(/\/+$/, '');
-              let res;
-              try {
-                res = await axios.get(`${targetUrl}/api/v2/status/gateways`, {
-                  headers: { 'X-API-Key': apiKey },
-                  timeout: 5000,
-                  httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }),
-                });
-              } catch {
-                res = await axios.get(`${targetUrl}/api/v2/status/gateway`, {
-                  headers: { 'X-API-Key': apiKey },
-                  timeout: 5000,
-                  httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }),
+              const res = await axios.get(`${targetUrl}/api/v2/status/gateways`, {
+                headers: {
+                  'X-API-Key': apiKey,
+                  'Accept': 'application/json',
+                },
+                timeout: 6000,
+                httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }),
+              });
+              const gateways = res.data?.data || [];
+              if (gateways.length > 0) {
+                const onlineCount = gateways.filter((g) => g.status === 'online').length;
+                const dynamicStatus = onlineCount === gateways.length ? 'ONLINE (100% dos links ativos)' : onlineCount > 0 ? 'DEGRADADO (link redundante em falha)' : 'OFFLINE';
+                summary += `• *Links de Internet:* ${dynamicStatus}\n`;
+                gateways.forEach((gw) => {
+                  const gwIcon = gw.status === 'online' ? '🟢' : '🔴';
+                  summary += `  └ ${gwIcon} *${gw.name}:* ${gw.status.toUpperCase()} | RTT: ${gw.delay}ms | Perda: ${gw.loss}%\n`;
                 });
               }
-              const gateways = res.data?.data || [];
-              gateways.forEach((gw) => {
-                const gwIcon = gw.status === 'online' ? '🟢' : '🔴';
-                summary += `  └ ${gwIcon} *${gw.name}:* ${gw.status.toUpperCase()} | RTT: ${gw.delay}ms | Perda: ${gw.loss}%\n`;
-              });
             }
-          } catch {}
+          } catch (pfsenseErr) {
+            console.warn('Erro ao consultar gateways pfSense no Hermes:', pfsenseErr.message);
+          }
         }
         summary += `\n`;
       }
 
-      summary += `_Dados consultados no Cofre às ${new Date().toLocaleTimeString('pt-BR')}._`;
+      summary += `_Dados consultados no Cofre às ${new Date().toLocaleTimeString('pt-BR', tzBrasilia)}._`;
       return summary;
     } catch (err) {
       return `⚠️ *Erro ao consultar status dos equipamentos:* Não foi possível conectar ao cofre (${err.message}).`;

@@ -11,6 +11,7 @@ services:
     environment:
       PORT: 3000
       NODE_ENV: production
+      TZ: "America/Sao_Paulo"
       # Modelos de IA LLM
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
       OPENAI_API_KEY: "${OPENAI_API_KEY}"

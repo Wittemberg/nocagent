@@ -2,8 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Dependências do sistema para o core, rede e compatibilidade OpenSSL com Prisma
-RUN apk add --no-cache curl python3 py3-pip bash iputils openssl libc6-compat
+# Dependências do sistema para o core, rede, timezone Brasil e compatibilidade OpenSSL com Prisma
+RUN apk add --no-cache curl python3 py3-pip bash iputils openssl libc6-compat tzdata
+ENV TZ="America/Sao_Paulo"
 
 COPY package*.json ./
 COPY prisma ./prisma

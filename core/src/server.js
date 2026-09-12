@@ -136,13 +136,13 @@ app.get('/api/equipments/status', async (req, res) => {
               let authSuccess = false;
 
               // Estratégia de autenticação resiliente:
-              // 1. Tenta X-API-Key + Authorization: Bearer
-              // 2. Se falhar com 401, tenta Basic Auth (admin:apiKey ou apiKey)
-              // 3. Tenta X-API-Key individual
+              // 1. X-API-Key com Accept: application/json (obrigatório: o pfSense rejeita o padrão do axios com HTTP 406 Not Acceptable)
+              // 2. Authorization: Bearer <key>
+              // 3. Basic Auth
               const authAttempts = [
-                { 'X-API-Key': apiKey, 'Authorization': apiKey.startsWith('Bearer ') ? apiKey : `Bearer ${apiKey}` },
-                { 'Authorization': `Basic ${Buffer.from(apiKey.includes(':') ? apiKey : `admin:${apiKey}`).toString('base64')}` },
-                { 'X-API-Key': apiKey }
+                { 'X-API-Key': apiKey, 'Accept': 'application/json' },
+                { 'Authorization': apiKey.startsWith('Bearer ') ? apiKey : `Bearer ${apiKey}`, 'Accept': 'application/json' },
+                { 'Authorization': `Basic ${Buffer.from(apiKey.includes(':') ? apiKey : `admin:${apiKey}`).toString('base64')}`, 'Accept': 'application/json' }
               ];
 
               for (const headers of authAttempts) {
@@ -154,24 +154,13 @@ app.get('/api/equipments/status', async (req, res) => {
                   });
                   authSuccess = true;
                   break;
-                } catch (firstErr) {
-                  if (firstErr.response?.status === 401) {
+                } catch (err) {
+                  const status = err.response?.status;
+                  // Se for 401 Unauthorized ou 406 Not Acceptable, tenta a próxima estratégia de cabeçalho
+                  if (status === 401 || status === 406) {
                     continue;
                   }
-                  try {
-                    gwRes = await axios.get(`${targetUrl}/api/v2/status/gateway`, {
-                      headers,
-                      timeout: 6000,
-                      httpsAgent,
-                    });
-                    authSuccess = true;
-                    break;
-                  } catch (secondErr) {
-                    if (secondErr.response?.status === 401) {
-                      continue;
-                    }
-                    throw secondErr;
-                  }
+                  throw err;
                 }
               }
 
@@ -185,10 +174,10 @@ app.get('/api/equipments/status', async (req, res) => {
               // Calcula médias reais de latência e perda
               if (gws.length > 0) {
                 const onlineGws = gws.filter(g => g.status === 'online');
-                item.status = onlineGws.length > 0 ? (onlineGws.length === gws.length ? 'online' : 'degraded') : 'degraded';
-                const totalDelay = gws.reduce((acc, g) => acc + (parseFloat(g.delay) || 0), 0);
+                item.status = onlineGws.length > 0 ? (onlineGws.length === gws.length ? 'online' : 'degraded') : 'offline';
+                const totalDelay = onlineGws.reduce((acc, g) => acc + (parseFloat(g.delay) || 0), 0);
                 const totalLoss = gws.reduce((acc, g) => acc + (parseFloat(g.loss) || 0), 0);
-                item.lastLatency = Math.round((totalDelay / gws.length) * 10) / 10;
+                item.lastLatency = onlineGws.length > 0 ? Math.round((totalDelay / onlineGws.length) * 10) / 10 : 0;
                 item.lastLossPercent = Math.round((totalLoss / gws.length) * 10) / 10;
                 item.lastCheck = new Date();
               } else {
