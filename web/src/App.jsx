@@ -1957,34 +1957,37 @@ export default function App() {
         </div>
 
         {/* NAVEGAÇÃO POR TABS */}
-        <div className="max-w-7xl mx-auto px-4 flex gap-2 border-t border-slate-800/60 overflow-x-auto text-sm">
-          {[
-            { id: 'overview', label: 'Visão Geral (NOC)', icon: Activity },
-            { id: 'chat', label: 'Terminal IA (Chat)', icon: MessageSquare },
-            { id: 'vault', label: 'Cofre de Equipamentos', icon: Lock },
-            { id: 'storages', label: 'Cofre de Storages', icon: Database },
-            { id: 'backups', label: 'Auditoria de Backups', icon: HardDrive },
-            ...(currentUser?.role === 'SUPERADMIN' ? [{ id: 'tenants', label: 'Tenants', icon: Building2 }] : []),
-            ...(currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'TENANT_MASTER' ? [{ id: 'users', label: 'Usuários', icon: Users }] : []),
-            ...(currentUser?.role === 'SUPERADMIN' ? [{ id: 'observability', label: 'Governança & APM', icon: Gauge }] : []),
-          ].map(tab => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`py-2.5 px-4 font-medium flex items-center gap-2 border-b-2 transition-all duration-200 whitespace-nowrap ${
-                  active 
-                    ? 'border-sky-500 text-sky-400 bg-sky-500/10' 
-                    : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            );
-          })}
+        <div className="w-full border-t border-slate-800/60 bg-slate-950/40">
+          <div className="max-w-7xl 2xl:max-w-screen-2xl mx-auto px-4 flex items-center gap-1.5 overflow-x-auto text-xs lg:text-sm py-1.5 scrollbar-none">
+            {[
+              { id: 'overview', label: 'Visão Geral', fullLabel: 'Visão Geral (NOC)', icon: Activity },
+              { id: 'chat', label: 'Terminal IA', fullLabel: 'Terminal IA (Chat)', icon: MessageSquare },
+              { id: 'vault', label: 'Equipamentos', fullLabel: 'Cofre de Equipamentos', icon: Lock },
+              { id: 'storages', label: 'Storages', fullLabel: 'Cofre de Storages', icon: Database },
+              { id: 'backups', label: 'Backups', fullLabel: 'Auditoria de Backups', icon: HardDrive },
+              ...(currentUser?.role === 'SUPERADMIN' ? [{ id: 'tenants', label: 'Tenants', fullLabel: 'Gestão de Tenants', icon: Building2 }] : []),
+              ...(currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'TENANT_MASTER' ? [{ id: 'users', label: 'Usuários', fullLabel: 'Gestão de Usuários', icon: Users }] : []),
+              ...(currentUser?.role === 'SUPERADMIN' ? [{ id: 'observability', label: 'Governança & APM', fullLabel: 'Governança & APM (Disjuntor / Traces)', icon: Gauge }] : []),
+            ].map(tab => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  title={tab.fullLabel}
+                  className={`py-2 px-3 lg:px-3.5 font-medium flex items-center gap-2 rounded-lg transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
+                    active 
+                      ? 'text-sky-400 bg-sky-500/15 shadow-sm shadow-sky-500/10 font-semibold' 
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${active ? 'text-sky-400' : 'text-slate-400'}`} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </header>
 
