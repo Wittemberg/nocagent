@@ -24,9 +24,10 @@ import {
   Copy,
   Check,
   Terminal,
-  Folder,
   Cpu,
-  Layers
+  Layers,
+  Filter,
+  BellOff
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -484,6 +485,39 @@ export default function App() {
   const [noEquipment, setNoEquipment] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [statusError, setStatusError] = useState(null);
+
+  // Filtro de tipos na visão geral (conforme dropdown de cadastro)
+  const [overviewTypeFilter, setOverviewTypeFilter] = useState('ALL');
+
+  // Silenciamento de alertas com persistência em localStorage
+  const [snoozeAlertUntil, setSnoozeAlertUntil] = useState(() => {
+    try {
+      const saved = localStorage.getItem('noc_snooze_alert_until');
+      return saved ? parseInt(saved, 10) : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const [isSnoozeMenuOpen, setIsSnoozeMenuOpen] = useState(false);
+
+  const handleSnoozeAlert = (minutes) => {
+    const until = Date.now() + minutes * 60 * 1000;
+    setSnoozeAlertUntil(until);
+    try {
+      localStorage.setItem('noc_snooze_alert_until', String(until));
+    } catch {}
+    setIsSnoozeMenuOpen(false);
+  };
+
+  const handleClearSnooze = () => {
+    setSnoozeAlertUntil(0);
+    try {
+      localStorage.removeItem('noc_snooze_alert_until');
+    } catch {}
+  };
+
+  const isAlertSnoozed = snoozeAlertUntil > Date.now();
+  const snoozeRemainingMinutes = Math.max(1, Math.round((snoozeAlertUntil - Date.now()) / 60000));
 
   const [equipments, setEquipments] = useState([]);
   const [loadingEquipments, setLoadingEquipments] = useState(false);
@@ -975,29 +1009,68 @@ export default function App() {
  
         {/* BANNER DE ALERTA DE LINK REDUNDANTE DEGRADADO */}
         {degradedEquipments.length > 0 && downEquipments.length === 0 && (
-          <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-amber-950/60 to-slate-900 border border-amber-900/80 flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-amber-900/50 text-amber-400 border border-amber-700/50">
-                <AlertTriangle className="w-5 h-5" />
+          isAlertSnoozed ? (
+            <div className="mb-4 px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs text-slate-400">
+              <div className="flex items-center gap-2">
+                <BellOff className="w-4 h-4 text-amber-400/80 flex-shrink-0" />
+                <span>
+                  Alerta de redundância/contingência silenciado por mais <strong className="text-amber-300 font-mono font-semibold">{snoozeRemainingMinutes} min</strong> ({degradedEquipments.map(e => e.name).join(', ')}).
+                </span>
               </div>
-              <div>
-                <h3 className="font-semibold text-amber-200 text-sm">
-                  ⚠️ ALERTA DE REDUNDÂNCIA DE LINK: {degradedEquipments.map(e => e.name).join(', ')}
-                </h3>
-                <p className="text-xs text-amber-300/80 mt-0.5">
-                  {degradedEquipments.map(e => `Equipamento ${e.name} está online, mas possui 1 ou mais links com perda de pacotes ou inativos (${e.lastLossPercent != null ? `${e.lastLossPercent}% de perda média` : 'link inativo'}).`).join(' • ')}
-                </p>
+              <button
+                onClick={handleClearSnooze}
+                className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold underline transition ml-3 whitespace-nowrap"
+              >
+                Reexibir Alerta
+              </button>
+            </div>
+          ) : (
+            <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-amber-950/60 to-slate-900 border border-amber-900/80 flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-amber-900/50 text-amber-400 border border-amber-700/50">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-amber-200 text-sm">
+                    ⚠️ ALERTA DE REDUNDÂNCIA DE LINK: {degradedEquipments.map(e => e.name).join(', ')}
+                  </h3>
+                  <p className="text-xs text-amber-300/80 mt-0.5">
+                    {degradedEquipments.map(e => `Equipamento ${e.name} está online, mas possui 1 ou mais links com perda de pacotes ou inativos (${e.lastLossPercent != null ? `${e.lastLossPercent}% de perda média` : 'link inativo'}).`).join(' • ')}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0 relative">
+                <button 
+                  onClick={fetchEquipmentsStatus}
+                  disabled={refreshing}
+                  className="px-3 py-1.5 rounded-lg bg-amber-900/40 hover:bg-amber-900/70 border border-amber-700/60 text-xs font-medium text-amber-200 flex items-center gap-1.5 transition"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                  Revalidar
+                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setIsSnoozeMenuOpen(!isSnoozeMenuOpen)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-300 flex items-center gap-1.5 transition"
+                    title="Silenciar notificação deste incidente temporariamente"
+                  >
+                    <BellOff className="w-3.5 h-3.5 text-slate-400" />
+                    Ocultar Alerta
+                  </button>
+                  {isSnoozeMenuOpen && (
+                    <div className="absolute right-0 mt-1.5 w-44 bg-slate-900 border border-slate-700/90 rounded-xl shadow-2xl py-1 z-30 text-xs">
+                      <span className="block px-3 py-1 text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Ocultar por:</span>
+                      <button onClick={() => handleSnoozeAlert(15)} className="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-slate-300 transition">15 minutos</button>
+                      <button onClick={() => handleSnoozeAlert(30)} className="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-slate-300 transition">30 minutos</button>
+                      <button onClick={() => handleSnoozeAlert(60)} className="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-slate-300 transition">1 hora</button>
+                      <button onClick={() => handleSnoozeAlert(240)} className="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-slate-300 transition">4 horas</button>
+                      <button onClick={() => handleSnoozeAlert(1440)} className="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-slate-300 transition">24 horas</button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-            <button 
-              onClick={fetchEquipmentsStatus}
-              disabled={refreshing}
-              className="px-3 py-1.5 rounded-lg bg-amber-900/40 hover:bg-amber-900/70 border border-amber-700/60 text-xs font-medium text-amber-200 flex items-center gap-1.5 transition"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              Revalidar
-            </button>
-          </div>
+          )
         )}
 
         {/* BANNER DE ALERTA DE AUTENTICAÇÃO NA API (EQUIPAMENTO ONLINE MAS CHAVE RECUSADA) */}
@@ -1033,7 +1106,7 @@ export default function App() {
         {/* TAB 1: VISÃO GERAL */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-800/60">
               <div>
                 <h2 className="text-base font-semibold text-white flex items-center gap-2">
                   <Radio className="w-4 h-4 text-sky-400" />
@@ -1041,14 +1114,36 @@ export default function App() {
                 </h2>
                 <p className="text-xs text-slate-400">Visão operacional em tempo real dos ativos de rede gerenciados no Cofre.</p>
               </div>
-              <button 
-                onClick={fetchEquipmentsStatus}
-                disabled={refreshing}
-                className="text-xs text-slate-400 hover:text-sky-400 flex items-center gap-1 transition px-3 py-1.5 border border-slate-800 rounded-xl bg-slate-900/60"
-              >
-                <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
-                Atualizar Dados
-              </button>
+
+              {/* FILTROS DE TIPO E ATUALIZAÇÃO */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-xl px-2.5 py-1 text-xs shadow-sm">
+                  <Filter className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
+                  <select
+                    value={overviewTypeFilter}
+                    onChange={(e) => setOverviewTypeFilter(e.target.value)}
+                    className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer pr-1 font-medium"
+                  >
+                    <option value="ALL" className="bg-slate-900 text-slate-200">Todos os Ativos ({equipmentList.length})</option>
+                    <option value="PFSENSE" className="bg-slate-900 text-slate-200">pfSense Firewall (REST API)</option>
+                    <option value="MIKROTIK" className="bg-slate-900 text-slate-200">Mikrotik RouterOS (API)</option>
+                    <option value="PROXMOX" className="bg-slate-900 text-slate-200">Proxmox VE Cluster</option>
+                    <option value="LINUX_SERVER" className="bg-slate-900 text-slate-200">Servidor Linux (SSH / Agente)</option>
+                    <option value="WINDOWS_SERVER" className="bg-slate-900 text-slate-200">Servidor Windows (WinRM / Agente)</option>
+                    <option value="ZABBIX" className="bg-slate-900 text-slate-200">Zabbix Server</option>
+                    <option value="GENERIC_SNMP" className="bg-slate-900 text-slate-200">SNMP Genérico</option>
+                  </select>
+                </div>
+
+                <button 
+                  onClick={fetchEquipmentsStatus}
+                  disabled={refreshing}
+                  className="text-xs text-slate-300 hover:text-sky-400 flex items-center gap-1.5 transition px-3 py-1.5 border border-slate-800 rounded-xl bg-slate-900/90 hover:bg-slate-800 shadow-sm"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-sky-400' : 'text-slate-400'}`} />
+                  Atualizar
+                </button>
+              </div>
             </div>
 
             {loadingStatus ? (
@@ -1086,9 +1181,21 @@ export default function App() {
               <div className="p-8 text-center bg-slate-900/40 border border-slate-800 rounded-2xl text-xs text-slate-400">
                 Nenhum equipamento retornado pelo cofre.
               </div>
+            ) : equipmentList.filter(eq => overviewTypeFilter === 'ALL' || eq.type === overviewTypeFilter).length === 0 ? (
+              <div className="p-8 text-center bg-slate-900/40 border border-slate-800 rounded-2xl text-xs text-slate-400">
+                <p>Nenhum equipamento do tipo selecionado (<strong>{overviewTypeFilter}</strong>) encontrado.</p>
+                <button
+                  onClick={() => setOverviewTypeFilter('ALL')}
+                  className="mt-3 px-3 py-1.5 bg-sky-600/20 hover:bg-sky-600/30 text-sky-400 border border-sky-500/40 rounded-lg text-xs font-semibold transition"
+                >
+                  Limpar Filtro e Exibir Todos
+                </button>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5">
-                {equipmentList.map(eq => {
+                {equipmentList
+                  .filter(eq => overviewTypeFilter === 'ALL' || eq.type === overviewTypeFilter)
+                  .map(eq => {
                   const isOnline = eq.status === 'online';
                   const isDegraded = eq.status === 'degraded';
                   const isAuthError = eq.status === 'auth_error';
