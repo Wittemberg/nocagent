@@ -18,45 +18,87 @@ async function resolveTargetEquipment(text) {
       orderBy: { createdAt: 'desc' },
     });
 
-    if (!equipments || equipments.length === 0) return { matched: null, all: [] };
+    if (!equipments || equipments.length === 0) {
+      return { matched: null, group: null, subgroup: null, groupEquipments: [], all: [] };
+    }
 
     const lower = text.toLowerCase();
 
-    // 1. Busca correspondência direta pelo nome do equipamento (ex: "supertop", "calvi", "libra")
+    // 1. Identifica se o usuário mencionou algum GRUPO / TENANT (ex: "SuperTop", "Matriz", "Cliente X")
+    const distinctGroups = Array.from(new Set(equipments.map((e) => e.group?.trim()).filter(Boolean)));
+    let matchedGroup = null;
+    for (const g of distinctGroups) {
+      if (lower.includes(g.toLowerCase())) {
+        matchedGroup = g;
+        break;
+      }
+    }
+
+    // 2. Identifica se mencionou algum SUBGRUPO / UNIDADE / FILIAL (ex: "Loja 01", "Loja 1", "CD", "Filial Centro")
+    const distinctSubgroups = Array.from(new Set(equipments.map((e) => e.subgroup?.trim()).filter(Boolean)));
+    let matchedSubgroup = null;
+    for (const sub of distinctSubgroups) {
+      if (lower.includes(sub.toLowerCase())) {
+        matchedSubgroup = sub;
+        break;
+      }
+    }
+
+    // 3. Equipamentos pertencentes ao grupo/subgrupo detectado
+    let groupEquipments = [];
+    if (matchedGroup) {
+      groupEquipments = equipments.filter((e) => (e.group || '').toLowerCase() === matchedGroup.toLowerCase());
+      if (matchedSubgroup) {
+        groupEquipments = groupEquipments.filter((e) => (e.subgroup || '').toLowerCase() === matchedSubgroup.toLowerCase());
+      }
+    } else if (matchedSubgroup) {
+      groupEquipments = equipments.filter((e) => (e.subgroup || '').toLowerCase() === matchedSubgroup.toLowerCase());
+    }
+
+    // 4. Busca correspondência direta pelo nome do equipamento individual (ex: "ProxMox SuperTop", "Mikrotik Loja 01")
     for (const eq of equipments) {
       const eqNameLower = eq.name.toLowerCase();
-      // Match pelo nome completo ou partes significativas do nome
       if (lower.includes(eqNameLower)) {
-        return { matched: eq, all: equipments };
+        return { matched: eq, group: matchedGroup || eq.group, subgroup: matchedSubgroup || eq.subgroup, groupEquipments, all: equipments };
       }
       const parts = eqNameLower.split(/[\s_-]+/).filter((p) => p.length >= 3);
       if (parts.some((p) => lower.includes(p))) {
-        return { matched: eq, all: equipments };
+        return { matched: eq, group: matchedGroup || eq.group, subgroup: matchedSubgroup || eq.subgroup, groupEquipments, all: equipments };
       }
     }
 
-    // 2. Se mencionou tipo específico de tecnologia
+    // 5. Se mencionou tipo específico de tecnologia
     if (lower.includes('proxmox') || lower.includes('hypervisor') || lower.includes('pve')) {
-      const pve = equipments.find((e) => e.type === 'PROXMOX');
-      if (pve) return { matched: pve, all: equipments };
+      const pool = groupEquipments.length > 0 ? groupEquipments : equipments;
+      const pve = pool.find((e) => e.type === 'PROXMOX') || equipments.find((e) => e.type === 'PROXMOX');
+      if (pve) return { matched: pve, group: matchedGroup || pve.group, subgroup: matchedSubgroup || pve.subgroup, groupEquipments, all: equipments };
     }
     if (lower.includes('pfsense') || lower.includes('firewall') || lower.includes('gateway')) {
-      const pfs = equipments.find((e) => e.type === 'PFSENSE');
-      if (pfs) return { matched: pfs, all: equipments };
+      const pool = groupEquipments.length > 0 ? groupEquipments : equipments;
+      const pfs = pool.find((e) => e.type === 'PFSENSE') || equipments.find((e) => e.type === 'PFSENSE');
+      if (pfs) return { matched: pfs, group: matchedGroup || pfs.group, subgroup: matchedSubgroup || pfs.subgroup, groupEquipments, all: equipments };
     }
     if (lower.includes('mikrotik') || lower.includes('routeros') || lower.includes('roteador')) {
-      const mkt = equipments.find((e) => e.type === 'MIKROTIK');
-      if (mkt) return { matched: mkt, all: equipments };
+      const pool = groupEquipments.length > 0 ? groupEquipments : equipments;
+      const mkt = pool.find((e) => e.type === 'MIKROTIK') || equipments.find((e) => e.type === 'MIKROTIK');
+      if (mkt) return { matched: mkt, group: matchedGroup || mkt.group, subgroup: matchedSubgroup || mkt.subgroup, groupEquipments, all: equipments };
     }
     if (lower.includes('zabbix') || lower.includes('alarme') || lower.includes('trigger')) {
-      const zbx = equipments.find((e) => e.type === 'ZABBIX');
-      if (zbx) return { matched: zbx, all: equipments };
+      const pool = groupEquipments.length > 0 ? groupEquipments : equipments;
+      const zbx = pool.find((e) => e.type === 'ZABBIX') || equipments.find((e) => e.type === 'ZABBIX');
+      if (zbx) return { matched: zbx, group: matchedGroup || zbx.group, subgroup: matchedSubgroup || zbx.subgroup, groupEquipments, all: equipments };
     }
 
-    return { matched: null, all: equipments };
+    return {
+      matched: null,
+      group: matchedGroup,
+      subgroup: matchedSubgroup,
+      groupEquipments,
+      all: equipments,
+    };
   } catch (err) {
     console.warn('Erro ao resolver equipamento no Hermes:', err.message);
-    return { matched: null, all: [] };
+    return { matched: null, group: null, subgroup: null, groupEquipments: [], all: [] };
   }
 }
 
@@ -121,14 +163,25 @@ async function fetchLiveTelemetry(equipment) {
 /**
  * Constrói bloco de contexto operacional para injeção no prompt das IAs
  */
-function buildTelemetryContextText(matchedEquipment, telemetry, allEquipments) {
+function buildTelemetryContextText(matchedEquipment, telemetry, allEquipments, scope = {}) {
   let context = `[INVENTÁRIO ATIVO DE EQUIPAMENTOS NO COFRE]\n`;
   if (allEquipments && allEquipments.length > 0) {
     allEquipments.forEach((eq) => {
-      context += `- ${eq.name} (Tipo: ${eq.type}, Host: ${eq.host}, Status: ${eq.status})\n`;
+      context += `- ${eq.name} (Tipo: ${eq.type}, Grupo: "${eq.group || 'Geral'}", Subgrupo: "${eq.subgroup || 'N/A'}", Status: ${eq.status})\n`;
     });
   } else {
     context += `Nenhum equipamento registrado.\n`;
+  }
+
+  if (scope?.group && scope.groupEquipments && scope.groupEquipments.length > 0) {
+    context += `\n[GRUPO / TENANT EM FOCO: "${scope.group}"]\n`;
+    if (scope.subgroup) {
+      context += `• Subgrupo / Unidade em Foco: "${scope.subgroup}"\n`;
+    }
+    context += `• Total de Equipamentos no Grupo: ${scope.groupEquipments.length}\n`;
+    scope.groupEquipments.forEach((eq) => {
+      context += `  - [${eq.subgroup || 'Geral'}] ${eq.name} (${eq.type}): Status=${eq.status}, Host=${eq.host}\n`;
+    });
   }
 
   if (!telemetry || !matchedEquipment) {
@@ -338,7 +391,41 @@ async function formatPureStatusReadout(matchedEquipment, telemetry, normalized, 
  * Motor de Raciocínio Diagnóstico Autônomo (Offline / Zero-Key Fallback)
  * Garante que o Hermes "pense" criticamente sobre a telemetria mesmo sem chaves de LLM externas.
  */
-function autonomousDiagnosticReasoner({ text, normalized, matchedEquipment, telemetry, allEquipments }) {
+function autonomousDiagnosticReasoner({ text, normalized, matchedEquipment, telemetry, allEquipments, scope = {} }) {
+  // CASO 0: Visão e Diagnóstico do Grupo / Tenant Multi-Unidades (ex: "SuperTop")
+  if (scope?.group && (normalized.includes(scope.group.toLowerCase()) || scope.groupEquipments?.length > 0) && !matchedEquipment) {
+    const groupName = scope.group;
+    const items = scope.groupEquipments || [];
+    const online = items.filter((e) => e.status === 'online').length;
+    const degraded = items.filter((e) => e.status === 'degraded').length;
+    const offline = items.filter((e) => e.status === 'offline' || e.status === 'unknown').length;
+
+    const bySubgroup = {};
+    items.forEach((e) => {
+      const sub = e.subgroup || 'Unidade Geral';
+      if (!bySubgroup[sub]) bySubgroup[sub] = [];
+      bySubgroup[sub].push(e);
+    });
+
+    let resp = `🏢 *STATUS DO GRUPO / TENANT • ${groupName.toUpperCase()}*\n\n`;
+    resp += `• *Visão Geral:* ${items.length} ativos em ${Object.keys(bySubgroup).length} unidades\n`;
+    resp += `• *Saúde da Rede:* 🟢 ${online} Online | 🟡 ${degraded} Degradados | 🔴 ${offline} Offline\n\n`;
+
+    resp += `📋 *Detalhamento por Unidade / Filial:*\n`;
+    for (const [sub, eqs] of Object.entries(bySubgroup)) {
+      const allSubOnline = eqs.every((e) => e.status === 'online');
+      const subIcon = allSubOnline ? '🟢' : eqs.some((e) => e.status === 'degraded') ? '🟡' : '🔴';
+      resp += `${subIcon} *${sub}:*\n`;
+      eqs.forEach((eq) => {
+        const icon = eq.status === 'online' ? '🟢' : eq.status === 'degraded' ? '🟡' : '🔴';
+        resp += `  └ ${icon} *${eq.name}* (${eq.type}) - ${eq.status.toUpperCase()}\n`;
+      });
+    }
+
+    resp += `\n💡 *Dica:* Você pode me perguntar sobre uma unidade específica (ex: *"Como está a Loja 01?"*) ou sobre uma tecnologia específica (ex: *"Como estão os Mikrotiks do ${groupName}?"*).`;
+    return resp;
+  }
+
   // CASO 1: Otimização e redução de uso de RAM no Proxmox VE
   if (
     (telemetry?.type === 'PROXMOX' || normalized.includes('proxmox') || normalized.includes('supertop') || normalized.includes('calvi')) &&
@@ -589,7 +676,14 @@ async function processMessage({ text, senderPhone, senderName }) {
   }
 
   // 5. Resolução do Equipamento em questão e Coleta da Telemetria em Tempo Real (RAG)
-  const { matched: matchedEquipment, all: allEquipments } = await resolveTargetEquipment(text);
+  const {
+    matched: matchedEquipment,
+    group: matchedGroup,
+    subgroup: matchedSubgroup,
+    groupEquipments,
+    all: allEquipments,
+  } = await resolveTargetEquipment(text);
+  const scope = { group: matchedGroup, subgroup: matchedSubgroup, groupEquipments };
   const telemetry = await fetchLiveTelemetry(matchedEquipment);
 
   // 6. Se o usuário pediu expressamente APENAS uma leitura de status/inventário sem dúvidas ou perguntas
@@ -599,7 +693,7 @@ async function processMessage({ text, senderPhone, senderName }) {
 
   // 7. MODO DE RACIOCÍNIO E PENSAMENTO DIAGNÓSTICO (CONSULTATIVE_REASONING)
   // Monta o contexto operacional de telemetria
-  const telemetryContext = buildTelemetryContextText(matchedEquipment, telemetry, allEquipments);
+  const telemetryContext = buildTelemetryContextText(matchedEquipment, telemetry, allEquipments, scope);
 
   // Tenta processar com as LLMs configuradas (Claude 3.5 Sonnet, GPT-4o, Gemini ou Ollama)
   const llmResponse = await callLlmReasoning({
@@ -621,6 +715,7 @@ async function processMessage({ text, senderPhone, senderName }) {
     matchedEquipment,
     telemetry,
     allEquipments,
+    scope,
   });
 }
 

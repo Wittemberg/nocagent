@@ -172,6 +172,9 @@ app.get('/api/equipments/status', async (req, res) => {
           host: eq.host,
           port: eq.port,
           status: eq.status || 'unknown',
+          group: eq.group || 'Geral',
+          subgroup: eq.subgroup || null,
+          tags: eq.tags || [],
           lastLatency: eq.lastLatency,
           lastLossPercent: eq.lastLossPercent,
           lastCheck: eq.lastCheck,
@@ -620,7 +623,7 @@ app.get('/api/equipments', async (req, res) => {
  */
 app.post('/api/equipments', async (req, res) => {
   try {
-    const { name, type, host, port, credentials, connectionMode, backupStorageId, backupSchedule } = req.body;
+    const { name, type, host, port, credentials, connectionMode, backupStorageId, backupSchedule, group, subgroup, tags } = req.body;
 
     if (!name || !type) {
       return res.status(400).json({
@@ -660,6 +663,12 @@ app.post('/api/equipments', async (req, res) => {
       enrollmentExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
     }
 
+    const parsedTags = Array.isArray(tags) 
+      ? tags.map(t => String(t).trim()).filter(Boolean)
+      : typeof tags === 'string'
+      ? tags.split(',').map(t => t.trim()).filter(Boolean)
+      : [];
+
     const created = await prisma.equipment.create({
       data: {
         name: String(name).trim(),
@@ -667,6 +676,9 @@ app.post('/api/equipments', async (req, res) => {
         host: host ? String(host).trim() : (mode === 'AGENT' ? 'outbound-agent' : '0.0.0.0'),
         port: port ? parseInt(port, 10) : null,
         connectionMode: mode,
+        group: group ? String(group).trim() : 'Geral',
+        subgroup: subgroup ? String(subgroup).trim() : null,
+        tags: parsedTags,
         enrollmentToken,
         enrollmentExpiresAt,
         backupStorageId: backupStorageId || null,
@@ -684,6 +696,9 @@ app.post('/api/equipments', async (req, res) => {
         host: true,
         port: true,
         status: true,
+        group: true,
+        subgroup: true,
+        tags: true,
         connectionMode: true,
         enrollmentToken: true,
         backupStorageId: true,
@@ -701,7 +716,7 @@ app.post('/api/equipments', async (req, res) => {
           target: `${created.name} (${created.type})`,
           status: 'SUCCESS',
           source: 'WEB_DASHBOARD',
-          details: { equipmentId: created.id, host: created.host, mode },
+          details: { equipmentId: created.id, host: created.host, mode, group: created.group, subgroup: created.subgroup },
         },
       });
     } catch (auditErr) {
@@ -724,7 +739,7 @@ app.post('/api/equipments', async (req, res) => {
 app.put('/api/equipments/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, type, host, port, credentials, connectionMode, backupStorageId, backupSchedule } = req.body;
+    const { name, type, host, port, credentials, connectionMode, backupStorageId, backupSchedule, group, subgroup, tags } = req.body;
 
     const existing = await prisma.equipment.findUnique({ where: { id } });
     if (!existing) {
@@ -746,6 +761,15 @@ app.put('/api/equipments/:id', async (req, res) => {
     if (connectionMode) updateData.connectionMode = connectionMode;
     if (backupStorageId !== undefined) updateData.backupStorageId = backupStorageId || null;
     if (backupSchedule !== undefined) updateData.backupSchedule = backupSchedule;
+    if (group !== undefined) updateData.group = group ? String(group).trim() : 'Geral';
+    if (subgroup !== undefined) updateData.subgroup = subgroup ? String(subgroup).trim() : null;
+    if (tags !== undefined) {
+      updateData.tags = Array.isArray(tags)
+        ? tags.map(t => String(t).trim()).filter(Boolean)
+        : typeof tags === 'string'
+        ? tags.split(',').map(t => t.trim()).filter(Boolean)
+        : [];
+    }
 
     // Se forneceu novas credenciais, recriptografa no cofre AES-256-GCM
     if (credentials && (typeof credentials === 'object' ? Object.keys(credentials).length > 0 : String(credentials).trim() !== '')) {
@@ -766,6 +790,9 @@ app.put('/api/equipments/:id', async (req, res) => {
         host: true,
         port: true,
         status: true,
+        group: true,
+        subgroup: true,
+        tags: true,
         connectionMode: true,
         active: true,
         backupStorageId: true,
@@ -781,20 +808,106 @@ app.put('/api/equipments/:id', async (req, res) => {
           target: `${updated.name} (${updated.type})`,
           status: 'SUCCESS',
           source: 'WEB_DASHBOARD',
-          details: { equipmentId: updated.id, host: updated.host, changedFields: Object.keys(updateData) },
+          details: { equipmentId: updated.id, group: updated.group, subgroup: updated.subgroup },
         },
       });
     } catch (auditErr) {
-      console.warn('Aviso ao registrar log de auditoria:', auditErr.message);
+      console.warn('Aviso ao registrar auditoria de edição:', auditErr.message);
     }
 
-    return res.json({
-      status: 'updated',
-      data: updated,
-    });
+    return res.json({ status: 'updated', data: updated });
   } catch (error) {
     console.error('Erro ao atualizar equipamento no cofre:', error);
     return res.status(500).json({ error: `Falha ao atualizar no cofre: ${error.message}` });
+  }
+});
+
+/**
+ * Grupos e Subgrupos de Equipamentos (Multi-Tenant & Sites)
+ */
+app.get('/api/equipments/groups', async (req, res) => {
+  try {
+    const equipments = await prisma.equipment.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        status: true,
+        group: true,
+        subgroup: true,
+        tags: true,
+      },
+    });
+
+    const groupsMap = {};
+    const allGroups = new Set();
+    const allSubgroups = new Set();
+
+    equipments.forEach((eq) => {
+      const g = eq.group?.trim() || 'Geral';
+      allGroups.add(g);
+
+      if (!groupsMap[g]) {
+        groupsMap[g] = {
+          name: g,
+          total: 0,
+          online: 0,
+          degraded: 0,
+          offline: 0,
+          subgroups: {},
+          types: {},
+        };
+      }
+
+      groupsMap[g].total++;
+      if (eq.status === 'online') groupsMap[g].online++;
+      else if (eq.status === 'degraded') groupsMap[g].degraded++;
+      else groupsMap[g].offline++;
+
+      const sub = eq.subgroup?.trim() || 'Geral / Sem Subgrupo';
+      if (eq.subgroup?.trim()) allSubgroups.add(eq.subgroup.trim());
+
+      if (!groupsMap[g].subgroups[sub]) {
+        groupsMap[g].subgroups[sub] = {
+          name: sub,
+          total: 0,
+          online: 0,
+          degraded: 0,
+          offline: 0,
+          equipments: [],
+        };
+      }
+
+      groupsMap[g].subgroups[sub].total++;
+      if (eq.status === 'online') groupsMap[g].subgroups[sub].online++;
+      else if (eq.status === 'degraded') groupsMap[g].subgroups[sub].degraded++;
+      else groupsMap[g].subgroups[sub].offline++;
+
+      groupsMap[g].subgroups[sub].equipments.push({
+        id: eq.id,
+        name: eq.name,
+        type: eq.type,
+        status: eq.status,
+      });
+
+      groupsMap[g].types[eq.type] = (groupsMap[g].types[eq.type] || 0) + 1;
+    });
+
+    const formatted = Object.values(groupsMap).map((g) => ({
+      ...g,
+      subgroups: Object.values(g.subgroups),
+    }));
+
+    return res.json({
+      status: 'ok',
+      groups: formatted,
+      allGroups: Array.from(allGroups).sort(),
+      allSubgroups: Array.from(allSubgroups).sort(),
+    });
+  } catch (err) {
+    console.error('Erro ao consultar grupos de equipamentos:', err);
+    return res.status(500).json({ error: 'Falha ao consultar grupos de equipamentos.' });
   }
 });
 
