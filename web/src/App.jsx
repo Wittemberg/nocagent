@@ -46,6 +46,7 @@ import {
   Gauge,
 } from 'lucide-react';
 import axios from 'axios';
+import QRCodeLib from 'qrcode';
 
 // Interceptor global do Axios para autenticação Bearer Token
 axios.interceptors.request.use((config) => {
@@ -711,6 +712,7 @@ export default function App() {
   const [is2faModalOpen, setIs2faModalOpen] = useState(false);
   const [setup2faSecret, setSetup2faSecret] = useState('');
   const [setup2faKeyuri, setSetup2faKeyuri] = useState('');
+  const [setup2faQrCode, setSetup2faQrCode] = useState('');
   const [setup2faCode, setSetup2faCode] = useState('');
   const [setup2faLoading, setSetup2faLoading] = useState(false);
   const [setup2faError, setSetup2faError] = useState(null);
@@ -850,10 +852,30 @@ export default function App() {
     setSetup2faError(null);
     setSetup2faSuccess(null);
     setSetup2faCode('');
+    setSetup2faQrCode('');
     try {
       const res = await axios.post('/api/auth/setup-2fa');
-      setSetup2faSecret(res.data.secret);
-      setSetup2faKeyuri(res.data.keyuri);
+      const secret = res.data.secret;
+      const keyuri = res.data.keyuri || res.data.otpauth || `otpauth://totp/NOC-Agent:${currentUser?.email || 'admin@nocagent.local'}?secret=${secret}&issuer=NOC-Agent`;
+      setSetup2faSecret(secret);
+      setSetup2faKeyuri(keyuri);
+
+      if (res.data.qrCode) {
+        setSetup2faQrCode(res.data.qrCode);
+      } else {
+        // Fallback: renderiza QR Code no próprio cliente caso a API retorne apenas a URI
+        try {
+          const clientQr = await QRCodeLib.toDataURL(keyuri, {
+            margin: 2,
+            width: 240,
+            color: { dark: '#0f172a', light: '#ffffff' }
+          });
+          setSetup2faQrCode(clientQr);
+        } catch (e) {
+          console.error('Erro ao gerar QR Code localmente:', e);
+        }
+      }
+
       setIs2faModalOpen(true);
     } catch (err) {
       alert(err.response?.data?.error || 'Erro ao iniciar configuração do 2FA.');
@@ -4391,41 +4413,66 @@ export default function App() {
                     </div>
                   )}
 
-                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-                    <span className="block text-slate-400 text-[11px]">Chave Secreta Base32:</span>
-                    <div className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-lg border border-slate-700 font-mono text-sky-400 font-bold tracking-wider text-xs">
-                      <span>{setup2faSecret}</span>
+                  {/* QR CODE PARA ESCANEAR COM SMARTPHONE */}
+                  <div className="flex flex-col items-center justify-center p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-3">
+                    {setup2faQrCode ? (
+                      <div className="p-2.5 bg-white rounded-xl shadow-xl shadow-sky-500/10 border border-slate-700/60 inline-block">
+                        <img 
+                          src={setup2faQrCode} 
+                          alt="QR Code Autenticador 2FA" 
+                          className="w-44 h-44 object-contain rounded"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-44 h-44 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-center">
+                        <RefreshCw className="w-6 h-6 text-sky-400 animate-spin" />
+                      </div>
+                    )}
+                    
+                    <div className="text-center space-y-1">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-sky-950/80 border border-sky-800 text-sky-300 text-[11px] font-semibold">
+                        <QrCode className="w-3.5 h-3.5" />
+                        Aponte a câmera do autenticador
+                      </span>
+                      <p className="text-[11px] text-slate-400 max-w-xs">
+                        Abra o <strong>Google Authenticator</strong>, <strong>Authy</strong> ou <strong>1Password</strong> e escaneie a imagem acima.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* CHAVE SECRETA BASE32 MANUAL COMO ALTERNATIVA */}
+                  <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 space-y-1.5">
+                    <span className="block text-slate-400 text-[11px]">Não consegue escanear? Digite a chave manual:</span>
+                    <div className="flex items-center justify-between bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 font-mono text-sky-300 font-bold tracking-wider text-xs">
+                      <span className="truncate select-all">{setup2faSecret}</span>
                       <button
                         type="button"
                         onClick={() => {
                           navigator.clipboard?.writeText(setup2faSecret);
                           alert('Chave secreta copiada para a área de transferência!');
                         }}
-                        className="text-slate-400 hover:text-sky-300 p-1"
-                        title="Copiar Chave"
+                        className="text-slate-400 hover:text-sky-300 p-1 transition"
+                        title="Copiar Chave Secreta"
                       >
-                        <Copy className="w-4 h-4" />
+                        <Copy className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
 
-                  <div className="space-y-1.5 text-slate-400 text-[11px]">
-                    <p>1. No seu app autenticador, selecione <strong>Adicionar Conta</strong> → <strong>Digitar Chave</strong>.</p>
-                    <p>2. Nome da conta: <strong>NOC-Agent ({currentUser?.email})</strong></p>
-                    <p>3. Cole a chave secreta acima e confirme.</p>
-                    <p>4. Digite o código de 6 dígitos gerado abaixo para ativar:</p>
-                  </div>
-
+                  {/* INPUT DO CÓDIGO DE 6 DÍGITOS */}
                   <div>
-                    <label className="block text-slate-300 font-semibold mb-1">Código de Validação (6 Dígitos)</label>
+                    <label className="block text-slate-300 font-semibold mb-1 text-center">
+                      Código de Validação (6 Dígitos):
+                    </label>
                     <input
                       type="text"
                       maxLength={6}
                       required
+                      autoFocus
                       placeholder="000000"
                       value={setup2faCode}
                       onChange={(e) => setSetup2faCode(e.target.value.replace(/\D/g, ''))}
-                      className="w-full bg-slate-950 border border-sky-500/50 rounded-xl px-4 py-2.5 text-center text-xl font-mono tracking-[0.3em] text-sky-300 placeholder:text-slate-700 focus:outline-none focus:border-sky-400"
+                      className="w-full bg-slate-950 border border-sky-500/60 rounded-xl px-4 py-2.5 text-center text-2xl font-mono tracking-[0.3em] text-sky-300 placeholder:text-slate-700 focus:outline-none focus:border-sky-400 shadow-inner"
                     />
                   </div>
 

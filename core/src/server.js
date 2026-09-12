@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const QRCode = require('qrcode');
 const https = require('https');
 const { PrismaClient } = require('@prisma/client');
 const { handleChatwootWebhook } = require('./chatwoot/bridge');
@@ -419,15 +420,27 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 });
 
 /**
- * Iniciar Configuração de 2FA
+ * Iniciar Configuração de 2FA (Retorna Segredo Base32, KeyURI e QR Code em Data URL)
  */
 app.post('/api/auth/setup-2fa', authenticateToken, async (req, res) => {
   try {
-    const { secret, keyuri } = generateTotpSecret(req.user.email);
+    const { secret, otpauth } = generateTotpSecret(req.user.email);
+    const qrCode = await QRCode.toDataURL(otpauth, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 240,
+      color: {
+        dark: '#0f172a',
+        light: '#ffffff',
+      },
+    });
+
     return res.json({
       status: 'ok',
       secret,
-      keyuri,
+      keyuri: otpauth,
+      otpauth,
+      qrCode,
     });
   } catch (error) {
     console.error('Erro ao gerar segredo 2FA:', error);
