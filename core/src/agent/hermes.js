@@ -68,11 +68,96 @@ async function processMessage({ text, senderPhone, senderName }) {
     return `🛑 *Ação cancelada pelo operador.* Nenhuma modificação foi realizada nos equipamentos de rede.`;
   }
 
-  // 3. Fallback inteligente local / chamada direta para consultas frequentes
-  const normalized = text.toLowerCase();
+  // 3. Ações de impacto solicitadas em linguagem natural (exige 2FA / aprovação humana)
+  if (normalized.includes('reiniciar') || normalized.includes('desligar') || normalized.includes('reboot') || normalized.includes('derrubar')) {
+    const action = 'REINICIAR_EQUIPAMENTO';
+    const target = text;
+    const approval = createApprovalRequest(action, target, { requestedBy: senderPhone }, senderPhone);
+    return approval.challengeMessage;
+  }
 
-  // Consulta geral de Status dos Equipamentos / Links / Rede
-  if (normalized.includes('equipamento') || normalized.includes('status') || normalized.includes('link') || normalized.includes('gateway') || normalized.includes('pfsense') || normalized.includes('rede') || normalized.includes('internet')) {
+  // 4. Auditoria REAL de Backups nos Storages e Equipamentos (prioritário sobre consultas genéricas)
+  if (
+    normalized.includes('backup') ||
+    normalized.includes('auditar') ||
+    normalized.includes('auditoria') ||
+    normalized.includes('snapshot')
+  ) {
+    try {
+      const tzBrasilia = { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+      const [equipments, audits, storages] = await Promise.all([
+        prisma.equipment.findMany({
+          where: { active: true },
+          include: { backupStorage: true },
+          orderBy: { createdAt: 'desc' },
+        }),
+        prisma.backupAudit.findMany({
+          take: 10,
+          orderBy: { verifiedAt: 'desc' },
+          include: {
+            equipment: { select: { name: true, type: true } },
+            storage: { select: { name: true, type: true } },
+          },
+        }),
+        prisma.storage.findMany({
+          where: { active: true },
+        }),
+      ]);
+
+      if (equipments.length === 0) {
+        return `ℹ️ *Nenhum equipamento cadastrado no Cofre:*\nCadastre os equipamentos na aba *Cofre de Equipamentos* para habilitar a auditoria e gestão de backups.`;
+      }
+
+      let summary = `💾 *AUDITORIA DE BACKUPS DOS EQUIPAMENTOS*\n\n`;
+
+      if (audits.length > 0) {
+        summary += `📋 *Últimos Backups Auditados no Storage:*\n`;
+        audits.forEach((aud) => {
+          const statusIcon = aud.status === 'SUCCESS' ? '🟢' : aud.status === 'FAILED' ? '🔴' : '🟡';
+          const eqName = aud.equipment?.name || 'Equipamento';
+          const stName = aud.storage?.name || aud.storageBucket || 'Storage';
+          const sizeKb = aud.sizeBytes ? `${Math.round(Number(aud.sizeBytes) / 1024)} KB` : 'N/A';
+          const dataHora = new Date(aud.verifiedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+          summary += `${statusIcon} *${eqName}:* \`${aud.backupFile}\` (${sizeKb})\n`;
+          summary += `  └ *Storage:* ${stName} | *Auditado em:* ${dataHora}\n`;
+        });
+      } else {
+        summary += `📋 *Status de Backup por Equipamento:*\n`;
+        equipments.forEach((eq) => {
+          const hasStorage = !!eq.backupStorage;
+          const storageName = hasStorage ? eq.backupStorage.name : 'Nenhum Storage vinculado';
+          const schedule = eq.backupSchedule || 'MANUAL';
+          summary += `• *${eq.name}* (${eq.type}):\n`;
+          summary += `  └ *Storage Destino:* ${storageName}\n`;
+          summary += `  └ *Rotina Agendada:* ${schedule}\n`;
+          summary += `  └ *Último Arquivo:* Nenhum backup auditado registrado no banco ainda.\n`;
+        });
+
+        summary += `\nℹ️ *Storages Cadastrados:* ${storages.length > 0 ? storages.map((s) => s.name).join(', ') : 'Nenhum storage cadastrado (configure MinIO, S3 ou SFTP no Cofre de Storages)'}.\n`;
+      }
+
+      summary += `\n_Auditoria consultada no Cofre às ${new Date().toLocaleTimeString('pt-BR', tzBrasilia)}._`;
+      return summary;
+    } catch (err) {
+      console.error('Erro ao auditar backups no Hermes:', err);
+      return `⚠️ *Erro ao consultar auditoria de backups:* Não foi possível conectar ao banco (${err.message}).`;
+    }
+  }
+
+  // 5. Consulta geral de Status dos Equipamentos / Links / Conectividade
+  if (
+    normalized.includes('equipamento') ||
+    normalized.includes('status') ||
+    normalized.includes('link') ||
+    normalized.includes('gateway') ||
+    normalized.includes('pfsense') ||
+    normalized.includes('mikrotik') ||
+    normalized.includes('proxmox') ||
+    normalized.includes('zabbix') ||
+    normalized.includes('rede') ||
+    normalized.includes('internet') ||
+    normalized.includes('conectividade')
+  ) {
     try {
       const equipments = await prisma.equipment.findMany({
         where: { active: true },
@@ -132,24 +217,7 @@ async function processMessage({ text, senderPhone, senderName }) {
     }
   }
 
-  // Consulta de Backups no Storage S3
-  if (normalized.includes('backup') || normalized.includes('s3') || normalized.includes('snapshot')) {
-    return `💾 *AUDITORIA DE BACKUPS NO STORAGE S3*\n\n` +
-      `🟢 *pfSense Matriz:* Configuração (.xml) sincronizada há 4 horas (1.2 MB).\n` +
-      `🟢 *Mikrotik Borda:* Export (.rsc) recebido às 02:30 (450 KB).\n` +
-      `🟢 *Proxmox Node 1:* 12 snapshots de VMs confirmados no bucket \`nocagent\`.\n\n` +
-      `✅ *SLA de Retenção:* Todos os equipamentos com backups íntegros nas últimas 24h.`;
-  }
-
-  // Ações de impacto solicitadas em linguagem natural
-  if (normalized.includes('reiniciar') || normalized.includes('desligar') || normalized.includes('reboot') || normalized.includes('derrubar')) {
-    const action = 'REINICIAR_EQUIPAMENTO';
-    const target = text;
-    const approval = createApprovalRequest(action, target, { requestedBy: senderPhone }, senderPhone);
-    return approval.challengeMessage;
-  }
-
-  // 4. Integração com LLM (Anthropic Claude ou OpenAI)
+  // 6. Integração com LLM (Anthropic Claude ou OpenAI)
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (anthropicKey && anthropicKey.startsWith('sk-ant')) {
     try {
@@ -169,14 +237,35 @@ async function processMessage({ text, senderPhone, senderName }) {
     }
   }
 
-  // Resposta padrão caso nenhuma LLM responda
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey && openaiKey.startsWith('sk-')) {
+    try {
+      const OpenAI = require('openai');
+      const openai = new OpenAI({ apiKey: openaiKey });
+
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: text },
+        ],
+        max_tokens: 1024,
+      });
+
+      return response.choices[0]?.message?.content || 'NOC-Agent operacional.';
+    } catch (llmErr) {
+      console.error('Erro na chamada OpenAI:', llmErr.message);
+    }
+  }
+
+  // 7. Resposta padrão caso nenhuma LLM responda
   return (
     `🤖 *NOC-Agent operacional (Modo Resiliente)*\n\n` +
     `Olá, *${senderName || 'Operador'}*! Recebi sua solicitação:\n` +
     `> "${text}"\n\n` +
     `Você pode me perguntar:\n` +
     `• *"Como estão os links do pfSense?"*\n` +
-    `• *"Como estão os backups de hoje no S3?"*\n` +
+    `• *"Auditar backups recentes dos equipamentos"*\n` +
     `• *"Qual é o status das VMs do Proxmox?"*`
   );
 }
