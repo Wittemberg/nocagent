@@ -30,9 +30,29 @@ import {
   BellOff,
   Building2,
   Store,
-  Tag
+  Tag,
+  Users,
+  UserPlus,
+  ShieldAlert,
+  KeyRound,
+  LogOut,
+  QrCode,
+  Smartphone,
+  UserCheck,
+  Shield,
 } from 'lucide-react';
 import axios from 'axios';
+
+// Interceptor global do Axios para autenticação Bearer Token
+axios.interceptors.request.use((config) => {
+  try {
+    const token = localStorage.getItem('noc_auth_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  } catch {}
+  return config;
+}, (error) => Promise.reject(error));
 
 const initialEquipmentForm = {
   name: '',
@@ -642,6 +662,327 @@ function EquipmentCredentialInputs({ form, setForm, storages = [], isEdit = fals
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
+
+  // --- AUTENTICAÇÃO E SESSÃO ---
+  const [authToken, setAuthToken] = useState(() => {
+    try {
+      return localStorage.getItem('noc_auth_token') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('noc_current_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Formulário de Login & 2FA
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [login2faCode, setLogin2faCode] = useState('');
+  const [loginTempToken, setLoginTempToken] = useState('');
+  const [loginStep, setLoginStep] = useState('CREDENTIALS'); // 'CREDENTIALS' | '2FA'
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState(null);
+
+  // Setup de 2FA
+  const [is2faModalOpen, setIs2faModalOpen] = useState(false);
+  const [setup2faSecret, setSetup2faSecret] = useState('');
+  const [setup2faKeyuri, setSetup2faKeyuri] = useState('');
+  const [setup2faCode, setSetup2faCode] = useState('');
+  const [setup2faLoading, setSetup2faLoading] = useState(false);
+  const [setup2faError, setSetup2faError] = useState(null);
+  const [setup2faSuccess, setSetup2faSuccess] = useState(null);
+
+  // Gestão de Tenants (Exclusivo SUPERADMIN)
+  const [tenants, setTenants] = useState([]);
+  const [loadingTenants, setLoadingTenants] = useState(false);
+  const [isTenantModalOpen, setIsTenantModalOpen] = useState(false);
+  const [editingTenant, setEditingTenant] = useState(null);
+  const [tenantForm, setTenantForm] = useState({
+    name: '',
+    slug: '',
+    document: '',
+    plan: 'PROFESSIONAL',
+    status: 'ACTIVE',
+  });
+  const [tenantSaving, setTenantSaving] = useState(false);
+  const [tenantError, setTenantError] = useState(null);
+
+  // Gestão de Usuários (SUPERADMIN & TENANT_MASTER)
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [userTenantFilter, setUserTenantFilter] = useState('ALL');
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [userForm, setUserForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'OPERATOR',
+    tenantId: '',
+    phone: '',
+    active: true,
+  });
+  const [userSaving, setUserSaving] = useState(false);
+  const [userError, setUserError] = useState(null);
+
+  // Validação periódica ou de inicialização da sessão
+  useEffect(() => {
+    if (authToken) {
+      axios.get('/api/auth/me')
+        .then((res) => {
+          if (res.data?.user) {
+            setCurrentUser(res.data.user);
+            try {
+              localStorage.setItem('noc_current_user', JSON.stringify(res.data.user));
+            } catch {}
+          }
+        })
+        .catch(() => {
+          handleLogout();
+        });
+    }
+  }, [authToken]);
+
+  const handleLogout = () => {
+    setAuthToken('');
+    setCurrentUser(null);
+    try {
+      localStorage.removeItem('noc_auth_token');
+      localStorage.removeItem('noc_current_user');
+    } catch {}
+    setLoginStep('CREDENTIALS');
+    setLoginEmail('');
+    setLoginPassword('');
+    setLogin2faCode('');
+    setLoginTempToken('');
+    setLoginError(null);
+  };
+
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    setLoginError(null);
+    setLoginLoading(true);
+
+    try {
+      const res = await axios.post('/api/auth/login', {
+        email: loginEmail,
+        password: loginPassword,
+      });
+
+      if (res.data.require2fa) {
+        setLoginTempToken(res.data.tempToken);
+        setLoginStep('2FA');
+        setLogin2faCode('');
+      } else {
+        const token = res.data.token;
+        const user = res.data.user;
+        setAuthToken(token);
+        setCurrentUser(user);
+        try {
+          localStorage.setItem('noc_auth_token', token);
+          localStorage.setItem('noc_current_user', JSON.stringify(user));
+        } catch {}
+        setLoginPassword('');
+      }
+    } catch (err) {
+      setLoginError(err.response?.data?.error || 'Erro ao realizar login.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleVerify2faSubmit = async (e) => {
+    e.preventDefault();
+    setLoginError(null);
+    setLoginLoading(true);
+
+    try {
+      const res = await axios.post('/api/auth/verify-2fa', {
+        tempToken: loginTempToken,
+        code: login2faCode.trim(),
+      });
+
+      const token = res.data.token;
+      const user = res.data.user;
+      setAuthToken(token);
+      setCurrentUser(user);
+      try {
+        localStorage.setItem('noc_auth_token', token);
+        localStorage.setItem('noc_current_user', JSON.stringify(user));
+      } catch {}
+      setLoginPassword('');
+      setLogin2faCode('');
+      setLoginTempToken('');
+      setLoginStep('CREDENTIALS');
+    } catch (err) {
+      setLoginError(err.response?.data?.error || 'Código 2FA incorreto ou expirado.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleStartSetup2fa = async () => {
+    setSetup2faLoading(true);
+    setSetup2faError(null);
+    setSetup2faSuccess(null);
+    setSetup2faCode('');
+    try {
+      const res = await axios.post('/api/auth/setup-2fa');
+      setSetup2faSecret(res.data.secret);
+      setSetup2faKeyuri(res.data.keyuri);
+      setIs2faModalOpen(true);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao iniciar configuração do 2FA.');
+    } finally {
+      setSetup2faLoading(false);
+    }
+  };
+
+  const handleConfirm2fa = async (e) => {
+    e.preventDefault();
+    setSetup2faLoading(true);
+    setSetup2faError(null);
+    try {
+      await axios.post('/api/auth/confirm-2fa', {
+        secret: setup2faSecret,
+        code: setup2faCode.trim(),
+      });
+      setSetup2faSuccess('Autenticação em Dois Fatores ativada com sucesso!');
+      setCurrentUser((prev) => ({ ...prev, totpEnabled: true }));
+      setTimeout(() => {
+        setIs2faModalOpen(false);
+        setSetup2faSuccess(null);
+      }, 1500);
+    } catch (err) {
+      setSetup2faError(err.response?.data?.error || 'Código 2FA incorreto.');
+    } finally {
+      setSetup2faLoading(false);
+    }
+  };
+
+  // Funções de Tenants
+  const fetchTenants = async () => {
+    if (currentUser?.role !== 'SUPERADMIN') return;
+    setLoadingTenants(true);
+    try {
+      const res = await axios.get('/api/tenants');
+      setTenants(res.data.data || []);
+    } catch (err) {
+      console.error('Erro ao listar tenants:', err);
+    } finally {
+      setLoadingTenants(false);
+    }
+  };
+
+  const handleSaveTenant = async (e) => {
+    e.preventDefault();
+    setTenantSaving(true);
+    setTenantError(null);
+    try {
+      if (editingTenant) {
+        await axios.put(`/api/tenants/${editingTenant.id}`, tenantForm);
+      } else {
+        await axios.post('/api/tenants', tenantForm);
+      }
+      setIsTenantModalOpen(false);
+      setEditingTenant(null);
+      setTenantForm({ name: '', slug: '', document: '', plan: 'PROFESSIONAL', status: 'ACTIVE' });
+      fetchTenants();
+    } catch (err) {
+      setTenantError(err.response?.data?.error || 'Erro ao salvar tenant.');
+    } finally {
+      setTenantSaving(false);
+    }
+  };
+
+  const handleDeleteTenant = async (id, name) => {
+    if (!window.confirm(`Tem certeza que deseja remover o tenant "${name}"?`)) return;
+    try {
+      await axios.delete(`/api/tenants/${id}`);
+      fetchTenants();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao excluir tenant.');
+    }
+  };
+
+  // Funções de Usuários
+  const fetchUsers = async () => {
+    if (currentUser?.role !== 'SUPERADMIN' && currentUser?.role !== 'TENANT_MASTER') return;
+    setLoadingUsers(true);
+    try {
+      const params = userTenantFilter !== 'ALL' && currentUser?.role === 'SUPERADMIN' ? { tenantId: userTenantFilter } : {};
+      const res = await axios.get('/api/users', { params });
+      setUsers(res.data.data || []);
+    } catch (err) {
+      console.error('Erro ao listar usuários:', err);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleSaveUser = async (e) => {
+    e.preventDefault();
+    setUserSaving(true);
+    setUserError(null);
+    try {
+      if (editingUser) {
+        const payload = {
+          name: userForm.name,
+          role: userForm.role,
+          phone: userForm.phone,
+          active: userForm.active,
+        };
+        if (userForm.password) payload.password = userForm.password;
+        await axios.put(`/api/users/${editingUser.id}`, payload);
+      } else {
+        await axios.post('/api/users', userForm);
+      }
+      setIsUserModalOpen(false);
+      setEditingUser(null);
+      setUserForm({
+        name: '',
+        email: '',
+        password: '',
+        role: 'OPERATOR',
+        tenantId: '',
+        phone: '',
+        active: true,
+      });
+      fetchUsers();
+    } catch (err) {
+      setUserError(err.response?.data?.error || 'Erro ao salvar usuário.');
+    } finally {
+      setUserSaving(false);
+    }
+  };
+
+  const handleDeleteUser = async (id, name) => {
+    if (!window.confirm(`Tem certeza que deseja remover o usuário "${name}"?`)) return;
+    try {
+      await axios.delete(`/api/users/${id}`);
+      fetchUsers();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao excluir usuário.');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'tenants' && currentUser?.role === 'SUPERADMIN') {
+      fetchTenants();
+    }
+    if (activeTab === 'users' && (currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'TENANT_MASTER')) {
+      fetchUsers();
+      if (currentUser?.role === 'SUPERADMIN') {
+        fetchTenants();
+      }
+    }
+  }, [activeTab, currentUser, userTenantFilter]);
   const [chatMessages, setChatMessages] = useState([
     {
       sender: 'bot',
@@ -1420,20 +1761,68 @@ export default function App() {
             </div>
           </div>
 
-          {/* STATUS DOS MÓDULOS */}
+          {/* STATUS DOS MÓDULOS & USUÁRIO CONECTADO */}
           <div className="flex items-center gap-3 text-xs">
-            <div className="hidden sm:flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
+            <div className="hidden md:flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
               <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
               <span className="text-slate-300">Cofre AES-256</span>
             </div>
-            <div className="hidden sm:flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
+            <div className="hidden lg:flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
               <HardDrive className="w-3.5 h-3.5 text-amber-400" />
               <span className="text-slate-300">Storage</span>
             </div>
-            <div className="flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
+            <div className="hidden lg:flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
               <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
               <span className="text-slate-300">Chatwoot WhatsApp</span>
             </div>
+
+            {currentUser && (
+              <div className="flex items-center gap-2.5 pl-3 border-l border-slate-800">
+                <div className="flex flex-col items-end">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-white font-medium text-xs">{currentUser.name}</span>
+                    <span className={`px-1.5 py-0.2 text-[10px] font-bold rounded uppercase tracking-wider ${
+                      currentUser.role === 'SUPERADMIN' 
+                        ? 'bg-rose-950/80 text-rose-300 border border-rose-800/80'
+                        : currentUser.role === 'TENANT_MASTER'
+                        ? 'bg-sky-950/80 text-sky-300 border border-sky-800/80'
+                        : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/80'
+                    }`}>
+                      {currentUser.role === 'SUPERADMIN' ? 'Superadmin' : currentUser.role === 'TENANT_MASTER' ? 'Tenant Master' : 'Operador'}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                    {currentUser.tenant?.name ? (
+                      <span className="text-sky-400 font-medium">{currentUser.tenant.name}</span>
+                    ) : (
+                      <span>{currentUser.email}</span>
+                    )}
+                    {currentUser.totpEnabled ? (
+                      <span className="text-emerald-400 flex items-center gap-0.5 ml-1 font-semibold" title="2FA TOTP Ativo">
+                        • <ShieldCheck className="w-3 h-3 text-emerald-400" /> 2FA
+                      </span>
+                    ) : (
+                      <button 
+                        onClick={handleStartSetup2fa}
+                        disabled={setup2faLoading}
+                        className="text-amber-400 hover:text-amber-300 underline font-semibold flex items-center gap-0.5 ml-1"
+                        title="Configurar aplicativo autenticador 2FA"
+                      >
+                        • Ativar 2FA
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleLogout}
+                  title="Encerrar Sessão"
+                  className="p-1.5 rounded-lg bg-slate-900/80 hover:bg-red-950/60 border border-slate-800 hover:border-red-800 text-slate-400 hover:text-red-300 transition"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1445,6 +1834,8 @@ export default function App() {
             { id: 'vault', label: 'Cofre de Equipamentos', icon: Lock },
             { id: 'storages', label: 'Cofre de Storages', icon: Database },
             { id: 'backups', label: 'Auditoria de Backups', icon: HardDrive },
+            ...(currentUser?.role === 'SUPERADMIN' ? [{ id: 'tenants', label: 'Tenants', icon: Building2 }] : []),
+            ...(currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'TENANT_MASTER' ? [{ id: 'users', label: 'Usuários', icon: Users }] : []),
           ].map(tab => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -1468,7 +1859,138 @@ export default function App() {
 
       {/* CONTEÚDO PRINCIPAL */}
       <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
-        {/* BANNER DINÂMICO DE INCIDENTES REAIS (QUEDA FÍSICA / PACOTES) */}
+        {(!authToken || !currentUser) ? (
+          <div className="min-h-[65vh] flex items-center justify-center py-12 px-4">
+            <div className="w-full max-w-md bg-[#0d1322] border border-slate-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-1 bg-gradient-to-r from-transparent via-sky-500 to-transparent"></div>
+              
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-sky-600 to-cyan-400 flex items-center justify-center mx-auto mb-4 shadow-xl shadow-sky-500/20">
+                  <ShieldCheck className="w-9 h-9 text-white" />
+                </div>
+                <h2 className="text-2xl font-bold text-white tracking-tight">NOC-Agent Security</h2>
+                <p className="text-xs text-slate-400 mt-1">Acesso Restrito • Monitoramento e Automação 24/7</p>
+              </div>
+
+              {loginError && (
+                <div className="mb-6 p-3.5 rounded-xl bg-red-950/60 border border-red-800/80 text-red-200 text-xs flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>{loginError}</div>
+                </div>
+              )}
+
+              {loginStep === 'CREDENTIALS' ? (
+                <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1.5">E-mail Corporativo</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="operador@nocagent.local"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1.5">Senha</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••••••"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 transition"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loginLoading}
+                    className="w-full mt-2 py-3 px-4 rounded-xl bg-gradient-to-r from-sky-600 to-cyan-500 hover:from-sky-500 hover:to-cyan-400 font-bold text-white text-sm shadow-lg shadow-sky-600/30 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {loginLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Validando credenciais...
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-4 h-4" />
+                        Acessar Console
+                      </>
+                    )}
+                  </button>
+
+                  <div className="pt-4 border-t border-slate-800/80 text-center">
+                    <span className="text-[11px] text-slate-500">
+                      Autenticação com criptografia Scrypt + 2FA TOTP.
+                    </span>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleVerify2faSubmit} className="space-y-4 text-xs">
+                  <div className="p-3.5 rounded-2xl bg-sky-950/40 border border-sky-800/60 flex items-start gap-3">
+                    <Smartphone className="w-5 h-5 text-sky-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-sky-200 text-xs">Verificação em Duas Etapas</h4>
+                      <p className="text-[11px] text-sky-400/80 mt-0.5">
+                        Abra o Google Authenticator ou Authy e digite o código de 6 dígitos gerado.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold text-center mb-2">Código 2FA (6 Dígitos)</label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      autoFocus
+                      placeholder="000000"
+                      value={login2faCode}
+                      onChange={(e) => setLogin2faCode(e.target.value.replace(/\D/g, ''))}
+                      className="w-full bg-slate-950 border border-sky-500/60 rounded-2xl px-4 py-3 text-center text-3xl font-mono tracking-[0.4em] text-sky-300 placeholder:text-slate-700 focus:outline-none focus:border-sky-400 transition"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loginLoading || login2faCode.length < 6}
+                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 font-bold text-white text-sm shadow-lg shadow-emerald-600/30 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {loginLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Validando token 2FA...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Confirmar e Acessar
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginStep('CREDENTIALS');
+                      setLogin2faCode('');
+                      setLoginError(null);
+                    }}
+                    className="w-full py-2 text-slate-400 hover:text-slate-200 text-xs transition"
+                  >
+                    ← Voltar para login com senha
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* BANNER DINÂMICO DE INCIDENTES REAIS (QUEDA FÍSICA / PACOTES) */}
         {downEquipments.length > 0 && (
           <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-red-950/60 to-slate-900 border border-red-900/80 flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -2624,6 +3146,709 @@ export default function App() {
               </div>
             )}
           </div>
+        )}
+
+        {/* TAB 5: GESTÃO DE TENANTS (EXCLUSIVO SUPERADMIN) */}
+        {activeTab === 'tenants' && currentUser?.role === 'SUPERADMIN' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-sky-400" />
+                  Gestão de Tenants (Organizações Multi-Tenant)
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Gerenciamento global de clientes, isolamento de dados, planos e cotas de infraestrutura.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchTenants}
+                  disabled={loadingTenants}
+                  className="px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs text-slate-300 flex items-center gap-1.5 transition"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingTenants ? 'animate-spin' : ''}`} />
+                  Atualizar
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingTenant(null);
+                    setTenantForm({
+                      name: '',
+                      slug: '',
+                      document: '',
+                      plan: 'PROFESSIONAL',
+                      status: 'ACTIVE',
+                    });
+                    setTenantError(null);
+                    setIsTenantModalOpen(true);
+                  }}
+                  className="px-3.5 py-2 bg-sky-600 hover:bg-sky-500 rounded-xl text-xs font-semibold text-white flex items-center gap-1.5 shadow-lg shadow-sky-600/20 transition"
+                >
+                  <Plus className="w-4 h-4" />
+                  Novo Tenant
+                </button>
+              </div>
+            </div>
+
+            {loadingTenants ? (
+              <div className="p-8 text-center bg-slate-900/40 border border-slate-800 rounded-2xl text-xs text-slate-400">
+                Carregando lista de tenants...
+              </div>
+            ) : tenants.length === 0 ? (
+              <div className="p-12 text-center bg-slate-900/30 border border-dashed border-slate-800 rounded-2xl">
+                <Building2 className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+                <h4 className="text-sm font-semibold text-slate-300">Nenhum tenant cadastrado ainda</h4>
+                <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                  Cadastre o primeiro cliente da plataforma para vincular usuários e equipamentos.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {tenants.map((t) => (
+                  <div key={t.id} className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition flex flex-col justify-between gap-4">
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div>
+                          <h3 className="text-sm font-bold text-white">{t.name}</h3>
+                          <span className="text-[11px] font-mono text-slate-400">slug: {t.slug}</span>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                          t.status === 'ACTIVE'
+                            ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80'
+                            : t.status === 'SUSPENDED'
+                            ? 'bg-rose-950/80 text-rose-400 border-rose-800/80'
+                            : 'bg-amber-950/80 text-amber-400 border-amber-800/80'
+                        }`}>
+                          {t.status === 'ACTIVE' ? 'Ativo' : t.status === 'SUSPENDED' ? 'Suspenso' : 'Trial'}
+                        </span>
+                      </div>
+
+                      {t.document && (
+                        <p className="text-xs text-slate-400 mb-2">
+                          <span className="text-slate-500 font-medium">CNPJ/CPF:</span> {t.document}
+                        </p>
+                      )}
+
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="px-2 py-0.5 bg-slate-800 rounded text-[11px] text-sky-300 font-medium border border-slate-700">
+                          Plano: {t.plan}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-800/80 text-xs">
+                        <div className="bg-slate-950/50 p-2 rounded-xl border border-slate-800">
+                          <span className="block text-[11px] text-slate-500">Equipamentos</span>
+                          <span className="font-bold text-white text-sm">{t._count?.equipments ?? 0}</span>
+                        </div>
+                        <div className="bg-slate-950/50 p-2 rounded-xl border border-slate-800">
+                          <span className="block text-[11px] text-slate-500">Usuários</span>
+                          <span className="font-bold text-white text-sm">{t._count?.users ?? 0}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800/60">
+                      <button
+                        onClick={() => {
+                          setEditingTenant(t);
+                          setTenantForm({
+                            name: t.name,
+                            slug: t.slug,
+                            document: t.document || '',
+                            plan: t.plan || 'PROFESSIONAL',
+                            status: t.status || 'ACTIVE',
+                          });
+                          setTenantError(null);
+                          setIsTenantModalOpen(true);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1 transition"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTenant(t.id, t.name)}
+                        className="px-2.5 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-red-300 text-xs font-medium flex items-center gap-1 transition"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Excluir
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 6: GESTÃO DE USUÁRIOS (SUPERADMIN & TENANT_MASTER) */}
+        {activeTab === 'users' && (currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'TENANT_MASTER') && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                  <Users className="w-4 h-4 text-emerald-400" />
+                  Gestão de Usuários e Permissões (RBAC)
+                </h2>
+                <p className="text-xs text-slate-400">
+                  {currentUser.role === 'SUPERADMIN'
+                    ? 'Visualização e gestão global de operadores e gestores de todos os tenants.'
+                    : `Gestão exclusiva de operadores e acessos da organização ${currentUser.tenant?.name || ''}.`}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {currentUser.role === 'SUPERADMIN' && (
+                  <select
+                    value={userTenantFilter}
+                    onChange={(e) => setUserTenantFilter(e.target.value)}
+                    className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="ALL">Todos os Tenants</option>
+                    {tenants.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                )}
+
+                <button
+                  onClick={fetchUsers}
+                  disabled={loadingUsers}
+                  className="px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs text-slate-300 flex items-center gap-1.5 transition"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingUsers ? 'animate-spin' : ''}`} />
+                  Atualizar
+                </button>
+
+                <button
+                  onClick={() => {
+                    setEditingUser(null);
+                    setUserForm({
+                      name: '',
+                      email: '',
+                      password: '',
+                      role: 'OPERATOR',
+                      tenantId: currentUser.role === 'TENANT_MASTER' ? currentUser.tenantId : (tenants[0]?.id || ''),
+                      phone: '',
+                      active: true,
+                    });
+                    setUserError(null);
+                    setIsUserModalOpen(true);
+                  }}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-semibold text-white flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Novo Usuário
+                </button>
+              </div>
+            </div>
+
+            {loadingUsers ? (
+              <div className="p-8 text-center bg-slate-900/40 border border-slate-800 rounded-2xl text-xs text-slate-400">
+                Carregando catálogo de usuários...
+              </div>
+            ) : users.length === 0 ? (
+              <div className="p-12 text-center bg-slate-900/30 border border-dashed border-slate-800 rounded-2xl">
+                <Users className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+                <h4 className="text-sm font-semibold text-slate-300">Nenhum usuário localizado</h4>
+                <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                  Cadastre operadores ou técnicos para compartilhar o acesso ao monitoramento.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {users.map((u) => (
+                  <div
+                    key={u.id}
+                    className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition flex flex-col md:flex-row md:items-center justify-between gap-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-300 font-bold text-sm border border-slate-700">
+                        {u.name ? u.name.charAt(0).toUpperCase() : 'U'}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white text-sm">{u.name}</span>
+                          <span className={`px-2 py-0.2 rounded text-[10px] font-bold uppercase tracking-wider ${
+                            u.role === 'SUPERADMIN'
+                              ? 'bg-rose-950/80 text-rose-300 border border-rose-800/80'
+                              : u.role === 'TENANT_MASTER'
+                              ? 'bg-sky-950/80 text-sky-300 border border-sky-800/80'
+                              : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/80'
+                          }`}>
+                            {u.role}
+                          </span>
+                          {!u.active && (
+                            <span className="px-1.5 py-0.2 bg-slate-800 text-slate-400 text-[10px] rounded border border-slate-700">
+                              Inativo
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 text-xs text-slate-400 mt-0.5">
+                          <span>{u.email}</span>
+                          {u.phone && <span>• Tel: {u.phone}</span>}
+                          {u.tenant?.name && (
+                            <span className="text-sky-400 font-medium">
+                              • Org: {u.tenant.name}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-xs">
+                      <div className="flex flex-col items-end text-right">
+                        <div className="flex items-center gap-1.5">
+                          {u.totpEnabled ? (
+                            <span className="text-emerald-400 flex items-center gap-1 font-medium text-[11px] bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/60">
+                              <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                              2FA Ativo
+                            </span>
+                          ) : (
+                            <span className="text-amber-400 flex items-center gap-1 font-medium text-[11px] bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/60">
+                              <AlertTriangle className="w-3 h-3 text-amber-400" />
+                              2FA Inativo
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-slate-500 mt-1">
+                          {u.lastLoginAt ? `Último login: ${new Date(u.lastLoginAt).toLocaleString('pt-BR')}` : 'Nunca acessou'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 border-l border-slate-800 pl-3">
+                        <button
+                          onClick={() => {
+                            setEditingUser(u);
+                            setUserForm({
+                              name: u.name,
+                              email: u.email,
+                              password: '',
+                              role: u.role,
+                              tenantId: u.tenantId || '',
+                              phone: u.phone || '',
+                              active: u.active,
+                            });
+                            setUserError(null);
+                            setIsUserModalOpen(true);
+                          }}
+                          className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                          title="Editar Usuário"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        {u.id !== currentUser.id && (
+                          <button
+                            onClick={() => handleDeleteUser(u.id, u.name)}
+                            className="p-2 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-red-300 transition"
+                            title="Excluir Usuário"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* MODAL DE CADASTRO / EDIÇÃO DE TENANT */}
+        {isTenantModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-sky-950 text-sky-400 rounded-xl border border-sky-800">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">
+                      {editingTenant ? 'Editar Tenant' : 'Cadastrar Novo Tenant'}
+                    </h3>
+                    <p className="text-xs text-slate-400">Organização isolada para gestão de infraestrutura e usuários.</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsTenantModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {tenantError && (
+                <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  <span>{tenantError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveTenant} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Nome da Organização *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Supermercados SuperTop, Hospital Central"
+                    value={tenantForm.name}
+                    onChange={(e) => setTenantForm({ ...tenantForm, name: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Identificador (Slug)</label>
+                    <input
+                      type="text"
+                      placeholder="supertop (auto se vazio)"
+                      value={tenantForm.slug}
+                      onChange={(e) => setTenantForm({ ...tenantForm, slug: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">CNPJ ou Documento</label>
+                    <input
+                      type="text"
+                      placeholder="00.000.000/0001-00"
+                      value={tenantForm.document}
+                      onChange={(e) => setTenantForm({ ...tenantForm, document: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Plano</label>
+                    <select
+                      value={tenantForm.plan}
+                      onChange={(e) => setTenantForm({ ...tenantForm, plan: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                    >
+                      <option value="STARTER">Starter</option>
+                      <option value="PROFESSIONAL">Professional</option>
+                      <option value="ENTERPRISE">Enterprise</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Status</label>
+                    <select
+                      value={tenantForm.status}
+                      onChange={(e) => setTenantForm({ ...tenantForm, status: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                    >
+                      <option value="ACTIVE">Ativo</option>
+                      <option value="SUSPENDED">Suspenso</option>
+                      <option value="TRIAL">Trial</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setIsTenantModalOpen(false)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={tenantSaving}
+                    className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-semibold shadow-lg shadow-sky-600/20 transition disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {tenantSaving ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      'Salvar Tenant'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL DE CADASTRO / EDIÇÃO DE USUÁRIO */}
+        {isUserModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-emerald-950 text-emerald-400 rounded-xl border border-emerald-800">
+                    <UserCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">
+                      {editingUser ? 'Editar Usuário' : 'Cadastrar Novo Usuário'}
+                    </h3>
+                    <p className="text-xs text-slate-400">Controle de acesso e privilégios operacionais.</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsUserModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {userError && (
+                <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  <span>{userError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveUser} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Nome Completo *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Carlos Silva, Ana Engenharia"
+                    value={userForm.name}
+                    onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">E-mail de Acesso *</label>
+                    <input
+                      type="email"
+                      required
+                      disabled={!!editingUser}
+                      placeholder="operador@empresa.com"
+                      value={userForm.email}
+                      onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 disabled:opacity-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Telefone / WhatsApp</label>
+                    <input
+                      type="text"
+                      placeholder="(11) 99999-9999"
+                      value={userForm.phone}
+                      onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">
+                    {editingUser ? 'Alterar Senha (deixe em branco para manter)' : 'Senha Inicial *'}
+                  </label>
+                  <input
+                    type="password"
+                    required={!editingUser}
+                    placeholder={editingUser ? '••••••••••••' : 'Mínimo 6 caracteres'}
+                    value={userForm.password}
+                    onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Função / Papel *</label>
+                    <select
+                      value={userForm.role}
+                      onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                    >
+                      {currentUser?.role === 'SUPERADMIN' && (
+                        <option value="SUPERADMIN">Superadmin (Global)</option>
+                      )}
+                      <option value="TENANT_MASTER">Tenant Master (Gestor do Tenant)</option>
+                      <option value="OPERATOR">Operador (Técnico NOC)</option>
+                      <option value="VIEWER">Visualizador (Somente Leitura)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Tenant (Organização)</label>
+                    {currentUser?.role === 'SUPERADMIN' ? (
+                      <select
+                        value={userForm.tenantId}
+                        onChange={(e) => setUserForm({ ...userForm, tenantId: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                      >
+                        <option value="">Selecione o Tenant...</option>
+                        {tenants.map((t) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        disabled
+                        value={currentUser?.tenant?.name || 'Seu Tenant'}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-400 opacity-60"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {editingUser && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="userActiveCheck"
+                      checked={userForm.active}
+                      onChange={(e) => setUserForm({ ...userForm, active: e.target.checked })}
+                      className="rounded bg-slate-950 border-slate-700 text-sky-500 focus:ring-0"
+                    />
+                    <label htmlFor="userActiveCheck" className="text-slate-300 font-medium cursor-pointer">
+                      Usuário Ativo (acesso permitido ao sistema)
+                    </label>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setIsUserModalOpen(false)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={userSaving}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold shadow-lg shadow-emerald-600/20 transition disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {userSaving ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      'Salvar Usuário'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL DE CONFIGURAÇÃO DE 2FA TOTP */}
+        {is2faModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-sky-950 text-sky-400 rounded-xl border border-sky-800">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Configurar 2FA (TOTP)</h3>
+                    <p className="text-xs text-slate-400">Google Authenticator, Authy ou 1Password.</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIs2faModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {setup2faSuccess ? (
+                <div className="p-4 bg-emerald-950/60 border border-emerald-800 rounded-xl text-center space-y-2">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
+                  <h4 className="text-sm font-bold text-emerald-200">{setup2faSuccess}</h4>
+                  <p className="text-xs text-emerald-400/80">Sua conta agora está protegida com autenticação em dois fatores.</p>
+                </div>
+              ) : (
+                <form onSubmit={handleConfirm2fa} className="space-y-4 text-xs">
+                  {setup2faError && (
+                    <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                      <span>{setup2faError}</span>
+                    </div>
+                  )}
+
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                    <span className="block text-slate-400 text-[11px]">Chave Secreta Base32:</span>
+                    <div className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-lg border border-slate-700 font-mono text-sky-400 font-bold tracking-wider text-xs">
+                      <span>{setup2faSecret}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(setup2faSecret);
+                          alert('Chave secreta copiada para a área de transferência!');
+                        }}
+                        className="text-slate-400 hover:text-sky-300 p-1"
+                        title="Copiar Chave"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 text-slate-400 text-[11px]">
+                    <p>1. No seu app autenticador, selecione <strong>Adicionar Conta</strong> → <strong>Digitar Chave</strong>.</p>
+                    <p>2. Nome da conta: <strong>NOC-Agent ({currentUser?.email})</strong></p>
+                    <p>3. Cole a chave secreta acima e confirme.</p>
+                    <p>4. Digite o código de 6 dígitos gerado abaixo para ativar:</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">Código de Validação (6 Dígitos)</label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      placeholder="000000"
+                      value={setup2faCode}
+                      onChange={(e) => setSetup2faCode(e.target.value.replace(/\D/g, ''))}
+                      className="w-full bg-slate-950 border border-sky-500/50 rounded-xl px-4 py-2.5 text-center text-xl font-mono tracking-[0.3em] text-sky-300 placeholder:text-slate-700 focus:outline-none focus:border-sky-400"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setIs2faModalOpen(false)}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium transition"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={setup2faLoading || setup2faCode.length < 6}
+                      className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-semibold shadow-lg shadow-sky-600/20 transition disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {setup2faLoading ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          Validando...
+                        </>
+                      ) : (
+                        'Ativar 2FA'
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
+        </>
         )}
       </main>
 

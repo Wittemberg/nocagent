@@ -12,6 +12,17 @@ const { getMikrotikMetrics } = require('./drivers/mikrotik');
 const { getPfSenseMetrics } = require('./drivers/pfsense');
 const { getZabbixActiveTriggers } = require('./drivers/zabbix');
 const { MCP_TOOLS_DEFINITIONS, executeMcpTool } = require('./agent/mcpTools');
+const {
+  hashPassword,
+  verifyPassword,
+  generateToken,
+  verifyToken,
+  generateTotpSecret,
+  verifyTotp,
+  authenticateToken,
+  requireSuperAdmin,
+  requireTenantMasterOrSuperAdmin,
+} = require('./security/auth');
 
 const crypto = require('crypto');
 const net = require('net');
@@ -97,8 +108,611 @@ app.get('/api/health', (req, res) => {
       chatwootDualApi: true,
       vaultAES256: true,
       s3Storage: true,
+      multiTenantRbac: true,
+      totp2fa: true,
     },
   });
+});
+
+/**
+ * Inicialização e Bootstrap do Superadministrador
+ */
+async function bootstrapSuperadmin() {
+  try {
+    const adminEmail = (process.env.DCC_DEVELOPER_USERNAME || 'admin@nocagent.local').trim().toLowerCase();
+    const existingAdmin = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: adminEmail },
+          { role: 'SUPERADMIN' },
+        ],
+      },
+    });
+
+    if (!existingAdmin) {
+      console.log(`[BOOTSTRAP] Criando superadministrador inicial (${adminEmail})...`);
+      const defaultPassword = process.env.DCC_DEVELOPER_PASSWORD || 'NocAgent@2026!';
+      const { hash, salt } = hashPassword(defaultPassword);
+      const totpSecret = process.env.DCC_TOTP_SECRET || 'JBSWY3DPEHPK3PXP';
+
+      let defaultTenant = await prisma.tenant.findFirst({ where: { slug: 'noc-corp' } });
+      if (!defaultTenant) {
+        defaultTenant = await prisma.tenant.create({
+          data: {
+            name: 'NOC Agent Global Corp',
+            slug: 'noc-corp',
+            status: 'ACTIVE',
+            plan: 'ENTERPRISE',
+          },
+        });
+      }
+
+      await prisma.user.create({
+        data: {
+          email: adminEmail,
+          name: 'Super Admin',
+          passwordHash: hash,
+          salt: salt,
+          role: 'SUPERADMIN',
+          tenantId: defaultTenant.id,
+          totpSecret: totpSecret,
+          totpEnabled: true,
+          active: true,
+        },
+      });
+      console.log(`[BOOTSTRAP] Superadmin inicial criado: ${adminEmail} (2FA ativo)`);
+    }
+  } catch (err) {
+    console.error('[BOOTSTRAP] Aviso ao verificar/criar superadmin:', err.message);
+  }
+}
+
+// --- ROTAS DE AUTENTICAÇÃO E 2FA ---
+
+/**
+ * Login Inicial (Etapa 1: E-mail e Senha)
+ */
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'E-mail e senha são obrigatórios.' });
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const user = await prisma.user.findUnique({
+      where: { email: cleanEmail },
+      include: {
+        tenant: {
+          select: { id: true, name: true, slug: true, status: true, plan: true },
+        },
+      },
+    });
+
+    if (!user || !user.active) {
+      return res.status(401).json({ error: 'Credenciais inválidas ou usuário inativo.' });
+    }
+
+    // Verificar senha com scrypt timingSafeEqual
+    const passwordValid = verifyPassword(password, user.passwordHash, user.salt);
+    if (!passwordValid) {
+      return res.status(401).json({ error: 'Credenciais inválidas.' });
+    }
+
+    // Se 2FA estiver ativado, retorna token temporário para etapa 2
+    if (user.totpEnabled) {
+      const tempToken = generateToken({ userId: user.id, email: user.email, temp2fa: true }, '10m');
+      return res.json({
+        status: 'ok',
+        require2fa: true,
+        tempToken,
+        message: 'Código de autenticação de dois fatores (2FA) necessário.',
+      });
+    }
+
+    // Sem 2FA: atualiza lastLoginAt e emite token de sessão permanente
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+
+    const token = generateToken({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      tenantId: user.tenantId,
+    });
+
+    return res.json({
+      status: 'ok',
+      require2fa: false,
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        tenantId: user.tenantId,
+        tenant: user.tenant,
+        totpEnabled: user.totpEnabled,
+      },
+    });
+  } catch (error) {
+    console.error('Erro no login:', error);
+    return res.status(500).json({ error: 'Falha no processamento do login.' });
+  }
+});
+
+/**
+ * Validação do Código 2FA TOTP (Etapa 2)
+ */
+app.post('/api/auth/verify-2fa', async (req, res) => {
+  try {
+    const { tempToken, code } = req.body;
+    if (!tempToken || !code) {
+      return res.status(400).json({ error: 'Token temporário e código 2FA são obrigatórios.' });
+    }
+
+    const decoded = verifyToken(tempToken);
+    if (!decoded || !decoded.temp2fa || !decoded.userId) {
+      return res.status(401).json({ error: 'Sessão 2FA expirada ou inválida. Faça login novamente.' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      include: {
+        tenant: {
+          select: { id: true, name: true, slug: true, status: true, plan: true },
+        },
+      },
+    });
+
+    if (!user || !user.active) {
+      return res.status(401).json({ error: 'Usuário não encontrado ou desativado.' });
+    }
+
+    const isTotpValid = verifyTotp(user.totpSecret, code);
+    if (!isTotpValid) {
+      return res.status(400).json({ error: 'Código 2FA incorreto ou expirado. Verifique o horário do seu dispositivo.' });
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+
+    const token = generateToken({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      tenantId: user.tenantId,
+    });
+
+    return res.json({
+      status: 'ok',
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        tenantId: user.tenantId,
+        tenant: user.tenant,
+        totpEnabled: user.totpEnabled,
+      },
+    });
+  } catch (error) {
+    console.error('Erro na verificação 2FA:', error);
+    return res.status(500).json({ error: 'Falha ao validar 2FA.' });
+  }
+});
+
+/**
+ * Perfil do Usuário Autenticado
+ */
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        phone: true,
+        totpEnabled: true,
+        lastLoginAt: true,
+        tenantId: true,
+        tenant: {
+          select: { id: true, name: true, slug: true, status: true, plan: true },
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    return res.json({ status: 'ok', user });
+  } catch (error) {
+    console.error('Erro ao buscar dados do usuário:', error);
+    return res.status(500).json({ error: 'Erro ao consultar perfil.' });
+  }
+});
+
+/**
+ * Iniciar Configuração de 2FA
+ */
+app.post('/api/auth/setup-2fa', authenticateToken, async (req, res) => {
+  try {
+    const { secret, keyuri } = generateTotpSecret(req.user.email);
+    return res.json({
+      status: 'ok',
+      secret,
+      keyuri,
+    });
+  } catch (error) {
+    console.error('Erro ao gerar segredo 2FA:', error);
+    return res.status(500).json({ error: 'Falha ao iniciar setup 2FA.' });
+  }
+});
+
+/**
+ * Confirmar e Ativar 2FA
+ */
+app.post('/api/auth/confirm-2fa', authenticateToken, async (req, res) => {
+  try {
+    const { secret, code } = req.body;
+    if (!secret || !code) {
+      return res.status(400).json({ error: 'Segredo e código de verificação são obrigatórios.' });
+    }
+
+    const isValid = verifyTotp(secret, code);
+    if (!isValid) {
+      return res.status(400).json({ error: 'Código 2FA inválido. Certifique-se de digitar o token correto do autenticador.' });
+    }
+
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        totpSecret: secret,
+        totpEnabled: true,
+      },
+    });
+
+    return res.json({ status: 'ok', message: 'Autenticação de dois fatores ativada com sucesso!' });
+  } catch (error) {
+    console.error('Erro ao confirmar 2FA:', error);
+    return res.status(500).json({ error: 'Falha ao ativar 2FA.' });
+  }
+});
+
+// --- GESTÃO DE TENANTS (EXCLUSIVO SUPERADMIN) ---
+
+/**
+ * Listagem de Tenants
+ */
+app.get('/api/tenants', authenticateToken, requireSuperAdmin, async (req, res) => {
+  try {
+    const tenants = await prisma.tenant.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        _count: {
+          select: {
+            users: true,
+            equipments: true,
+          },
+        },
+      },
+    });
+
+    return res.json({ status: 'ok', count: tenants.length, data: tenants });
+  } catch (error) {
+    console.error('Erro ao listar tenants:', error);
+    return res.status(500).json({ error: 'Erro ao consultar tenants.' });
+  }
+});
+
+/**
+ * Cadastro de Novo Tenant
+ */
+app.post('/api/tenants', authenticateToken, requireSuperAdmin, async (req, res) => {
+  try {
+    const { name, slug, document, plan, status } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Nome do tenant é obrigatório.' });
+    }
+
+    const generatedSlug = (slug || name)
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
+    const existing = await prisma.tenant.findUnique({ where: { slug: generatedSlug } });
+    if (existing) {
+      return res.status(400).json({ error: `Identificador (slug) "${generatedSlug}" já está em uso.` });
+    }
+
+    const tenant = await prisma.tenant.create({
+      data: {
+        name: name.trim(),
+        slug: generatedSlug,
+        document: document ? document.trim() : null,
+        plan: plan || 'PROFESSIONAL',
+        status: status || 'ACTIVE',
+      },
+    });
+
+    return res.status(201).json({ status: 'ok', tenant });
+  } catch (error) {
+    console.error('Erro ao criar tenant:', error);
+    return res.status(500).json({ error: 'Falha ao cadastrar tenant.' });
+  }
+});
+
+/**
+ * Atualização de Tenant
+ */
+app.put('/api/tenants/:id', authenticateToken, requireSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, slug, document, plan, status } = req.body;
+
+    const data = {};
+    if (name) data.name = name.trim();
+    if (slug) data.slug = slug.trim().toLowerCase();
+    if (document !== undefined) data.document = document ? document.trim() : null;
+    if (plan) data.plan = plan;
+    if (status) data.status = status;
+
+    const tenant = await prisma.tenant.update({
+      where: { id },
+      data,
+    });
+
+    return res.json({ status: 'ok', tenant });
+  } catch (error) {
+    console.error('Erro ao atualizar tenant:', error);
+    return res.status(500).json({ error: 'Falha ao atualizar tenant.' });
+  }
+});
+
+/**
+ * Exclusão de Tenant
+ */
+app.delete('/api/tenants/:id', authenticateToken, requireSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const tenant = await prisma.tenant.findUnique({
+      where: { id },
+      include: {
+        _count: { select: { equipments: true, users: true } },
+      },
+    });
+
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant não encontrado.' });
+    }
+
+    if (tenant._count.equipments > 0 || tenant._count.users > 0) {
+      return res.status(400).json({
+        error: `Não é possível excluir o tenant pois existem ${tenant._count.equipments} equipamentos e ${tenant._count.users} usuários vinculados. Remova ou transfira-os primeiro.`,
+      });
+    }
+
+    await prisma.tenant.delete({ where: { id } });
+    return res.json({ status: 'ok', message: 'Tenant removido com sucesso.' });
+  } catch (error) {
+    console.error('Erro ao excluir tenant:', error);
+    return res.status(500).json({ error: 'Falha ao excluir tenant.' });
+  }
+});
+
+// --- GESTÃO DE USUÁRIOS (SUPERADMIN & TENANT MASTER) ---
+
+/**
+ * Listagem de Usuários (com isolamento por Tenant)
+ */
+app.get('/api/users', authenticateToken, requireTenantMasterOrSuperAdmin, async (req, res) => {
+  try {
+    let whereClause = {};
+
+    if (req.user.role === 'SUPERADMIN') {
+      if (req.query.tenantId) {
+        whereClause.tenantId = req.query.tenantId;
+      }
+    } else {
+      // TENANT_MASTER só pode ver usuários do seu próprio tenant
+      whereClause.tenantId = req.user.tenantId;
+    }
+
+    const users = await prisma.user.findMany({
+      where: whereClause,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        phone: true,
+        active: true,
+        totpEnabled: true,
+        lastLoginAt: true,
+        createdAt: true,
+        tenantId: true,
+        tenant: {
+          select: { id: true, name: true, slug: true },
+        },
+      },
+    });
+
+    return res.json({ status: 'ok', count: users.length, data: users });
+  } catch (error) {
+    console.error('Erro ao listar usuários:', error);
+    return res.status(500).json({ error: 'Erro ao consultar usuários.' });
+  }
+});
+
+/**
+ * Criação de Usuário
+ */
+app.post('/api/users', authenticateToken, requireTenantMasterOrSuperAdmin, async (req, res) => {
+  try {
+    const { email, name, password, role, tenantId, phone } = req.body;
+
+    if (!email || !name || !password) {
+      return res.status(400).json({ error: 'E-mail, nome e senha são obrigatórios.' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = await prisma.user.findUnique({ where: { email: cleanEmail } });
+    if (existing) {
+      return res.status(400).json({ error: 'Já existe um usuário cadastrado com este e-mail.' });
+    }
+
+    let assignedTenantId;
+    let assignedRole = role || 'OPERATOR';
+
+    if (req.user.role === 'TENANT_MASTER') {
+      // Tenant Master obrigatoriamente vincula ao seu tenant e não pode criar SUPERADMIN
+      assignedTenantId = req.user.tenantId;
+      if (assignedRole === 'SUPERADMIN') {
+        return res.status(403).json({ error: 'Tenant Master não possui permissão para criar Superadministradores.' });
+      }
+    } else {
+      // SUPERADMIN pode especificar qualquer tenantId
+      assignedTenantId = tenantId || req.user.tenantId;
+    }
+
+    const { hash, salt } = hashPassword(password);
+    const { secret: totpSecret } = generateTotpSecret(cleanEmail);
+
+    const newUser = await prisma.user.create({
+      data: {
+        email: cleanEmail,
+        name: name.trim(),
+        passwordHash: hash,
+        salt,
+        role: assignedRole,
+        tenantId: assignedTenantId,
+        phone: phone ? phone.trim() : null,
+        totpSecret,
+        totpEnabled: false,
+        active: true,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        phone: true,
+        active: true,
+        createdAt: true,
+        tenantId: true,
+        tenant: {
+          select: { id: true, name: true, slug: true },
+        },
+      },
+    });
+
+    return res.status(201).json({ status: 'ok', user: newUser });
+  } catch (error) {
+    console.error('Erro ao cadastrar usuário:', error);
+    return res.status(500).json({ error: 'Falha ao cadastrar usuário.' });
+  }
+});
+
+/**
+ * Atualização de Usuário
+ */
+app.put('/api/users/:id', authenticateToken, requireTenantMasterOrSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, role, phone, active, password } = req.body;
+
+    const targetUser = await prisma.user.findUnique({ where: { id } });
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    // Tenant Master só pode alterar usuários do seu próprio tenant
+    if (req.user.role === 'TENANT_MASTER') {
+      if (targetUser.tenantId !== req.user.tenantId) {
+        return res.status(403).json({ error: 'Sem permissão para alterar usuários de outro tenant.' });
+      }
+      if (role === 'SUPERADMIN') {
+        return res.status(403).json({ error: 'Não é permitido atribuir papel de Superadministrador.' });
+      }
+    }
+
+    const updateData = {};
+    if (name) updateData.name = name.trim();
+    if (phone !== undefined) updateData.phone = phone ? phone.trim() : null;
+    if (role && (req.user.role === 'SUPERADMIN' || role !== 'SUPERADMIN')) {
+      updateData.role = role;
+    }
+    if (active !== undefined) updateData.active = Boolean(active);
+    if (password && password.length >= 6) {
+      const { hash, salt } = hashPassword(password);
+      updateData.passwordHash = hash;
+      updateData.salt = salt;
+    }
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        phone: true,
+        active: true,
+        tenantId: true,
+      },
+    });
+
+    return res.json({ status: 'ok', user: updated });
+  } catch (error) {
+    console.error('Erro ao atualizar usuário:', error);
+    return res.status(500).json({ error: 'Falha ao atualizar usuário.' });
+  }
+});
+
+/**
+ * Exclusão de Usuário
+ */
+app.delete('/api/users/:id', authenticateToken, requireTenantMasterOrSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (id === req.user.id) {
+      return res.status(400).json({ error: 'Você não pode excluir seu próprio usuário conectado.' });
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id } });
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    if (req.user.role === 'TENANT_MASTER' && targetUser.tenantId !== req.user.tenantId) {
+      return res.status(403).json({ error: 'Sem permissão para excluir usuário de outro tenant.' });
+    }
+
+    await prisma.user.delete({ where: { id } });
+    return res.json({ status: 'ok', message: 'Usuário excluído com sucesso.' });
+  } catch (error) {
+    console.error('Erro ao excluir usuário:', error);
+    return res.status(500).json({ error: 'Falha ao excluir usuário.' });
+  }
 });
 
 /**
@@ -1528,11 +2142,14 @@ app.post('/api/mcp/execute', async (req, res) => {
 });
 
 // Inicialização do Servidor HTTP
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`====================================================`);
   console.log(`🚀 NOC-Agent Core Runtime rodando na porta ${PORT}`);
   console.log(`🌐 Healthcheck: http://localhost:${PORT}/api/health`);
   console.log(`💬 Chatwoot Webhook: http://localhost:${PORT}/api/webhooks/chatwoot`);
   console.log(`📡 Endpoints reais: /api/gateways, /api/equipments, /api/backups`);
+  console.log(`🔐 Autenticação & 2FA: /api/auth/login, /api/tenants, /api/users`);
   console.log(`====================================================`);
+
+  await bootstrapSuperadmin();
 });

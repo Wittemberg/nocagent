@@ -43,6 +43,58 @@ enum ApprovalStatus {
   REJECTED
 }
 
+enum UserRole {
+  SUPERADMIN     // Acesso global irrestrito, gerencia tenants e sistema
+  TENANT_MASTER  // Gerente do tenant, cadastra usuários para o seu próprio tenant
+  OPERATOR       // Operador de rede do tenant (diagnósticos, chamados)
+  VIEWER         // Somente leitura do tenant
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  TRIAL
+}
+
+model Tenant {
+  id          String       @id @default(uuid())
+  name        String       // Ex: "SuperTop Supermercados"
+  slug        String       @unique // Ex: "supertop"
+  document    String?      // CNPJ / CPF
+  status      TenantStatus @default(ACTIVE)
+  plan        String?      @default("ENTERPRISE")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  users       User[]
+  equipments  Equipment[]
+  featureFlags FeatureFlag[]
+
+  @@map("tenants")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  tenantId     String?
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  name         String
+  email        String    @unique
+  passwordHash String
+  salt         String
+  role         UserRole  @default(OPERATOR)
+  phone        String?
+  totpSecret   String?   // Segredo Base32 para 2FA
+  totpEnabled  Boolean   @default(false)
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@index([email])
+  @@map("users")
+}
+
 model Operator {
   id               String            @id @default(uuid())
   name             String
@@ -109,6 +161,9 @@ model Equipment {
   agentVersion         String?
   osInfo               Json?         // Informações de SO, CPU, RAM, Disco e Uptime reportadas pelo agente
 
+  // Vínculo Multi-Tenant
+  tenantId             String?
+  tenant               Tenant?       @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   // Vínculo com Storage de Destino para Backups
   backupStorageId      String?
   backupStorage        Storage?      @relation(fields: [backupStorageId], references: [id], onDelete: SetNull)
@@ -122,7 +177,9 @@ model Equipment {
   updatedAt            DateTime      @updatedAt
   incidents            Incident[]
   backupAudits         BackupAudit[]
+  mcpTraces            McpTrace[]
 
+  @@index([tenantId])
   @@index([group])
   @@index([subgroup])
   @@map("equipments")
@@ -196,3 +253,51 @@ model ApprovalRequest {
   @@index([status])
   @@map("approval_requests")
 }
+
+model FeatureFlag {
+  id          String   @id @default(uuid())
+  key         String   // Ex: "ai-autonomous-l1-read", "ai-autonomous-l2-remediation", "ai-autonomous-l3-critical"
+  description String?
+  type        String   @default("BOOLEAN") // BOOLEAN, PERCENTAGE, TENANT_LIST
+  value       String   @default("true")
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([key, tenantId])
+  @@index([key])
+  @@map("feature_flags")
+}
+
+model McpTrace {
+  id          String     @id @default(uuid())
+  driver      String     // PROXMOX, MIKROTIK, PFSENSE, ZABBIX, LLM
+  equipmentId String?
+  equipment   Equipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  method      String     // GET, POST, PING, etc.
+  endpoint    String     // Ex: "/api2/json/nodes/pve/status" ou "RouterOS:ping"
+  durationMs  Float      // Latência em milissegundos
+  statusCode  Int?       // Código HTTP (ex: 200, 500) ou status code
+  error       String?
+  createdAt   DateTime   @default(now())
+
+  @@index([driver])
+  @@index([createdAt])
+  @@map("mcp_traces")
+}
+
+model SystemMetric {
+  id            String   @id @default(uuid())
+  service       String   // core, web
+  cpuPercent    Float
+  memoryBytes   BigInt
+  activeSockets Int?
+  timestamp     DateTime @default(now())
+
+  @@index([service])
+  @@index([timestamp])
+  @@map("system_metrics")
+}
+
