@@ -10,12 +10,17 @@ const axios = require('axios');
 const prisma = new PrismaClient();
 
 /**
- * Localiza equipamento no cofre baseado em menções no texto do usuário
+ * Localiza equipamento no cofre baseado em menções no texto do usuário com isolamento multi-tenant
  */
-async function resolveTargetEquipment(text) {
+async function resolveTargetEquipment(text, tenantId = null) {
   try {
+    const whereClause = { active: true };
+    if (tenantId) {
+      whereClause.tenantId = tenantId;
+    }
+
     const equipments = await prisma.equipment.findMany({
-      where: { active: true },
+      where: whereClause,
       include: { backupStorage: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -647,7 +652,7 @@ async function callLlmReasoning({ systemPrompt, telemetryContext, userPrompt, se
 /**
  * Processador principal de mensagens do Hermes AI Engine com Telemetria RAG e Raciocínio Diagnóstico
  */
-async function processMessage({ text, senderPhone, senderName }) {
+async function processMessage({ text, senderPhone, senderName, tenantId = null, role = 'OPERATOR' }) {
   const normalized = (text || '').toLowerCase().trim();
 
   // 0. Trava de Emergência Global (Emergency Kill-Switch)
@@ -685,14 +690,15 @@ async function processMessage({ text, senderPhone, senderName }) {
     return approval.challengeMessage;
   }
 
-  // 5. Resolução do Equipamento em questão e Coleta da Telemetria em Tempo Real (RAG)
+  // 5. Resolução do Equipamento em questão e Coleta da Telemetria em Tempo Real (RAG com Isolamento de Tenant)
+  const effectiveTenantId = role === 'SUPERADMIN' ? null : tenantId;
   const {
     matched: matchedEquipment,
     group: matchedGroup,
     subgroup: matchedSubgroup,
     groupEquipments,
     all: allEquipments,
-  } = await resolveTargetEquipment(text);
+  } = await resolveTargetEquipment(text, effectiveTenantId);
   const scope = { group: matchedGroup, subgroup: matchedSubgroup, groupEquipments };
   const telemetry = await fetchLiveTelemetry(matchedEquipment);
 

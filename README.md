@@ -98,10 +98,10 @@ O agente consulta o endpoint `/api/v2/status/gateways` no firewall e responde em
 - A IA **nunca** lê nem recebe senhas nas respostas.
 - A chave mestra descriptografa o token estritamente na memória RAM durante a fração de segundo necessária para disparar a chamada de rede.
 
-### 6. 🏢 Gestão Hierárquica Multi-Tenant (Grupos, Subgrupos e Unidades)
-- Suporte a múltiplos clientes/tenants (ex: grupo *SuperTop*) e suas unidades ou lojas (ex: *Loja 01*, *Loja 02*, *CD Distribuição*).
-- Cada filial com seu próprio roteador Mikrotik, nó Proxmox VE e máquinas virtuais associadas.
-- Visualização em raias dedicadas através do botão **"Agrupar por Unidade"** com contagem instantânea de ativos ativos e degradados por loja.
+### 6. 🏢 Gestão Hierárquica Multi-Tenant & Isolamento Estrito de Dados
+- **Isolamento de Dados em Profundidade:** Cada organização (`Tenant`) possui seus próprios usuários, firewalls pfSense, roteadores Mikrotik, servidores, storages de backup e logs de auditoria completamente isolados via particionamento estrito por `tenantId`.
+- **Zero Data Leak:** Usuários com perfil `TENANT_MASTER`, `OPERATOR` ou `VIEWER` visualizam única e exclusivamente os ativos de sua organização. Clientes recém-cadastrados iniciam em estado limpo (`empty state`) sem contaminação cruzada de status ou alertas legados.
+- **Hierarquia Interna Flexível:** Gestão de filiais e unidades (`group`, `subgroup` e `tags`), permitindo agrupar dezenas de lojas de um mesmo cliente corporativo com visualização dedicada por raias.
 
 ### 7. 📊 Dashboard Web de Alta Densidade com Telemetria Real
 - Cards compactos para monitorar dezenas de nós em uma única tela sem poluição visual.
@@ -110,13 +110,20 @@ O agente consulta o endpoint `/api/v2/status/gateways` no firewall e responde em
 - **Resiliência Integrada:** Polling automático de telemetria a cada 30 segundos e botão de retry inteligente.
 
 ### 8. 🧠 Raciocínio Diagnóstico Autônomo (Hermes AI RAG)
-- O Hermes AI Engine analisa a telemetria ao vivo via RAG antes de responder qualquer interação.
+- O Hermes AI Engine analisa a telemetria ao vivo via RAG antes de responder qualquer interação, respeitando estritamente o `tenantId` da sessão ativa.
 - Identificação precisa de entidades no prompt (ex: *"como está a Loja 01 do SuperTop?"*, *"quais VMs estão no Proxmox Calvi?"*).
 - Diagnóstico estruturado com 6 padrões operacionais: Visão de Grupo/Tenant, Nó Proxmox, Gateway pfSense, Mikrotik BGP, Auditoria de Backups e Saúde Global.
 
-### 9. 🔐 Autenticação Segura, RBAC Multi-Tenant & 2FA TOTP
+### 9. 🔐 Autenticação Segura, RBAC Multi-Tenant, 2FA TOTP & Gestão de Cotas
 - **Criptografia Scrypt nativa:** Hash de senhas com salt aleatório e verificação em tempo constante (`timingSafeEqual`).
-- **Padrão RBAC estrito:** Perfis `SUPERADMIN` (gestão global e kill-switch), `TENANT_MASTER` (administração local da organização), `OPERATOR` (diagnósticos e chamados) e `VIEWER` (somente leitura).
+- **Padrão RBAC estrito:** Perfis `SUPERADMIN` (gestão global da plataforma e kill-switch), `TENANT_MASTER` (administração local da organização), `OPERATOR` (diagnósticos e chamados) e `VIEWER` (somente leitura).
+- **Gestão Visual de Cotas por Plano:** Configuração no cadastro/edição de organizações com presets automáticos (`Starter`, `Professional`, `Enterprise`) e campos customizáveis para:
+  - Limite máximo de equipamentos (`maxEquipments`);
+  - Limite máximo de usuários (`maxUsers`);
+  - Limite máximo de storages de backup (`maxStorages`);
+  - Nível de autonomia da IA (`aiLevel`: L1, L2, L3);
+  - Política de retenção de logs e auditorias (`retentionDays`).
+- **Enforcement Automático:** A API bloqueia tentativas de criação acima da cota contratada com erro `403 Forbidden` descritivo.
 - **2FA TOTP:** Suporte a autenticação em dois fatores com Google Authenticator e Authy via Base32 QR Code.
 - **Credenciais padrão iniciais:** `admin@nocagent.local` / `NocAgent@2026!` (com auto-reparo e primeiro acesso descomplicado).
 

@@ -129,6 +129,16 @@ app.get('/api/health', (req, res) => {
 });
 
 /**
+ * Retorna filtro estrito de Tenant para isolamento de dados
+ */
+function getTenantFilter(req) {
+  if (req.user?.role === 'SUPERADMIN') {
+    return req.query?.tenantId ? { tenantId: req.query.tenantId } : {};
+  }
+  return { tenantId: req.user?.tenantId || 'unassigned-tenant' };
+}
+
+/**
  * Inicialização e Bootstrap do Superadministrador
  */
 async function bootstrapSuperadmin() {
@@ -146,7 +156,36 @@ async function bootstrapSuperadmin() {
           slug: 'noc-corp',
           status: 'ACTIVE',
           plan: 'ENTERPRISE',
+          maxEquipments: 0,
+          maxUsers: 0,
+          maxStorages: 0,
+          aiLevel: 'L3_CRITICAL',
+          retentionDays: 90,
         },
+      });
+    } else {
+      // Garante cotas preenchidas no tenant padrão
+      await prisma.tenant.update({
+        where: { id: defaultTenant.id },
+        data: {
+          maxEquipments: defaultTenant.maxEquipments ?? 0,
+          maxUsers: defaultTenant.maxUsers ?? 0,
+          maxStorages: defaultTenant.maxStorages ?? 0,
+          aiLevel: defaultTenant.aiLevel ?? 'L3_CRITICAL',
+          retentionDays: defaultTenant.retentionDays ?? 90,
+        },
+      });
+    }
+
+    // Auto-migração: vincula qualquer equipamento ou storage órfão ao tenant padrão noc-corp
+    if (defaultTenant) {
+      await prisma.equipment.updateMany({
+        where: { tenantId: null },
+        data: { tenantId: defaultTenant.id },
+      });
+      await prisma.storage.updateMany({
+        where: { tenantId: null },
+        data: { tenantId: defaultTenant.id },
       });
     }
 
@@ -481,7 +520,7 @@ app.post('/api/auth/confirm-2fa', authenticateToken, async (req, res) => {
 // --- GESTÃO DE TENANTS (EXCLUSIVO SUPERADMIN) ---
 
 /**
- * Listagem de Tenants
+ * Listagem de Tenants com Contagem de Ativos
  */
 app.get('/api/tenants', authenticateToken, requireSuperAdmin, async (req, res) => {
   try {
@@ -492,6 +531,7 @@ app.get('/api/tenants', authenticateToken, requireSuperAdmin, async (req, res) =
           select: {
             users: true,
             equipments: true,
+            storages: true,
           },
         },
       },
@@ -505,11 +545,11 @@ app.get('/api/tenants', authenticateToken, requireSuperAdmin, async (req, res) =
 });
 
 /**
- * Cadastro de Novo Tenant
+ * Cadastro de Novo Tenant com Configuração de Cotas e Governança
  */
 app.post('/api/tenants', authenticateToken, requireSuperAdmin, async (req, res) => {
   try {
-    const { name, slug, document, plan, status } = req.body;
+    const { name, slug, document, plan, status, maxEquipments, maxUsers, maxStorages, aiLevel, retentionDays } = req.body;
     if (!name) {
       return res.status(400).json({ error: 'Nome do tenant é obrigatório.' });
     }
@@ -526,13 +566,26 @@ app.post('/api/tenants', authenticateToken, requireSuperAdmin, async (req, res) 
       return res.status(400).json({ error: `Identificador (slug) "${generatedSlug}" já está em uso.` });
     }
 
+    const selectedPlan = plan || 'PROFESSIONAL';
+    const planDefaults = {
+      STARTER: { maxEquipments: 10, maxUsers: 3, maxStorages: 1, aiLevel: 'L1_READ', retentionDays: 7 },
+      PROFESSIONAL: { maxEquipments: 50, maxUsers: 10, maxStorages: 3, aiLevel: 'L2_REMEDIATION', retentionDays: 30 },
+      ENTERPRISE: { maxEquipments: 0, maxUsers: 0, maxStorages: 0, aiLevel: 'L3_CRITICAL', retentionDays: 90 },
+    };
+    const defaults = planDefaults[selectedPlan] || planDefaults.PROFESSIONAL;
+
     const tenant = await prisma.tenant.create({
       data: {
         name: name.trim(),
         slug: generatedSlug,
         document: document ? document.trim() : null,
-        plan: plan || 'PROFESSIONAL',
+        plan: selectedPlan,
         status: status || 'ACTIVE',
+        maxEquipments: maxEquipments !== undefined ? parseInt(maxEquipments, 10) : defaults.maxEquipments,
+        maxUsers: maxUsers !== undefined ? parseInt(maxUsers, 10) : defaults.maxUsers,
+        maxStorages: maxStorages !== undefined ? parseInt(maxStorages, 10) : defaults.maxStorages,
+        aiLevel: aiLevel || defaults.aiLevel,
+        retentionDays: retentionDays !== undefined ? parseInt(retentionDays, 10) : defaults.retentionDays,
       },
     });
 
@@ -544,12 +597,12 @@ app.post('/api/tenants', authenticateToken, requireSuperAdmin, async (req, res) 
 });
 
 /**
- * Atualização de Tenant
+ * Atualização de Tenant e Cotas
  */
 app.put('/api/tenants/:id', authenticateToken, requireSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, slug, document, plan, status } = req.body;
+    const { name, slug, document, plan, status, maxEquipments, maxUsers, maxStorages, aiLevel, retentionDays } = req.body;
 
     const data = {};
     if (name) data.name = name.trim();
@@ -557,6 +610,11 @@ app.put('/api/tenants/:id', authenticateToken, requireSuperAdmin, async (req, re
     if (document !== undefined) data.document = document ? document.trim() : null;
     if (plan) data.plan = plan;
     if (status) data.status = status;
+    if (maxEquipments !== undefined) data.maxEquipments = parseInt(maxEquipments, 10);
+    if (maxUsers !== undefined) data.maxUsers = parseInt(maxUsers, 10);
+    if (maxStorages !== undefined) data.maxStorages = parseInt(maxStorages, 10);
+    if (aiLevel) data.aiLevel = aiLevel;
+    if (retentionDays !== undefined) data.retentionDays = parseInt(retentionDays, 10);
 
     const tenant = await prisma.tenant.update({
       where: { id },
@@ -679,6 +737,19 @@ app.post('/api/users', authenticateToken, requireTenantMasterOrSuperAdmin, async
     } else {
       // SUPERADMIN pode especificar qualquer tenantId
       assignedTenantId = tenantId || req.user.tenantId;
+    }
+
+    // Validação de cota de usuários do plano do Tenant
+    if (assignedTenantId) {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: assignedTenantId },
+        include: { _count: { select: { users: true } } },
+      });
+      if (tenant && tenant.maxUsers && tenant.maxUsers > 0 && tenant._count.users >= tenant.maxUsers) {
+        return res.status(403).json({
+          error: `Cota do plano excedida: limite máximo de ${tenant.maxUsers} usuário(s) atingido para esta organização (Plano ${tenant.plan || 'atual'}). Faça upgrade para adicionar mais operadores.`,
+        });
+      }
     }
 
     const { passwordHash, salt } = hashPassword(password);
@@ -826,9 +897,9 @@ app.post('/api/webhooks/chatwoot', async (req, res) => {
 });
 
 /**
- * Endpoint de Chat Direto (para o Dashboard Web interativo)
+ * Endpoint de Chat Direto (para o Dashboard Web interativo com Isolamento Multi-Tenant)
  */
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', authenticateToken, async (req, res) => {
   try {
     const { message, senderName } = req.body;
     if (!message) {
@@ -838,7 +909,9 @@ app.post('/api/chat', async (req, res) => {
     const reply = await processMessage({
       text: message,
       senderPhone: 'web-dashboard',
-      senderName: senderName || 'Operador Web',
+      senderName: senderName || req.user?.name || 'Operador Web',
+      tenantId: req.user?.role === 'SUPERADMIN' ? (req.body?.tenantId || null) : req.user?.tenantId,
+      role: req.user?.role || 'OPERATOR',
     });
 
     return res.json({ reply, timestamp: new Date().toISOString() });
@@ -849,19 +922,20 @@ app.post('/api/chat', async (req, res) => {
 });
 
 /**
- * Status REAL dos Equipamentos da Rede consultados via Cofre Criptográfico
+ * Status REAL dos Equipamentos da Rede consultados via Cofre Criptográfico com Isolamento de Tenant
  */
-app.get('/api/equipments/status', async (req, res) => {
+app.get('/api/equipments/status', authenticateToken, async (req, res) => {
   try {
+    const tenantFilter = getTenantFilter(req);
     const equipments = await prisma.equipment.findMany({
-      where: { active: true },
+      where: { active: true, ...tenantFilter },
       orderBy: { createdAt: 'desc' },
     });
 
     if (equipments.length === 0) {
       return res.json({
         status: 'empty',
-        message: 'Nenhum equipamento cadastrado no cofre.',
+        message: 'Nenhum equipamento cadastrado no cofre para este tenant.',
         data: [],
       });
     }
@@ -1180,21 +1254,23 @@ app.get('/api/equipments/status', async (req, res) => {
 });
 
 /**
- * Status REAL dos Gateways da Rede (Compatibilidade com endpoints legados)
+ * Status REAL dos Gateways da Rede (com Isolamento Multi-Tenant)
  */
-app.get('/api/gateways', async (req, res) => {
+app.get('/api/gateways', authenticateToken, async (req, res) => {
   try {
+    const tenantFilter = getTenantFilter(req);
     const pfsense = await prisma.equipment.findFirst({
       where: {
         type: 'PFSENSE',
         active: true,
+        ...tenantFilter,
       },
     });
 
     if (!pfsense) {
       return res.json({
         status: 'empty',
-        message: 'Nenhum equipamento cadastrado no cofre.',
+        message: 'Nenhum equipamento pfSense cadastrado para este tenant.',
         data: [],
       });
     }
@@ -1248,14 +1324,13 @@ app.get('/api/gateways', async (req, res) => {
 });
 
 /**
- * Lista REAL de Equipamentos Cadastrados no Cofre (sem dados fictícios)
+ * Lista REAL de Equipamentos Cadastrados no Cofre (com Isolamento Multi-Tenant)
  */
-/**
- * Lista REAL de Equipamentos Cadastrados no Cofre (sem dados fictícios)
- */
-app.get('/api/equipments', async (req, res) => {
+app.get('/api/equipments', authenticateToken, async (req, res) => {
   try {
+    const tenantFilter = getTenantFilter(req);
     const equipments = await prisma.equipment.findMany({
+      where: { ...tenantFilter },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -1274,6 +1349,7 @@ app.get('/api/equipments', async (req, res) => {
         enrollmentToken: true,
         agentVersion: true,
         osInfo: true,
+        tenantId: true,
         backupStorageId: true,
         backupSchedule: true,
         backupStorage: {
@@ -1297,7 +1373,6 @@ app.get('/api/equipments', async (req, res) => {
         if (osInfo.workloads && (osInfo.cpu?.percent != null || typeof osInfo.cpu === 'string')) {
           proxmoxData = osInfo;
         }
-        // Garante que cpu e memoryPercent sejam strings escalares para não quebrar React
         if (osInfo.cpu && typeof osInfo.cpu === 'object') {
           osInfo = {
             ...osInfo,
@@ -1331,11 +1406,11 @@ app.get('/api/equipments', async (req, res) => {
 });
 
 /**
- * Cadastro de NOVO Equipamento no Cofre com Criptografia AES-256-GCM
+ * Cadastro de NOVO Equipamento no Cofre (com Verificação de Cotas do Plano)
  */
-app.post('/api/equipments', async (req, res) => {
+app.post('/api/equipments', authenticateToken, async (req, res) => {
   try {
-    const { name, type, host, port, credentials, connectionMode, backupStorageId, backupSchedule, group, subgroup, tags } = req.body;
+    const { name, type, host, port, credentials, connectionMode, backupStorageId, backupSchedule, group, subgroup, tags, tenantId } = req.body;
 
     if (!name || !type) {
       return res.status(400).json({
@@ -1349,6 +1424,21 @@ app.post('/api/equipments', async (req, res) => {
       return res.status(400).json({
         error: `Tipo de equipamento inválido. Tipos aceitos: ${validTypes.join(', ')}`,
       });
+    }
+
+    const targetTenantId = req.user.role === 'SUPERADMIN' ? (tenantId || req.user.tenantId) : req.user.tenantId;
+
+    // Verificação de cota do plano de equipamentos
+    if (targetTenantId) {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: targetTenantId },
+        include: { _count: { select: { equipments: true } } },
+      });
+      if (tenant && tenant.maxEquipments && tenant.maxEquipments > 0 && tenant._count.equipments >= tenant.maxEquipments) {
+        return res.status(403).json({
+          error: `Cota do plano excedida: limite máximo de ${tenant.maxEquipments} equipamentos atingido para a organização no plano ${tenant.plan || 'atual'}. Faça upgrade de plano para cadastrar novos ativos.`,
+        });
+      }
     }
 
     const mode = connectionMode === 'AGENT' ? 'AGENT' : 'DIRECT';
@@ -1388,6 +1478,7 @@ app.post('/api/equipments', async (req, res) => {
         host: host ? String(host).trim() : (mode === 'AGENT' ? 'outbound-agent' : '0.0.0.0'),
         port: port ? parseInt(port, 10) : null,
         connectionMode: mode,
+        tenantId: targetTenantId || null,
         group: group ? String(group).trim() : 'Geral',
         subgroup: subgroup ? String(subgroup).trim() : null,
         tags: parsedTags,
@@ -1408,6 +1499,7 @@ app.post('/api/equipments', async (req, res) => {
         host: true,
         port: true,
         status: true,
+        tenantId: true,
         group: true,
         subgroup: true,
         tags: true,
@@ -1428,7 +1520,7 @@ app.post('/api/equipments', async (req, res) => {
           target: `${created.name} (${created.type})`,
           status: 'SUCCESS',
           source: 'WEB_DASHBOARD',
-          details: { equipmentId: created.id, host: created.host, mode, group: created.group, subgroup: created.subgroup },
+          details: { equipmentId: created.id, host: created.host, mode, tenantId: created.tenantId, group: created.group },
         },
       });
     } catch (auditErr) {
@@ -1446,9 +1538,9 @@ app.post('/api/equipments', async (req, res) => {
 });
 
 /**
- * Edição / Atualização de Equipamento no Cofre
+ * Edição / Atualização de Equipamento no Cofre com Isolamento de Tenant
  */
-app.put('/api/equipments/:id', async (req, res) => {
+app.put('/api/equipments/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, type, host, port, credentials, connectionMode, backupStorageId, backupSchedule, group, subgroup, tags } = req.body;
@@ -1456,6 +1548,10 @@ app.put('/api/equipments/:id', async (req, res) => {
     const existing = await prisma.equipment.findUnique({ where: { id } });
     if (!existing) {
       return res.status(404).json({ error: 'Equipamento não encontrado no cofre.' });
+    }
+
+    if (req.user.role !== 'SUPERADMIN' && existing.tenantId !== req.user.tenantId) {
+      return res.status(403).json({ error: 'Acesso negado: este equipamento pertence a outra organização.' });
     }
 
     const updateData = {};
@@ -1502,6 +1598,7 @@ app.put('/api/equipments/:id', async (req, res) => {
         host: true,
         port: true,
         status: true,
+        tenantId: true,
         group: true,
         subgroup: true,
         tags: true,
@@ -1535,12 +1632,13 @@ app.put('/api/equipments/:id', async (req, res) => {
 });
 
 /**
- * Grupos e Subgrupos de Equipamentos (Multi-Tenant & Sites)
+ * Grupos e Subgrupos de Equipamentos (com Isolamento Multi-Tenant)
  */
-app.get('/api/equipments/groups', async (req, res) => {
+app.get('/api/equipments/groups', authenticateToken, async (req, res) => {
   try {
+    const tenantFilter = getTenantFilter(req);
     const equipments = await prisma.equipment.findMany({
-      where: { active: true },
+      where: { active: true, ...tenantFilter },
       select: {
         id: true,
         name: true,
@@ -1628,12 +1726,13 @@ app.get('/api/equipments/groups', async (req, res) => {
 // ====================================================================
 
 /**
- * Lista Storages cadastrados no Cofre
+ * Lista Storages cadastrados no Cofre (com Isolamento Multi-Tenant)
  */
-app.get('/api/storages', async (req, res) => {
+app.get('/api/storages', authenticateToken, async (req, res) => {
   try {
+    const tenantFilter = getTenantFilter(req);
     const storages = await prisma.storage.findMany({
-      where: { active: true },
+      where: { active: true, ...tenantFilter },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -1642,6 +1741,7 @@ app.get('/api/storages', async (req, res) => {
         endpoint: true,
         bucketOrPath: true,
         region: true,
+        tenantId: true,
         isDefault: true,
         active: true,
         createdAt: true,
@@ -1667,16 +1767,30 @@ app.get('/api/storages', async (req, res) => {
 });
 
 /**
- * Cadastro de NOVO Storage com Criptografia AES-256-GCM
+ * Cadastro de NOVO Storage com Criptografia AES-256-GCM (com Verificação de Cotas do Plano)
  */
-app.post('/api/storages', async (req, res) => {
+app.post('/api/storages', authenticateToken, async (req, res) => {
   try {
-    const { name, type, endpoint, bucketOrPath, region, credentials, isDefault } = req.body;
+    const { name, type, endpoint, bucketOrPath, region, credentials, isDefault, tenantId } = req.body;
 
     if (!name || !endpoint || !bucketOrPath) {
       return res.status(400).json({
         error: 'Campos obrigatórios ausentes: name, endpoint e bucketOrPath.',
       });
+    }
+
+    const targetTenantId = req.user.role === 'SUPERADMIN' ? (tenantId || req.user.tenantId) : req.user.tenantId;
+
+    if (targetTenantId) {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: targetTenantId },
+        include: { _count: { select: { storages: true } } },
+      });
+      if (tenant && tenant.maxStorages && tenant.maxStorages > 0 && tenant._count.storages >= tenant.maxStorages) {
+        return res.status(403).json({
+          error: `Cota do plano excedida: limite máximo de ${tenant.maxStorages} storage(s) atingido para a organização no plano ${tenant.plan || 'atual'}. Faça upgrade de plano para adicionar mais destinos de backup.`,
+        });
+      }
     }
 
     const validTypes = ['S3_COMPATIBLE', 'SFTP', 'LOCAL_NFS'];
@@ -1690,7 +1804,7 @@ app.post('/api/storages', async (req, res) => {
 
     if (isDefault) {
       await prisma.storage.updateMany({
-        where: { isDefault: true },
+        where: { ...(targetTenantId ? { tenantId: targetTenantId } : {}), isDefault: true },
         data: { isDefault: false },
       });
     }
@@ -1702,6 +1816,7 @@ app.post('/api/storages', async (req, res) => {
         endpoint: String(endpoint).trim(),
         bucketOrPath: String(bucketOrPath).trim(),
         region: region ? String(region).trim() : 'us-east-1',
+        tenantId: targetTenantId || null,
         isDefault: !!isDefault,
         encryptedCredentials,
         iv,
@@ -1715,6 +1830,7 @@ app.post('/api/storages', async (req, res) => {
         endpoint: true,
         bucketOrPath: true,
         region: true,
+        tenantId: true,
         isDefault: true,
         active: true,
         createdAt: true,
@@ -1728,7 +1844,7 @@ app.post('/api/storages', async (req, res) => {
           target: `${created.name} (${created.type})`,
           status: 'SUCCESS',
           source: 'WEB_DASHBOARD',
-          details: { storageId: created.id, endpoint: created.endpoint, bucket: created.bucketOrPath },
+          details: { storageId: created.id, endpoint: created.endpoint, bucket: created.bucketOrPath, tenantId: created.tenantId },
         },
       });
     } catch {}
@@ -1744,9 +1860,9 @@ app.post('/api/storages', async (req, res) => {
 });
 
 /**
- * Atualização de Storage no Cofre
+ * Atualização de Storage no Cofre com Isolamento de Tenant
  */
-app.put('/api/storages/:id', async (req, res) => {
+app.put('/api/storages/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, type, endpoint, bucketOrPath, region, credentials, isDefault } = req.body;
@@ -1754,6 +1870,10 @@ app.put('/api/storages/:id', async (req, res) => {
     const existing = await prisma.storage.findUnique({ where: { id } });
     if (!existing) {
       return res.status(404).json({ error: 'Storage não encontrado.' });
+    }
+
+    if (req.user.role !== 'SUPERADMIN' && existing.tenantId !== req.user.tenantId) {
+      return res.status(403).json({ error: 'Acesso negado: este storage pertence a outra organização.' });
     }
 
     const updateData = {};
@@ -1766,7 +1886,7 @@ app.put('/api/storages/:id', async (req, res) => {
       updateData.isDefault = !!isDefault;
       if (isDefault) {
         await prisma.storage.updateMany({
-          where: { id: { not: id }, isDefault: true },
+          where: { id: { not: id }, ...(existing.tenantId ? { tenantId: existing.tenantId } : {}), isDefault: true },
           data: { isDefault: false },
         });
       }
@@ -1790,6 +1910,7 @@ app.put('/api/storages/:id', async (req, res) => {
         endpoint: true,
         bucketOrPath: true,
         region: true,
+        tenantId: true,
         isDefault: true,
         active: true,
         updatedAt: true,
@@ -1804,11 +1925,20 @@ app.put('/api/storages/:id', async (req, res) => {
 });
 
 /**
- * Remoção de Storage
+ * Remoção de Storage com Isolamento de Tenant
  */
-app.delete('/api/storages/:id', async (req, res) => {
+app.delete('/api/storages/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const existing = await prisma.storage.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ error: 'Storage não encontrado.' });
+    }
+
+    if (req.user.role !== 'SUPERADMIN' && existing.tenantId !== req.user.tenantId) {
+      return res.status(403).json({ error: 'Acesso negado: este storage pertence a outra organização.' });
+    }
+
     await prisma.storage.delete({ where: { id } });
     return res.json({ status: 'deleted', id });
   } catch (error) {
@@ -2122,15 +2252,19 @@ app.post('/api/agent/heartbeat', async (req, res) => {
 });
 
 /**
- * Remoção de Equipamento do Cofre
+ * Remoção de Equipamento do Cofre com Isolamento de Tenant
  */
-app.delete('/api/equipments/:id', async (req, res) => {
+app.delete('/api/equipments/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const existing = await prisma.equipment.findUnique({ where: { id } });
 
     if (!existing) {
       return res.status(404).json({ error: 'Equipamento não encontrado no cofre.' });
+    }
+
+    if (req.user.role !== 'SUPERADMIN' && existing.tenantId !== req.user.tenantId) {
+      return res.status(403).json({ error: 'Acesso negado: este equipamento pertence a outra organização.' });
     }
 
     await prisma.equipment.delete({ where: { id } });
@@ -2142,7 +2276,7 @@ app.delete('/api/equipments/:id', async (req, res) => {
           target: `${existing.name} (${existing.type})`,
           status: 'SUCCESS',
           source: 'WEB_DASHBOARD',
-          details: { equipmentId: id },
+          details: { equipmentId: id, tenantId: existing.tenantId },
         },
       });
     } catch {}
@@ -2155,16 +2289,21 @@ app.delete('/api/equipments/:id', async (req, res) => {
 });
 
 /**
- * Auditoria REAL de Backups salvos no Storage S3 (sem dados fictícios)
+ * Auditoria REAL de Backups salvos no Storage S3 (com Isolamento Multi-Tenant)
  */
-app.get('/api/backups', async (req, res) => {
+app.get('/api/backups', authenticateToken, async (req, res) => {
   try {
+    const tenantFilter = getTenantFilter(req);
     const audits = await prisma.backupAudit.findMany({
+      where: tenantFilter.tenantId ? { equipment: { tenantId: tenantFilter.tenantId } } : {},
       orderBy: { verifiedAt: 'desc' },
-      take: 20,
+      take: 50,
       include: {
         equipment: {
-          select: { name: true, type: true },
+          select: { name: true, type: true, tenantId: true },
+        },
+        storage: {
+          select: { name: true, type: true, bucketOrPath: true },
         },
       },
     });
@@ -2181,9 +2320,9 @@ app.get('/api/backups', async (req, res) => {
 });
 
 /**
- * Lista REAL de Logs de Auditoria (Audit Trail)
+ * Lista REAL de Logs de Auditoria (Audit Trail com Isolamento Multi-Tenant)
  */
-app.get('/api/audit-logs', async (req, res) => {
+app.get('/api/audit-logs', authenticateToken, async (req, res) => {
   try {
     const logs = await prisma.auditLog.findMany({
       orderBy: { createdAt: 'desc' },

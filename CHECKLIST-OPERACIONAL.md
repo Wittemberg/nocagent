@@ -163,3 +163,27 @@ Se por qualquer motivo as credenciais do superadmin precisarem ser restauradas p
 - Acesse a aba **Governança & APM** para visualizar a latência RTT em milissegundos das chamadas Proxmox, Mikrotik, pfSense e modelos de IA.
 - Inspecione a tabela de **Live Traces** para diagnosticar falhas de conectividade ou timeouts de API.
 
+---
+
+## 11. Política de Segurança Multi-Tenant & Governança de Cotas
+
+### A. Regra Geral de Isolamento de Dados
+1. **Escopo Obrigatório por Tenant:**
+   - Todo usuário autenticado possui `tenantId` e `role` gravados no token JWT.
+   - Requisições emitidas por perfis não-`SUPERADMIN` (`TENANT_MASTER`, `OPERATOR`, `VIEWER`) são automaticamente filtradas no banco de dados por `where: { tenantId }`.
+   - Endpoints cobertos: `/api/equipments/status`, `/api/equipments`, `/api/gateways`, `/api/storages`, `/api/backups`, `/api/audit-logs`, `/api/chat`.
+2. **Prevenção de Vazamento Cruzado:**
+   - Nenhum equipamento, gateway ou alerta de contingência de um cliente pode ser visível no painel de outro cliente.
+   - Tenants recém-cadastrados sem ativos iniciam em estado limpo (`empty state`), solicitando o cadastro do primeiro equipamento no Cofre.
+3. **Auto-Migração de Registros Órfãos:**
+   - Durante a inicialização do container `core`, a rotina de bootstrap associa automaticamente quaisquer registros legados sem `tenantId` ao tenant padrão do sistema (`noc-corp`), impedindo que fiquem acessíveis a novos tenants.
+
+### B. Gestão de Planos e Limites de Cotas
+1. **Presets Padrão:**
+   - **STARTER:** 10 equipamentos, 3 usuários, 1 storage, IA L1 (Diagnóstico), 7 dias de retenção.
+   - **PROFESSIONAL:** 50 equipamentos, 10 usuários, 3 storages, IA L2 (Remediação), 30 dias de retenção.
+   - **ENTERPRISE:** Cotas ilimitadas (`0`), IA L3 (Crítico / Autônomo), 90 dias de retenção.
+2. **Comportamento ao Atingir a Cota:**
+   - A tentativa de cadastrar novos equipamentos, usuários ou repositórios de backup além da cota configurada retorna `HTTP 403 Forbidden` com a mensagem indicando a capacidade máxima atingida.
+   - Para expandir os limites de uma organização, o Superadmin deve acessar **Tenants → Editar**, ajustar os valores de cota desejados e salvar.
+

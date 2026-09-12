@@ -184,5 +184,8 @@ FASE 5: Enterprise Engine, Observabilidade & Feature Flags (Pennant + Telescope 
 | **5.5** | Endpoints REST de Governança | `core/src/server.js` | `/api/flags`, `/api/flags/kill-switch`, `/api/observability/apm`, `/api/observability/traces` | ✅ Concluído |
 | **5.6** | Painel Web "Governança & APM" | `web/src/App.jsx` | Nova aba com cards de APM, matriz de flags, live inspector de traces e modal de Kill-Switch | ✅ Concluído |
 | **5.7** | Status Indicator em Tempo Real | Header do Dashboard | Badge dinâmico no topo com alerta pulsante quando o Kill-Switch estiver ativo | ✅ Concluído |
+| **5.8** | Isolamento Estrito Multi-Tenant & Zero Data Leak | `core/src/server.js`, `hermes.js`, `schema.prisma` | Particionamento por `tenantId` em 100% dos endpoints, RAG contextualizado e migração de órfãos | ✅ Concluído |
+| **5.9** | Gestão Visual de Planos & Cotas Operacionais | `web/src/App.jsx`, `core/src/server.js` | Modal e cards com cotas (Equipamentos, Usuários, Storages, IA L1-L3, Retenção) e bloqueio 403 | ✅ Concluído |
+
 
 

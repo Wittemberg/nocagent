@@ -94,6 +94,30 @@ const initialEquipmentForm = {
   realm: 'pam',
 };
 
+const PLAN_PRESETS = {
+  STARTER: {
+    maxEquipments: 10,
+    maxUsers: 3,
+    maxStorages: 1,
+    aiLevel: 'L1_READ',
+    retentionDays: 7,
+  },
+  PROFESSIONAL: {
+    maxEquipments: 50,
+    maxUsers: 10,
+    maxStorages: 3,
+    aiLevel: 'L2_REMEDIATION',
+    retentionDays: 30,
+  },
+  ENTERPRISE: {
+    maxEquipments: 0,
+    maxUsers: 0,
+    maxStorages: 0,
+    aiLevel: 'L3_CRITICAL',
+    retentionDays: 90,
+  },
+};
+
 function EquipmentCredentialInputs({ form, setForm, storages = [], isEdit = false, existingGroups = [], existingSubgroups = [], allEquipments = [] }) {
   // Lista unificada de grupos existentes
   const availableGroups = useMemo(() => {
@@ -729,6 +753,11 @@ export default function App() {
     document: '',
     plan: 'PROFESSIONAL',
     status: 'ACTIVE',
+    maxEquipments: 50,
+    maxUsers: 10,
+    maxStorages: 3,
+    aiLevel: 'L2_REMEDIATION',
+    retentionDays: 30,
   });
   const [tenantSaving, setTenantSaving] = useState(false);
   const [tenantError, setTenantError] = useState(null);
@@ -932,7 +961,18 @@ export default function App() {
       }
       setIsTenantModalOpen(false);
       setEditingTenant(null);
-      setTenantForm({ name: '', slug: '', document: '', plan: 'PROFESSIONAL', status: 'ACTIVE' });
+      setTenantForm({
+        name: '',
+        slug: '',
+        document: '',
+        plan: 'PROFESSIONAL',
+        status: 'ACTIVE',
+        maxEquipments: 50,
+        maxUsers: 10,
+        maxStorages: 3,
+        aiLevel: 'L2_REMEDIATION',
+        retentionDays: 30,
+      });
       fetchTenants();
     } catch (err) {
       setTenantError(err.response?.data?.error || 'Erro ao salvar tenant.');
@@ -3336,6 +3376,11 @@ export default function App() {
                       document: '',
                       plan: 'PROFESSIONAL',
                       status: 'ACTIVE',
+                      maxEquipments: 50,
+                      maxUsers: 10,
+                      maxStorages: 3,
+                      aiLevel: 'L2_REMEDIATION',
+                      retentionDays: 30,
                     });
                     setTenantError(null);
                     setIsTenantModalOpen(true);
@@ -3362,78 +3407,183 @@ export default function App() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {tenants.map((t) => (
-                  <div key={t.id} className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition flex flex-col justify-between gap-4">
-                    <div>
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div>
-                          <h3 className="text-sm font-bold text-white">{t.name}</h3>
-                          <span className="text-[11px] font-mono text-slate-400">slug: {t.slug}</span>
+                {tenants.map((t) => {
+                  const eqCount = t._count?.equipments ?? 0;
+                  const maxEq = t.maxEquipments ?? (t.plan === 'STARTER' ? 10 : t.plan === 'ENTERPRISE' ? 0 : 50);
+                  const eqPct = maxEq > 0 ? Math.min(Math.round((eqCount / maxEq) * 100), 100) : 0;
+
+                  const userCount = t._count?.users ?? 0;
+                  const maxU = t.maxUsers ?? (t.plan === 'STARTER' ? 3 : t.plan === 'ENTERPRISE' ? 0 : 10);
+                  const uPct = maxU > 0 ? Math.min(Math.round((userCount / maxU) * 100), 100) : 0;
+
+                  const storageCount = t._count?.storages ?? 0;
+                  const maxS = t.maxStorages ?? (t.plan === 'STARTER' ? 1 : t.plan === 'ENTERPRISE' ? 0 : 3);
+                  const sPct = maxS > 0 ? Math.min(Math.round((storageCount / maxS) * 100), 100) : 0;
+
+                  return (
+                    <div key={t.id} className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition flex flex-col justify-between gap-4">
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div>
+                            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                              {t.name}
+                              {t.slug === 'noc-corp' && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-sky-950 text-sky-400 border border-sky-800">
+                                  Default
+                                </span>
+                              )}
+                            </h3>
+                            <span className="text-[11px] font-mono text-slate-400">slug: {t.slug}</span>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                            t.status === 'ACTIVE'
+                              ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80'
+                              : t.status === 'SUSPENDED'
+                              ? 'bg-rose-950/80 text-rose-400 border-rose-800/80'
+                              : 'bg-amber-950/80 text-amber-400 border-amber-800/80'
+                          }`}>
+                            {t.status === 'ACTIVE' ? 'Ativo' : t.status === 'SUSPENDED' ? 'Suspenso' : 'Trial'}
+                          </span>
                         </div>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                          t.status === 'ACTIVE'
-                            ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80'
-                            : t.status === 'SUSPENDED'
-                            ? 'bg-rose-950/80 text-rose-400 border-rose-800/80'
-                            : 'bg-amber-950/80 text-amber-400 border-amber-800/80'
-                        }`}>
-                          {t.status === 'ACTIVE' ? 'Ativo' : t.status === 'SUSPENDED' ? 'Suspenso' : 'Trial'}
-                        </span>
+
+                        {t.document && (
+                          <p className="text-xs text-slate-400 mb-2">
+                            <span className="text-slate-500 font-medium">CNPJ/CPF:</span> {t.document}
+                          </p>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                            t.plan === 'ENTERPRISE'
+                              ? 'bg-purple-950/80 text-purple-300 border-purple-800'
+                              : t.plan === 'STARTER'
+                              ? 'bg-blue-950/80 text-blue-300 border-blue-800'
+                              : 'bg-slate-800 text-sky-300 border-slate-700'
+                          }`}>
+                            Plano {t.plan}
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-slate-950 text-amber-300 border border-amber-900/50 font-mono">
+                            IA: {t.aiLevel || 'L2_REMEDIATION'}
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-slate-950 text-slate-400 border border-slate-800 font-mono">
+                            {t.retentionDays || 30}d retenção
+                          </span>
+                        </div>
+
+                        {/* Monitoramento de Cotas e Consumo */}
+                        <div className="space-y-2 pt-3 border-t border-slate-800/80 text-xs">
+                          {/* Equipamentos */}
+                          <div>
+                            <div className="flex justify-between items-center text-[11px] mb-1">
+                              <span className="text-slate-400 flex items-center gap-1">
+                                <Server className="w-3 h-3 text-sky-400" />
+                                Equipamentos
+                              </span>
+                              <span className="font-semibold text-slate-200">
+                                {eqCount} <span className="text-slate-500 font-normal">/ {maxEq > 0 ? maxEq : '∞'}</span>
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-800">
+                              <div
+                                className={`h-full rounded-full transition-all duration-300 ${
+                                  maxEq > 0 && eqCount >= maxEq
+                                    ? 'bg-rose-500'
+                                    : maxEq > 0 && eqPct >= 80
+                                    ? 'bg-amber-500'
+                                    : 'bg-sky-500'
+                                }`}
+                                style={{ width: maxEq > 0 ? `${eqPct}%` : '20%' }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Usuários */}
+                          <div>
+                            <div className="flex justify-between items-center text-[11px] mb-1">
+                              <span className="text-slate-400 flex items-center gap-1">
+                                <Users className="w-3 h-3 text-emerald-400" />
+                                Usuários
+                              </span>
+                              <span className="font-semibold text-slate-200">
+                                {userCount} <span className="text-slate-500 font-normal">/ {maxU > 0 ? maxU : '∞'}</span>
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-800">
+                              <div
+                                className={`h-full rounded-full transition-all duration-300 ${
+                                  maxU > 0 && userCount >= maxU
+                                    ? 'bg-rose-500'
+                                    : maxU > 0 && uPct >= 80
+                                    ? 'bg-amber-500'
+                                    : 'bg-emerald-500'
+                                }`}
+                                style={{ width: maxU > 0 ? `${uPct}%` : '20%' }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Storages */}
+                          <div>
+                            <div className="flex justify-between items-center text-[11px] mb-1">
+                              <span className="text-slate-400 flex items-center gap-1">
+                                <Database className="w-3 h-3 text-purple-400" />
+                                Storages / Repositórios
+                              </span>
+                              <span className="font-semibold text-slate-200">
+                                {storageCount} <span className="text-slate-500 font-normal">/ {maxS > 0 ? maxS : '∞'}</span>
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-800">
+                              <div
+                                className={`h-full rounded-full transition-all duration-300 ${
+                                  maxS > 0 && storageCount >= maxS
+                                    ? 'bg-rose-500'
+                                    : maxS > 0 && sPct >= 80
+                                    ? 'bg-amber-500'
+                                    : 'bg-purple-500'
+                                }`}
+                                style={{ width: maxS > 0 ? `${sPct}%` : '20%' }}
+                              />
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
-                      {t.document && (
-                        <p className="text-xs text-slate-400 mb-2">
-                          <span className="text-slate-500 font-medium">CNPJ/CPF:</span> {t.document}
-                        </p>
-                      )}
-
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="px-2 py-0.5 bg-slate-800 rounded text-[11px] text-sky-300 font-medium border border-slate-700">
-                          Plano: {t.plan}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-800/80 text-xs">
-                        <div className="bg-slate-950/50 p-2 rounded-xl border border-slate-800">
-                          <span className="block text-[11px] text-slate-500">Equipamentos</span>
-                          <span className="font-bold text-white text-sm">{t._count?.equipments ?? 0}</span>
-                        </div>
-                        <div className="bg-slate-950/50 p-2 rounded-xl border border-slate-800">
-                          <span className="block text-[11px] text-slate-500">Usuários</span>
-                          <span className="font-bold text-white text-sm">{t._count?.users ?? 0}</span>
-                        </div>
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800/60">
+                        <button
+                          onClick={() => {
+                            setEditingTenant(t);
+                            setTenantForm({
+                              name: t.name,
+                              slug: t.slug,
+                              document: t.document || '',
+                              plan: t.plan || 'PROFESSIONAL',
+                              status: t.status || 'ACTIVE',
+                              maxEquipments: t.maxEquipments ?? (t.plan === 'STARTER' ? 10 : t.plan === 'ENTERPRISE' ? 0 : 50),
+                              maxUsers: t.maxUsers ?? (t.plan === 'STARTER' ? 3 : t.plan === 'ENTERPRISE' ? 0 : 10),
+                              maxStorages: t.maxStorages ?? (t.plan === 'STARTER' ? 1 : t.plan === 'ENTERPRISE' ? 0 : 3),
+                              aiLevel: t.aiLevel || (t.plan === 'STARTER' ? 'L1_READ' : t.plan === 'ENTERPRISE' ? 'L3_CRITICAL' : 'L2_REMEDIATION'),
+                              retentionDays: t.retentionDays ?? (t.plan === 'STARTER' ? 7 : t.plan === 'ENTERPRISE' ? 90 : 30),
+                            });
+                            setTenantError(null);
+                            setIsTenantModalOpen(true);
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1 transition"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTenant(t.id, t.name)}
+                          className="px-2.5 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-red-300 text-xs font-medium flex items-center gap-1 transition"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Excluir
+                        </button>
                       </div>
                     </div>
-
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800/60">
-                      <button
-                        onClick={() => {
-                          setEditingTenant(t);
-                          setTenantForm({
-                            name: t.name,
-                            slug: t.slug,
-                            document: t.document || '',
-                            plan: t.plan || 'PROFESSIONAL',
-                            status: t.status || 'ACTIVE',
-                          });
-                          setTenantError(null);
-                          setIsTenantModalOpen(true);
-                        }}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1 transition"
-                      >
-                        <Pencil className="w-3 h-3" />
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => handleDeleteTenant(t.id, t.name)}
-                        className="px-2.5 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-red-300 text-xs font-medium flex items-center gap-1 transition"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        Excluir
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -4090,7 +4240,7 @@ export default function App() {
         {/* MODAL DE CADASTRO / EDIÇÃO DE TENANT */}
         {isTenantModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4">
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-xl shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-sky-950 text-sky-400 rounded-xl border border-sky-800">
@@ -4156,10 +4306,26 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Plano</label>
+                    <label className="block text-slate-300 font-medium mb-1">Plano Base</label>
                     <select
                       value={tenantForm.plan}
-                      onChange={(e) => setTenantForm({ ...tenantForm, plan: e.target.value })}
+                      onChange={(e) => {
+                        const newPlan = e.target.value;
+                        const preset = PLAN_PRESETS[newPlan];
+                        if (preset) {
+                          setTenantForm({
+                            ...tenantForm,
+                            plan: newPlan,
+                            maxEquipments: preset.maxEquipments,
+                            maxUsers: preset.maxUsers,
+                            maxStorages: preset.maxStorages,
+                            aiLevel: preset.aiLevel,
+                            retentionDays: preset.retentionDays,
+                          });
+                        } else {
+                          setTenantForm({ ...tenantForm, plan: newPlan });
+                        }
+                      }}
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-sky-500"
                     >
                       <option value="STARTER">Starter</option>
@@ -4178,6 +4344,106 @@ export default function App() {
                       <option value="SUSPENDED">Suspenso</option>
                       <option value="TRIAL">Trial</option>
                     </select>
+                  </div>
+                </div>
+
+                {/* Painel Visual de Cotas e Capacidades do Plano */}
+                <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sliders className="w-3.5 h-3.5 text-sky-400" />
+                      Cotas e Limites Operacionais
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      0 = Ilimitado
+                    </span>
+                  </div>
+
+                  {/* Preset Quick Badges */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {['STARTER', 'PROFESSIONAL', 'ENTERPRISE'].map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => {
+                          const preset = PLAN_PRESETS[p];
+                          setTenantForm({
+                            ...tenantForm,
+                            plan: p,
+                            maxEquipments: preset.maxEquipments,
+                            maxUsers: preset.maxUsers,
+                            maxStorages: preset.maxStorages,
+                            aiLevel: preset.aiLevel,
+                            retentionDays: preset.retentionDays,
+                          });
+                        }}
+                        className={`px-2 py-1.5 rounded-lg text-[10px] font-semibold border transition text-center ${
+                          tenantForm.plan === p
+                            ? 'bg-sky-600/30 border-sky-500 text-sky-200 shadow-sm'
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                        }`}
+                      >
+                        Carregar Preset {p}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2.5 pt-1">
+                    <div>
+                      <label className="block text-slate-400 text-[11px] font-medium mb-1">Max Equipamentos</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={tenantForm.maxEquipments}
+                        onChange={(e) => setTenantForm({ ...tenantForm, maxEquipments: parseInt(e.target.value, 10) || 0 })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-sky-500 text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 text-[11px] font-medium mb-1">Max Usuários</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={tenantForm.maxUsers}
+                        onChange={(e) => setTenantForm({ ...tenantForm, maxUsers: parseInt(e.target.value, 10) || 0 })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-sky-500 text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 text-[11px] font-medium mb-1">Max Storages</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={tenantForm.maxStorages}
+                        onChange={(e) => setTenantForm({ ...tenantForm, maxStorages: parseInt(e.target.value, 10) || 0 })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-sky-500 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5 pt-1">
+                    <div>
+                      <label className="block text-slate-400 text-[11px] font-medium mb-1">Nível de Autonomia IA</label>
+                      <select
+                        value={tenantForm.aiLevel}
+                        onChange={(e) => setTenantForm({ ...tenantForm, aiLevel: e.target.value })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-sky-500 text-xs"
+                      >
+                        <option value="L1_READ">L1 - Diagnóstico & Leitura</option>
+                        <option value="L2_REMEDIATION">L2 - Remediação Assistida</option>
+                        <option value="L3_CRITICAL">L3 - Autônomo & Crítico</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 text-[11px] font-medium mb-1">Retenção de Dados (Dias)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={tenantForm.retentionDays}
+                        onChange={(e) => setTenantForm({ ...tenantForm, retentionDays: parseInt(e.target.value, 10) || 1 })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-sky-500 text-xs font-mono"
+                      />
+                    </div>
                   </div>
                 </div>
 

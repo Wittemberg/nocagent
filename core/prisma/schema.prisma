@@ -63,11 +63,18 @@ model Tenant {
   document    String?      // CNPJ / CPF
   status      TenantStatus @default(ACTIVE)
   plan        String?      @default("ENTERPRISE")
+  // Gestão de Cotas e Governança do Plano
+  maxEquipments Int?       @default(10) // 0 = Ilimitado
+  maxUsers      Int?       @default(3)  // 0 = Ilimitado
+  maxStorages   Int?       @default(1)  // 0 = Ilimitado
+  aiLevel       String?    @default("L1_READ") // L1_READ, L2_REMEDIATION, L3_CRITICAL
+  retentionDays Int?       @default(30)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  users       User[]
-  equipments  Equipment[]
+  users        User[]
+  equipments   Equipment[]
+  storages     Storage[]
   featureFlags FeatureFlag[]
 
   @@map("tenants")
@@ -132,9 +139,14 @@ model Storage {
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 
+  // Vínculo Multi-Tenant
+  tenantId             String?
+  tenant               Tenant?       @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
   equipments           Equipment[]
   backupAudits         BackupAudit[]
 
+  @@index([tenantId])
   @@map("storages")
 }
 

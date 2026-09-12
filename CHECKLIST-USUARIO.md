@@ -112,7 +112,20 @@
 - `[x]` Níveis granulares de autonomia da IA: L1 (Leitura), L2 (Remediação Supervisionada), L3 (Crítico)
 - `[x]` Emergency Kill-Switch global com corte instantâneo de comandos e remediações ativas
 - `[x]` Badge dinâmico no cabeçalho alertando status de operação normal vs kill-switch ativo
-- `[x]` Motor Pulse APM medindo latência RTT em ms por driver (Proxmox, pfSense, Mikrotik, Zabbix, LLM)
+- `[x]` Pulse APM medindo latência RTT em ms por driver (Proxmox, pfSense, Mikrotik, Zabbix, LLM)
 - `[x]` Telescope Inspector com histórico ponta a ponta de chamadas MCP, status code e diagnósticos de erro
 - `[x]` Aba dedicada "Governança & APM" exclusiva para superadministradores no Dashboard Web
+
+---
+
+## 🏢 10. Isolamento Estrito Multi-Tenant & Gestão Visual de Cotas ✅ CONCLUÍDO
+
+- `[x]` Isolamento estrito de dados por `tenantId` em todos os endpoints operacionais (status de equipamentos, cofre, storages, backups, auditoria e chat)
+- `[x]` Zero vazamento de dados entre organizações (Tenants recém-criados têm visualização isolada e empty state limpo)
+- `[x]` Raciocínio da IA Hermes RAG filtrado pelo contexto exclusivo do Tenant autenticado
+- `[x]` Gestão visual de cotas operacionais por plano integrada à tela e modal de cadastro/edição de Tenants
+- `[x]` Presets configuráveis por plano (`Starter`, `Professional`, `Enterprise`) com suporte a cotas ilimitadas (`0`)
+- `[x]` Monitoramento visual de consumo de cotas (Equipamentos, Usuários, Storages) com barras de progresso nos cards de Tenant
+- `[x]` Bloqueio com erro `403 Forbidden` na criação de recursos quando a cota do plano é atingida
+- `[x]` Auto-migração resiliente no startup para vincular registros órfãos pré-existentes ao tenant padrão `noc-corp`
 
