@@ -561,6 +561,9 @@ app.get('/api/equipments', async (req, res) => {
         host: true,
         port: true,
         status: true,
+        group: true,
+        subgroup: true,
+        tags: true,
         lastLatency: true,
         lastLossPercent: true,
         lastCheck: true,
@@ -602,6 +605,9 @@ app.get('/api/equipments', async (req, res) => {
       }
       return {
         ...eq,
+        group: eq.group || 'Geral',
+        subgroup: eq.subgroup || null,
+        tags: eq.tags || [],
         osInfo,
         proxmoxData: proxmoxData || undefined,
       };
@@ -614,7 +620,10 @@ app.get('/api/equipments', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao listar equipamentos:', error);
-    return res.status(500).json({ error: 'Erro ao consultar cofre de equipamentos.' });
+    return res.status(500).json({ 
+      error: 'Erro ao consultar cofre de equipamentos.',
+      details: error.message 
+    });
   }
 });
 

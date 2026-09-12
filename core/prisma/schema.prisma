@@ -112,6 +112,7 @@ model Equipment {
   // Vínculo com Storage de Destino para Backups
   backupStorageId      String?
   backupStorage        Storage?      @relation(fields: [backupStorageId], references: [id], onDelete: SetNull)
+  backupSchedule       String?       @default("DAILY") // Periodicidade: HOURLY, DAILY, WEEKLY
   // Agrupamento Hierárquico Multi-Tenant (Cliente / Unidade / Tags)
   group                String?       @default("Geral") // Cliente / Tenant / Grupo principal (ex: "SuperTop", "Matriz")
   subgroup             String?       // Unidade / Filial / Subgrupo (ex: "Loja 01 - Centro", "CD Distribuição", "Mikrotiks")
