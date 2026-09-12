@@ -1,5 +1,5 @@
 # ✅ Checklist do Usuário — NOC-Agent
-> Atualizado em: 11/09/2026 — Seções 1–6 concluídas ✅
+> Atualizado em: 12/09/2026 — Seções 1–7 concluídas ✅
 
 ---
 
@@ -76,4 +76,19 @@
 
 - `[x]` Primeiro equipamento cadastrado no Cofre com chave AES-256 (pfSense Libra)
 - `[x]` Validação de conectividade real via API do pfSense
+- `[x]` Nós Proxmox (SuperTop e Calvi) e roteadores Mikrotik cadastrados e operacionais
 - `[x]` Cofre criptográfico operacional e integrado ao Hermes AI Engine
+
+---
+
+## 📊 7. Dashboard Web & Gestão Multi-Tenant ✅ CONCLUÍDO
+
+- `[x]` Painel Web responsivo em produção (`nocagent.awecloudsolution.com`) com SSL automático
+- `[x]` Cards compactos de alta densidade com métricas de CPU, RAM e Disco
+- `[x]` Hierarquia de Clientes/Tenants (`group`) e Unidades/Lojas (`subgroup`) com auto-complete no cadastro
+- `[x]` Modo visual "Agrupar por Unidade" organizando equipamentos por loja/filial
+- `[x]` Filtros dinâmicos por Cliente, Unidade e Tipo de Equipamento
+- `[x]` Mecanismo de silenciamento de alertas (Snooze) por 15m, 30m, 1h, 4h ou 24h
+- `[x]` Polling automático de telemetria a cada 30 segundos e botão de retry inteligente
+- `[x]` Cofre de Storages gerenciando destinos S3, MinIO, Wasabi, SFTP e NFS vinculados aos ativos
+- `[x]` Terminal IA integrado com RAG de telemetria em tempo real e raciocínio diagnóstico multi-caso

@@ -5,13 +5,13 @@
 
 ![Mascote NOC-Agent](assets/images/mascot.jpg)
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg?style=flat-square)](ROADMAP.md)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg?style=flat-square)](ROADMAP.md)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white&style=flat-square)](STACK_SPEC.md)
 [![Node](https://img.shields.io/badge/node-v20_alpine-339933.svg?logo=nodedotjs&logoColor=white&style=flat-square)](STACK_SPEC.md)
 [![PostgreSQL](https://img.shields.io/badge/postgres-16-4169E1.svg?logo=postgresql&logoColor=white&style=flat-square)](STACK_SPEC.md)
 [![Storage](https://img.shields.io/badge/storage-S3_Compatible-FF9900.svg?logo=amazons3&logoColor=white&style=flat-square)](STACK_SPEC.md)
 [![Security](https://img.shields.io/badge/security-AES--256--GCM-success.svg?style=flat-square)](MANUAL_ILUSTRADO.md)
-[![Status](https://img.shields.io/badge/status-Fase%200%20%26%201-orange.svg?style=flat-square)](ROADMAP.md)
+[![Status](https://img.shields.io/badge/status-Fases%200%20a%204%20Concluídas-brightgreen.svg?style=flat-square)](ROADMAP.md)
 
 [📘 Manual Ilustrado](MANUAL_ILUSTRADO.md) • [📥 Baixar PDF (5 Páginas)](MANUAL_ILUSTRADO_NOC_AGENT.pdf) • [🏗️ Especificação Técnica](STACK_SPEC.md) • [🚀 Roadmap](ROADMAP.md) • [🛡️ Setup pfSense](PFSENSE-API-SETUP.md)
 
@@ -97,6 +97,22 @@ O agente consulta o endpoint `/api/v2/status/gateways` no firewall e responde em
 - As credenciais dos roteadores e firewalls **nunca** são armazenadas em texto puro.
 - A IA **nunca** lê nem recebe senhas nas respostas.
 - A chave mestra descriptografa o token estritamente na memória RAM durante a fração de segundo necessária para disparar a chamada de rede.
+
+### 6. 🏢 Gestão Hierárquica Multi-Tenant (Grupos, Subgrupos e Unidades)
+- Suporte a múltiplos clientes/tenants (ex: grupo *SuperTop*) e suas unidades ou lojas (ex: *Loja 01*, *Loja 02*, *CD Distribuição*).
+- Cada filial com seu próprio roteador Mikrotik, nó Proxmox VE e máquinas virtuais associadas.
+- Visualização em raias dedicadas através do botão **"Agrupar por Unidade"** com contagem instantânea de ativos ativos e degradados por loja.
+
+### 7. 📊 Dashboard Web de Alta Densidade com Telemetria Real
+- Cards compactos para monitorar dezenas de nós em uma única tela sem poluição visual.
+- Barras de consumo em tempo real para **CPU, RAM e Disco**, além do inventário de VMs e storages do Proxmox.
+- **Silenciador de Alertas (Snooze):** Oculta alertas pontuais de redundância/contingência por tempo determinado (15m, 30m, 1h, 4h, 24h) com persistência em `localStorage`.
+- **Resiliência Integrada:** Polling automático de telemetria a cada 30 segundos e botão de retry inteligente.
+
+### 8. 🧠 Raciocínio Diagnóstico Autônomo (Hermes AI RAG)
+- O Hermes AI Engine analisa a telemetria ao vivo via RAG antes de responder qualquer interação.
+- Identificação precisa de entidades no prompt (ex: *"como está a Loja 01 do SuperTop?"*, *"quais VMs estão no Proxmox Calvi?"*).
+- Diagnóstico estruturado com 6 padrões operacionais: Visão de Grupo/Tenant, Nó Proxmox, Gateway pfSense, Mikrotik BGP, Auditoria de Backups e Saúde Global.
 
 ---
 

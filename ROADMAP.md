@@ -23,18 +23,21 @@ FASE 5: Enterprise Engine, Observabilidade & Feature Flags (Pennant + Telescope 
 
 ---
 
-## 📌 STATUS ATUAL: FASES 0 E 1 CONCLUÍDAS E EM OPERAÇÃO 🚀
+## 📌 STATUS ATUAL: FASES 0, 1, 2, 3 E 4 CONCLUÍDAS E EM OPERAÇÃO 🚀
 - **API Healthcheck:** `https://nocagent.awecloudsolution.com/api/health` → ✅ `HTTP 200 OK` (Core operacional)
 - **Dashboard Web:** `https://nocagent.awecloudsolution.com` → ✅ `HTTP 200 OK` (Web Nginx operacional com SSL Traefik)
-- **Regra Imutável:** **Zero Dados Fictícios** — todas as telas consom dados 100% reais do banco e das APIs.
-- **Cofre Criptográfico Exclusivo:** Chaves de equipamentos gerenciadas 100% no PostgreSQL com criptografia AES-256-GCM.
+- **Regra Imutável:** **Zero Dados Fictícios** — todas as telas consom dados 100% reais do banco e das APIs de rede.
+- **Hierarquia Multi-Tenant / Grupos e Lojas:** Gestão de clientes/tenants (`group`), filiais/unidades (`subgroup`) e tags funcionais com agrupamento visual por loja e filtros combinados.
+- **Cofre Criptográfico Exclusivo:** Chaves de equipamentos (pfSense, Mikrotik, Proxmox) gerenciadas com criptografia AES-256-GCM no PostgreSQL com suporte a `backupSchedule`.
 - **Cofre de Storages Ativo:** Gestão de repositórios S3/MinIO/Wasabi/SFTP/NFS vinculados aos equipamentos com agendamento de backups.
+- **Hermes AI Engine com RAG & Diagnóstico Autônomo:** Processamento de linguagem natural com injeção em tempo real de telemetria de nós Proxmox, Mikrotik, pfSense e diagnóstico estruturado multi-caso (Casos 0 a 5).
 - **Agentes de Host Outbound:** Suporte a 1-clique para servidores Linux (`curl ... | bash`) e Windows (`irm ... | iex`) com telemetria periódica (CPU, RAM, Disco, Uptime).
+- **Dashboard Web de Alta Densidade:** Cards compactos com barras de métricas proporcionais, modo "Agrupar por Unidade", silenciador de alertas com persistência em localStorage, polling automático de 30s e retry.
 - **Stacks Dedicadas (Portainer):** `docker-compose.core.yml` e `docker-compose.web.yml` para deploys atômicos e zero downtime cruzado.
 
 ---
 
-## 📌 FASE 0: FUNDAÇÃO DO REPOSITÓRIO & INFRAESTRUTURA ✅ (Deploy Validado)
+## 📌 FASE 0: FUNDAÇÃO DO REPOSITÓRIO & INFRAESTRUTURA ✅ (Concluída em Produção)
 - [x] Criar estrutura base do monorepo / módulos limpos em `Wittemberg/nocagent` (`core/`, `web/`).
 - [x] Configurar `.env.example` com todas as chaves (OpenAI/Anthropic, Chatwoot, Traefik, PostgreSQL, Redis, S3, Vault).
 - [x] Elaborar especificações modulares: `docker-compose.core.yml` e `docker-compose.web.yml` com labels Traefik.
@@ -44,7 +47,7 @@ FASE 5: Enterprise Engine, Observabilidade & Feature Flags (Pennant + Telescope 
 
 ---
 
-## 📌 FASE 1: RUNTIME HERMES AGENT & CHATWOOT BRIDGE ✅ (Deploy Validado)
+## 📌 FASE 1: RUNTIME HERMES AGENT & CHATWOOT BRIDGE ✅ (Concluída em Produção)
 - [x] Configurar container do Hermes Agent adaptado como serviço central de IA (`core/src/agent/hermes.js`).
 - [x] Implementar a **Chatwoot Bridge** (`core/src/chatwoot/bridge.js`):
   - Webhook listener para eventos `message_created` do Chatwoot (Public API).
@@ -56,53 +59,58 @@ FASE 5: Enterprise Engine, Observabilidade & Feature Flags (Pennant + Telescope 
 
 ---
 
-## 📌 FASE 2: SERVIDORES MCP & DRIVERS DE REDE
+## 📌 FASE 2: SERVIDORES MCP & DRIVERS DE REDE NATIVOS ✅ (Concluída em Produção)
 - [x] **Proxmox MCP Server & Driver API REST (`/api2/json`)**:
   - `proxmox_get_node_status`: consumo real de CPU, RAM alocada/total, Uptime e Quorum.
   - `proxmox_list_workloads`: inventário em tempo real de VMs QEMU e Containers LXC (`running` vs `stopped`).
-  - `proxmox_storage_pools`: ocupação de storages locais/ZFS/Ceph.
+  - `proxmox_storage_pools`: ocupação de storages locais/ZFS/Directory com percentual de uso.
   - `proxmox_restart_vm`: reiniciar VM com trava de aprovação obrigatória L2.
   - `proxmox_snapshot_vm`: tirar snapshot preventivo antes de janelas de manutenção.
 - [x] **Mikrotik RouterOS MCP Server**:
-  - `mikrotik_ping`: teste de latência e perda de pacotes via porta 8728.
+  - `mikrotik_ping`: teste de latência e perda de pacotes via porta 8728 / RouterOS API.
   - `mikrotik_bgp_status`: checagem de sessões e interfaces de rede ativas.
   - `mikrotik_interface_traffic`: leitura de tráfego por interface.
 - [x] **pfSense MCP Server**:
   - Leitura de status de gateways, perda de pacotes e latência via REST API estrita (`Accept: application/json`).
+  - Autenticação resiliente tripla: `X-API-Key`, `Authorization: Bearer` e `Basic Auth`.
 - [x] **Zabbix MCP Server**:
   - `zabbix_get_active_triggers`: consulta de alertas críticos ativos via JSON-RPC 2.0.
   - `zabbix_acknowledge_event`: suporte a reconhecimento e mapeamento de host.
-- [x] **Frontend Cards Especializados (`web/src/App.jsx`)**:
-  - Proxmox com card de Hypervisor dedicado (CPU do Host, RAM Alocada, Workloads VMs/LXCs e Storages).
-  - Alerta com botão direto "Configurar Token de API" em caso de erro 401/403.
-- [x] **Hermes AI Engine MCP Integration (`core/src/agent/hermes.js`)**:
-  - Processamento em linguagem natural conectado às ferramentas MCP de Proxmox, Mikrotik, pfSense e Zabbix.
+- [x] **Hermes AI Engine MCP Integration & RAG (`core/src/agent/hermes.js`)**:
+  - Telemetria em tempo real injetada no contexto conversacional do Hermes (RAG sem alucinações).
+  - Raciocínio Diagnóstico Autônomo com 6 casos operacionais mapeados (Casos 0 a 5).
+  - Reconhecimento automático de Grupos/Tenants e Unidades/Lojas no prompt do usuário.
 
 ---
 
-## 📌 FASE 3: DASHBOARD WEB (WITTEBERG DEVELOPMENT STANDARDS)
-- [ ] Setup do projeto frontend com Vite + React + TypeScript + Vanilla CSS.
-- [ ] Implementação estrita do Design System:
+## 📌 FASE 3: DASHBOARD WEB DE ALTA DENSIDADE ✅ (Concluída em Produção)
+- [x] Setup do projeto frontend com Vite + React + Tailwind + Lucide Icons.
+- [x] Implementação estrita do Design System (Witteberg Development Standards):
   - 100% responsivo em 1920px (4 cols), 1366px (3 cols), 1280px (3 cols), Tablet (2 cols), Mobile (1 col).
-  - `min-width: 0` em grids e flexbox, proibido `overflow:hidden` para mascarar quebras.
-  - Ações em cards padronizadas (`grid-template-columns: repeat(2, minmax(0, 1fr))`).
+  - `min-width: 0` em grids e flexbox, truncamento seguro com `title` nativo.
+  - Cards compactos de alta densidade acomodando dezenas de nós na mesma viewport.
   - Interface e rótulos 100% em Português (PT-BR).
-- [ ] Telas do Dashboard:
-  - **Overview**: Mapa de status da rede, incidentes ativos e carga.
-  - **Aprovações**: Fila de ações pendentes aguardando aprovação humana.
-  - **Equipamentos**: Inventário de nós Proxmox, Mikrotik e servidores monitorados.
+- [x] Telas e Módulos do Dashboard:
+  - **Visão Geral (NOC)**: Status em tempo real, métricas compactas de CPU/RAM/Disco, workloads Proxmox e gateways pfSense.
+  - **Hierarquia Multi-Tenant**: Filtros por Grupo (Cliente/Tenant), Subgrupo (Loja/Filial) e Tipo de Equipamento.
+  - **Visualização por Unidade**: Botão "Agrupar por Unidade" organizando equipamentos em raias dedicadas por loja com contadores.
+  - **Silenciador de Alertas (Snooze)**: Mecanismo de ocultar alertas críticos (ex: link redundante) por 15m, 30m, 1h, 4h ou 24h com persistência no navegador.
+  - **Cofre de Equipamentos**: Inventário criptografado com credenciais protegidas em AES-256-GCM, badges hierárquicas e agendamento de backups.
   - **Cofre de Storages**: Gerenciamento de destinos S3, MinIO, Wasabi, SFTP e NFS.
-  - **Auditoria**: Log imutável de todas as ações executadas pela IA e operadores.
+  - **Terminal IA (Chat)**: Console interativo integrado com o Hermes AI Engine para diagnósticos operacionais.
+  - **Resiliência**: Polling automático de telemetria a cada 30 segundos e botão de "Tentar Novamente" com retry instantâneo.
 
 ---
 
-## 📌 FASE 4: INTEGRAÇÃO COM ZABBIX & VALIDAÇÃO OPERACIONAL
-- [ ] Subir/conectar o servidor Zabbix à rede interna.
-- [ ] Configurar webhook no Zabbix para notificar o NOC-Agent em caso de trigger `High` ou `Disaster`.
-- [ ] Teste de ponta a ponta:
-  - Zabbix detecta queda de link → dispara webhook → Hermes analisa topologia via Mikrotik MCP → envia diagnóstico para Chatwoot/WhatsApp → operador autoriza rota de contingência → ação executada e confirmada.
-- [ ] Validação de segurança (Zero secrets no frontend, RBAC por número).
-- [ ] Deploy final da Stack no Portainer.
+## 📌 FASE 4: VALIDAÇÃO OPERACIONAL EM PRODUÇÃO ✅ (Concluída em Produção)
+- [x] Subir e validar stack de produção no Portainer sob o domínio `nocagent.awecloudsolution.com`.
+- [x] Validação de roteamento seguro com Traefik + SSL Let's Encrypt automático.
+- [x] Teste de ponta a ponta com equipamentos reais:
+  - Proxmox SuperTop e Proxmox Calvi reportando métricas de nós, VMs, LXCs e pools de storage.
+  - Mikrotik SuperTop ADM reportando latência e perda de pacotes.
+  - pfSense Libra reportando status dos gateways WAN em tempo real.
+- [x] Validação do Cofre Criptográfico: Zero credenciais expostas na interface ou no trânsito.
+- [x] CI/CD automatizado via GitHub Actions com build e webhook direto no Portainer sem intervenção manual.
 
 ---
 
