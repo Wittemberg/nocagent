@@ -212,9 +212,12 @@ export default function App() {
     }
   };
 
-  // Identifica se há equipamentos ou itens monitorados caídos/degradados no momento
+  // Identifica se há equipamentos caídos ou com erro de autenticação de credencial
   const downEquipments = Array.isArray(equipmentList)
-    ? equipmentList.filter(eq => eq.status === 'offline' || eq.status === 'error' || (eq.lastLossPercent != null && eq.lastLossPercent > 0))
+    ? equipmentList.filter(eq => eq.status === 'offline' || (eq.lastLossPercent != null && eq.lastLossPercent > 0))
+    : [];
+  const authErrorEquipments = Array.isArray(equipmentList)
+    ? equipmentList.filter(eq => eq.status === 'auth_error')
     : [];
 
   return (
@@ -285,7 +288,7 @@ export default function App() {
 
       {/* CONTEÚDO PRINCIPAL */}
       <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
-        {/* BANNER DINÂMICO DE INCIDENTES (APENAS SE HOUVER QUEDA REAL) */}
+        {/* BANNER DINÂMICO DE INCIDENTES REAIS (QUEDA FÍSICA / PACOTES) */}
         {downEquipments.length > 0 && (
           <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-red-950/60 to-slate-900 border border-red-900/80 flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -308,6 +311,32 @@ export default function App() {
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
               Revalidar
+            </button>
+          </div>
+        )}
+
+        {/* BANNER DE ALERTA DE AUTENTICAÇÃO NA API (EQUIPAMENTO ONLINE MAS CHAVE RECUSADA) */}
+        {authErrorEquipments.length > 0 && (
+          <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-amber-950/60 to-slate-900 border border-amber-900/80 flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-amber-900/50 text-amber-400 border border-amber-700/50">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-amber-200 text-sm">
+                  🔐 ALERTA DE CREDENCIAL: {authErrorEquipments.map(e => e.name).join(', ')}
+                </h3>
+                <p className="text-xs text-amber-300/80 mt-0.5">
+                  {authErrorEquipments.map(e => `${e.name} está online na porta informada, mas a chave de API foi recusada (HTTP 401). Verifique a credencial cadastrada no Cofre.`).join(' • ')}
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={() => setActiveTab('vault')}
+              className="px-3 py-1.5 rounded-lg bg-amber-900/40 hover:bg-amber-900/70 border border-amber-700/60 text-xs font-medium text-amber-200 flex items-center gap-1.5 transition"
+            >
+              <Key className="w-3.5 h-3.5" />
+              Revisar no Cofre
             </button>
           </div>
         )}
@@ -373,17 +402,33 @@ export default function App() {
                 {equipmentList.map(eq => {
                   const isOnline = eq.status === 'online';
                   const isDegraded = eq.status === 'degraded';
+                  const isAuthError = eq.status === 'auth_error';
                   const borderClass = isOnline 
                     ? 'border-emerald-900/60 hover:border-emerald-700/80 shadow-lg shadow-emerald-950/20' 
                     : isDegraded 
                     ? 'border-amber-900/60 hover:border-amber-700/80 shadow-lg shadow-amber-950/20' 
+                    : isAuthError
+                    ? 'border-amber-700/60 hover:border-amber-600/80 shadow-lg shadow-amber-950/20'
                     : 'border-red-900/60 hover:border-red-700/80 shadow-lg shadow-red-950/20';
                   const badgeClass = isOnline 
                     ? 'bg-emerald-950 text-emerald-400 border-emerald-800' 
                     : isDegraded 
                     ? 'bg-amber-950 text-amber-400 border-amber-800' 
+                    : isAuthError
+                    ? 'bg-amber-950 text-amber-300 border-amber-700'
                     : 'bg-red-950 text-red-400 border-red-800';
-                  const dotClass = isOnline ? 'bg-emerald-400 animate-pulse' : isDegraded ? 'bg-amber-400 animate-pulse' : 'bg-red-500';
+                  const dotClass = isOnline 
+                    ? 'bg-emerald-400 animate-pulse' 
+                    : isDegraded || isAuthError 
+                    ? 'bg-amber-400 animate-pulse' 
+                    : 'bg-red-500';
+                  const badgeText = isOnline 
+                    ? 'ONLINE' 
+                    : isDegraded 
+                    ? 'DEGRADADO' 
+                    : isAuthError 
+                    ? 'CHAVE RECUSADA (401)' 
+                    : 'OFFLINE';
 
                   return (
                     <div 
@@ -400,7 +445,7 @@ export default function App() {
                             {eq.type}
                           </span>
                           <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider border ${badgeClass}`}>
-                            {eq.status}
+                            {badgeText}
                           </span>
                         </div>
                       </div>
@@ -409,6 +454,23 @@ export default function App() {
                         <span className="text-slate-500 block text-[11px]">Endpoint / Host:</span>
                         {eq.host}
                       </div>
+
+                      {eq.error && (
+                        <div className="mb-3 p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 text-amber-300 text-xs flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                            <span>{eq.error}</span>
+                          </div>
+                          {isAuthError && (
+                            <button
+                              onClick={() => setActiveTab('vault')}
+                              className="px-2.5 py-1 bg-amber-900/60 hover:bg-amber-800 border border-amber-700 rounded-lg text-[11px] font-semibold text-amber-200 transition whitespace-nowrap"
+                            >
+                              Editar Chave
+                            </button>
+                          )}
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-2 gap-4 pt-1 mb-2">
                         <div>

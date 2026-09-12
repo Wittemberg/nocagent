@@ -133,18 +133,50 @@ app.get('/api/equipments/status', async (req, res) => {
             if (apiKey) {
               const targetUrl = eq.host.replace(/\/+$/, '');
               let gwRes;
-              try {
-                gwRes = await axios.get(`${targetUrl}/api/v2/status/gateways`, {
-                  headers: { 'X-API-Key': apiKey },
-                  timeout: 6000,
-                  httpsAgent,
-                });
-              } catch {
-                gwRes = await axios.get(`${targetUrl}/api/v2/status/gateway`, {
-                  headers: { 'X-API-Key': apiKey },
-                  timeout: 6000,
-                  httpsAgent,
-                });
+              let authSuccess = false;
+
+              // Estratégia de autenticação resiliente:
+              // 1. Tenta X-API-Key + Authorization: Bearer
+              // 2. Se falhar com 401, tenta Basic Auth (admin:apiKey ou apiKey)
+              // 3. Tenta X-API-Key individual
+              const authAttempts = [
+                { 'X-API-Key': apiKey, 'Authorization': apiKey.startsWith('Bearer ') ? apiKey : `Bearer ${apiKey}` },
+                { 'Authorization': `Basic ${Buffer.from(apiKey.includes(':') ? apiKey : `admin:${apiKey}`).toString('base64')}` },
+                { 'X-API-Key': apiKey }
+              ];
+
+              for (const headers of authAttempts) {
+                try {
+                  gwRes = await axios.get(`${targetUrl}/api/v2/status/gateways`, {
+                    headers,
+                    timeout: 6000,
+                    httpsAgent,
+                  });
+                  authSuccess = true;
+                  break;
+                } catch (firstErr) {
+                  if (firstErr.response?.status === 401) {
+                    continue;
+                  }
+                  try {
+                    gwRes = await axios.get(`${targetUrl}/api/v2/status/gateway`, {
+                      headers,
+                      timeout: 6000,
+                      httpsAgent,
+                    });
+                    authSuccess = true;
+                    break;
+                  } catch (secondErr) {
+                    if (secondErr.response?.status === 401) {
+                      continue;
+                    }
+                    throw secondErr;
+                  }
+                }
+              }
+
+              if (!gwRes && !authSuccess) {
+                throw new Error('AUTH_FAILED_401');
               }
 
               const gws = gwRes.data?.data || [];
@@ -153,28 +185,47 @@ app.get('/api/equipments/status', async (req, res) => {
               // Calcula médias reais de latência e perda
               if (gws.length > 0) {
                 const onlineGws = gws.filter(g => g.status === 'online');
-                item.status = onlineGws.length > 0 ? (onlineGws.length === gws.length ? 'online' : 'degraded') : 'offline';
+                item.status = onlineGws.length > 0 ? (onlineGws.length === gws.length ? 'online' : 'degraded') : 'degraded';
                 const totalDelay = gws.reduce((acc, g) => acc + (parseFloat(g.delay) || 0), 0);
                 const totalLoss = gws.reduce((acc, g) => acc + (parseFloat(g.loss) || 0), 0);
                 item.lastLatency = Math.round((totalDelay / gws.length) * 10) / 10;
                 item.lastLossPercent = Math.round((totalLoss / gws.length) * 10) / 10;
                 item.lastCheck = new Date();
-
-                // Atualiza no banco em background
-                prisma.equipment.update({
-                  where: { id: eq.id },
-                  data: {
-                    status: item.status,
-                    lastLatency: item.lastLatency,
-                    lastLossPercent: item.lastLossPercent,
-                    lastCheck: item.lastCheck,
-                  },
-                }).catch(() => {});
+              } else {
+                // Se a API respondeu 200 OK, o firewall está 100% online
+                item.status = 'online';
+                item.lastLatency = 0;
+                item.lastLossPercent = 0;
+                item.lastCheck = new Date();
               }
+
+              // Atualiza no banco em background
+              prisma.equipment.update({
+                where: { id: eq.id },
+                data: {
+                  status: item.status,
+                  lastLatency: item.lastLatency,
+                  lastLossPercent: item.lastLossPercent,
+                  lastCheck: item.lastCheck,
+                },
+              }).catch(() => {});
             }
           } catch (err) {
             console.warn(`Aviso ao consultar pfSense ${eq.name}:`, err.message);
-            item.status = 'offline';
+            const httpStatus = err.response?.status;
+            if (httpStatus === 401 || err.message === 'AUTH_FAILED_401') {
+              item.status = 'auth_error';
+              item.error = 'Credenciais recusadas pelo pfSense (HTTP 401: Falha de autenticação). Verifique a API Key no Cofre.';
+            } else if (httpStatus === 403) {
+              item.status = 'auth_error';
+              item.error = 'Acesso proibido (HTTP 403: A API Key não tem permissão para consultar os gateways).';
+            } else if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+              item.status = 'offline';
+              item.error = `Não foi possível conectar ao host (${err.code}).`;
+            } else {
+              item.status = 'warning';
+              item.error = err.response?.data?.message || err.message;
+            }
           }
         }
 
