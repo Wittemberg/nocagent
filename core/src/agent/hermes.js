@@ -2,6 +2,8 @@ const { SYSTEM_PROMPT } = require('./prompts');
 const { createApprovalRequest, verifyApproval } = require('./approvals');
 const { decryptCredentials } = require('../security/vault');
 const { MCP_TOOLS_DEFINITIONS, executeMcpTool } = require('./mcpTools');
+const { isGlobalKillSwitchActive, getKillSwitchStatus, isFeatureEnabled } = require('../security/flags');
+const { recordMcpTrace } = require('../observability/apm');
 const { PrismaClient } = require('@prisma/client');
 const axios = require('axios');
 
@@ -647,6 +649,14 @@ async function callLlmReasoning({ systemPrompt, telemetryContext, userPrompt, se
  */
 async function processMessage({ text, senderPhone, senderName }) {
   const normalized = (text || '').toLowerCase().trim();
+
+  // 0. Trava de Emergência Global (Emergency Kill-Switch)
+  if (isGlobalKillSwitchActive()) {
+    const ks = getKillSwitchStatus();
+    if (/APROVAR\s+\d{4}/i.test(text) || /^reboot\b/i.test(normalized) || /^reiniciar\b/i.test(normalized) || /^desligar\b/i.test(normalized)) {
+      return `🚨 *EMERGENCY KILL-SWITCH ATIVADO*\n\nTodas as ações ativas, execuções de comandos e remediações da IA estão temporariamente suspensas por determinação administrativa.\n• *Motivo:* ${ks.reason || 'Segurança Operacional'}\n• *Acionado por:* ${ks.triggeredBy || 'Superadmin'}\n\nPara restabelecer, um Superadmin deve liberar o Kill-Switch no Dashboard Web em *Governança & APM*.`;
+    }
+  }
 
   // 1. Validação de Aprovação Humana 2FA (ex: "APROVAR 4821")
   if (/APROVAR\s+\d{4}/i.test(text)) {

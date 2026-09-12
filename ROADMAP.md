@@ -23,9 +23,11 @@ FASE 5: Enterprise Engine, Observabilidade & Feature Flags (Pennant + Telescope 
 
 ---
 
-## 📌 STATUS ATUAL: FASES 0, 1, 2, 3 E 4 CONCLUÍDAS E EM OPERAÇÃO 🚀
-- **API Healthcheck:** `https://nocagent.awecloudsolution.com/api/health` → ✅ `HTTP 200 OK` (Core operacional)
+## 📌 STATUS ATUAL: FASES 0, 1, 2, 3, 4 E 5 CONCLUÍDAS E EM OPERAÇÃO 🚀
+- **API Healthcheck & APM:** `https://nocagent.awecloudsolution.com/api/health` e `/api/observability/apm` → ✅ `HTTP 200 OK`
 - **Dashboard Web:** `https://nocagent.awecloudsolution.com` → ✅ `HTTP 200 OK` (Web Nginx operacional com SSL Traefik)
+- **Governança de Autonomia da IA & Emergency Kill-Switch:** Módulo de controle de autonomia (L1 Leitura, L2 Remediação, L3 Crítico) e corte imediato global de ações ativas da IA.
+- **Observabilidade APM & Traces MCP em Tempo Real:** Medição contínua de latência em milissegundos para Proxmox VE, pfSense, Mikrotik RouterOS e LLMs com histórico ponta a ponta.
 - **Regra Imutável:** **Zero Dados Fictícios** — todas as telas consom dados 100% reais do banco e das APIs de rede.
 - **Hierarquia Multi-Tenant / Grupos e Lojas:** Gestão de clientes/tenants (`group`), filiais/unidades (`subgroup`) e tags funcionais com agrupamento visual por loja e filtros combinados.
 - **Cofre Criptográfico Exclusivo:** Chaves de equipamentos (pfSense, Mikrotik, Proxmox) gerenciadas com criptografia AES-256-GCM no PostgreSQL com suporte a `backupSchedule`.
@@ -171,15 +173,16 @@ FASE 5: Enterprise Engine, Observabilidade & Feature Flags (Pennant + Telescope 
 
 ---
 
-### 📋 Plano de Implementação da Fase 5 (Passo a Passo)
+### 📋 Entregáveis da Fase 5 Concluídos
 
-| Etapa | Ação Técnica | Ferramentas / Componentes | Entregável |
-| :--- | :--- | :--- | :--- |
-| **5.1** | Setup da Engine Enterprise no Stack | PHP 8.3+, Composer, Redis, PostgreSQL | Módulo central configurado com suporte a drivers e workers de alta performance |
-| **5.2** | Instalação e Migrations do Pennant | `laravel/pennant` + Driver de Banco de Dados | Tabelas `features` criadas; classes de definição de flags para L1/L2/L3 e Kill-Switches |
-| **5.3** | Configuração do Telescope (Staging/Restrito) | `laravel/telescope` + Auth Gate | Dashboard `/telescope` restrito a Sysadmins via Traefik/VPN; watchers de HTTP, Jobs e DB ativos |
-| **5.4** | Instalação e Configuração do Pulse (Produção) | `laravel/pulse` + Livewire + Redis Ingest | Dashboard `/pulse` operacional em produção com métricas de servidores e requisições lentas |
-| **5.5** | Criação dos Cards Customizados de NOC | Pulse Custom Recorders & Livewire Components | Cards de *MCP Latency*, *Host Telemetry Ingest* e *AI Cost & Approvals* ativos |
-| **5.6** | Políticas de Retenção e Purga Automática | Cron de limpeza (`telescope:prune`, `pulse:clear`) | Política de retenção configurada (ex: 48h para Telescope em dev, 7 dias de agregação no Pulse) |
-| **5.7** | Proteção de Segurança e Traefik Routing | Traefik Basic-Auth / OAuth2 Proxy | Endpoints administrativos 100% isolados da internet pública |
+| Etapa | Ação Técnica | Componentes | Entregável | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **5.1** | Modelagem de Dados & Schema Prisma | `core/prisma/schema.prisma` | Modelos `FeatureFlag`, `McpTrace` e `SystemMetric` com índices e relações | ✅ Concluído |
+| **5.2** | Motor de Feature Flags & Kill-Switch | `core/src/security/flags.js` | Suporte a Redis + fallback em memória, níveis L1/L2/L3 e trava de segurança ativa | ✅ Concluído |
+| **5.3** | Motor APM de Baixa Latência | `core/src/observability/apm.js` | Coleta de RTT em ms por driver (Proxmox, pfSense, Mikrotik, LLM) com buffer e flush | ✅ Concluído |
+| **5.4** | Instrumentação MCP & Trava no Hermes | `core/src/agent/mcpTools.js` e `hermes.js` | Chamadas MCP protegidas pelo Kill-Switch e traces gravados automaticamente | ✅ Concluído |
+| **5.5** | Endpoints REST de Governança | `core/src/server.js` | `/api/flags`, `/api/flags/kill-switch`, `/api/observability/apm`, `/api/observability/traces` | ✅ Concluído |
+| **5.6** | Painel Web "Governança & APM" | `web/src/App.jsx` | Nova aba com cards de APM, matriz de flags, live inspector de traces e modal de Kill-Switch | ✅ Concluído |
+| **5.7** | Status Indicator em Tempo Real | Header do Dashboard | Badge dinâmico no topo com alerta pulsante quando o Kill-Switch estiver ativo | ✅ Concluído |
+
 

@@ -23,6 +23,19 @@ const {
   requireSuperAdmin,
   requireTenantMasterOrSuperAdmin,
 } = require('./security/auth');
+const {
+  initFlags,
+  getKillSwitchStatus,
+  setGlobalKillSwitch,
+  getAllFlags,
+  setFeatureFlag,
+} = require('./security/flags');
+const {
+  initApm,
+  getApmMetrics,
+  getRecentTraces,
+  recordMcpTrace,
+} = require('./observability/apm');
 
 const crypto = require('crypto');
 const net = require('net');
@@ -129,11 +142,12 @@ async function bootstrapSuperadmin() {
       },
     });
 
+    const defaultPassword = process.env.DCC_DEVELOPER_PASSWORD || 'NocAgent@2026!';
+    const { passwordHash, salt } = hashPassword(defaultPassword);
+    const totpSecret = process.env.DCC_TOTP_SECRET || 'JBSWY3DPEHPK3PXP';
+
     if (!existingAdmin) {
       console.log(`[BOOTSTRAP] Criando superadministrador inicial (${adminEmail})...`);
-      const defaultPassword = process.env.DCC_DEVELOPER_PASSWORD || 'NocAgent@2026!';
-      const { hash, salt } = hashPassword(defaultPassword);
-      const totpSecret = process.env.DCC_TOTP_SECRET || 'JBSWY3DPEHPK3PXP';
 
       let defaultTenant = await prisma.tenant.findFirst({ where: { slug: 'noc-corp' } });
       if (!defaultTenant) {
@@ -151,19 +165,33 @@ async function bootstrapSuperadmin() {
         data: {
           email: adminEmail,
           name: 'Super Admin',
-          passwordHash: hash,
-          salt: salt,
+          passwordHash,
+          salt,
           role: 'SUPERADMIN',
           tenantId: defaultTenant.id,
-          totpSecret: totpSecret,
-          totpEnabled: true,
+          totpSecret,
+          totpEnabled: false, // Inicia sem 2FA obrigatório para permitir primeiro acesso sem bloqueio
           active: true,
         },
       });
-      console.log(`[BOOTSTRAP] Superadmin inicial criado: ${adminEmail} (2FA ativo)`);
+      console.log(`[BOOTSTRAP] Superadmin inicial criado com sucesso: ${adminEmail}`);
+    } else {
+      // Se o usuário existir mas as credenciais estiverem corrompidas/vazias ou force reset ativo
+      if (!existingAdmin.passwordHash || !existingAdmin.salt || process.env.DCC_RESET_ADMIN === 'true') {
+        console.log(`[BOOTSTRAP] Sincronizando/reparando credenciais do superadmin (${existingAdmin.email})...`);
+        await prisma.user.update({
+          where: { id: existingAdmin.id },
+          data: {
+            passwordHash,
+            salt,
+            active: true,
+          },
+        });
+        console.log(`[BOOTSTRAP] Credenciais do superadmin reparadas com sucesso.`);
+      }
     }
   } catch (err) {
-    console.error('[BOOTSTRAP] Aviso ao verificar/criar superadmin:', err.message);
+    console.error('[BOOTSTRAP] Erro ao verificar/criar superadmin:', err.message);
   }
 }
 
@@ -592,14 +620,14 @@ app.post('/api/users', authenticateToken, requireTenantMasterOrSuperAdmin, async
       assignedTenantId = tenantId || req.user.tenantId;
     }
 
-    const { hash, salt } = hashPassword(password);
+    const { passwordHash, salt } = hashPassword(password);
     const { secret: totpSecret } = generateTotpSecret(cleanEmail);
 
     const newUser = await prisma.user.create({
       data: {
         email: cleanEmail,
         name: name.trim(),
-        passwordHash: hash,
+        passwordHash,
         salt,
         role: assignedRole,
         tenantId: assignedTenantId,
@@ -661,8 +689,8 @@ app.put('/api/users/:id', authenticateToken, requireTenantMasterOrSuperAdmin, as
     }
     if (active !== undefined) updateData.active = Boolean(active);
     if (password && password.length >= 6) {
-      const { hash, salt } = hashPassword(password);
-      updateData.passwordHash = hash;
+      const { passwordHash, salt } = hashPassword(password);
+      updateData.passwordHash = passwordHash;
       updateData.salt = salt;
     }
 
@@ -2141,6 +2169,116 @@ app.post('/api/mcp/execute', async (req, res) => {
   }
 });
 
+// =================================================================
+// ROTAS DE GOVERNANÇA, FEATURE FLAGS & EMERGENCY KILL-SWITCH
+// =================================================================
+
+/**
+ * Consulta status do Kill-Switch e catálogo de Feature Flags
+ */
+app.get('/api/flags', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = req.user.role === 'SUPERADMIN' ? req.query.tenantId : req.user.tenantId;
+    const flags = await getAllFlags(tenantId);
+    const killSwitch = getKillSwitchStatus();
+    return res.json({
+      status: 'ok',
+      killSwitch,
+      flags,
+    });
+  } catch (error) {
+    console.error('Erro ao consultar feature flags:', error);
+    return res.status(500).json({ error: 'Erro ao consultar feature flags.' });
+  }
+});
+
+/**
+ * Aciona ou Desativa o Emergency Kill-Switch Global
+ */
+app.post('/api/flags/kill-switch', authenticateToken, requireSuperAdmin, async (req, res) => {
+  try {
+    const { active, reason } = req.body;
+    if (active === undefined) {
+      return res.status(400).json({ error: 'O campo active (boolean) é obrigatório.' });
+    }
+    const operatorName = req.user?.name || 'Superadmin';
+    const status = await setGlobalKillSwitch(Boolean(active), reason || 'Ação administrativa', operatorName);
+    return res.json({
+      status: 'ok',
+      message: active ? '🚨 Emergency Kill-Switch ATIVADO com sucesso.' : '✅ Emergency Kill-Switch LIBERADO com sucesso.',
+      killSwitch: status,
+    });
+  } catch (error) {
+    console.error('Erro ao alternar kill switch:', error);
+    return res.status(500).json({ error: 'Falha ao alternar kill-switch.' });
+  }
+});
+
+/**
+ * Atualiza status ou valor de uma Feature Flag
+ */
+app.post('/api/flags/:key/toggle', authenticateToken, requireSuperAdmin, async (req, res) => {
+  try {
+    const { key } = req.params;
+    const { enabled, value, tenantId, description } = req.body;
+
+    const updated = await setFeatureFlag({
+      key,
+      enabled: enabled !== undefined ? Boolean(enabled) : true,
+      value: value !== undefined ? String(value) : 'true',
+      tenantId: tenantId || null,
+      description,
+    });
+
+    return res.json({
+      status: 'ok',
+      flag: updated,
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar flag:', error);
+    return res.status(500).json({ error: 'Erro ao salvar alteração da flag.' });
+  }
+});
+
+// =================================================================
+// ROTAS DE OBSERVABILIDADE & APM EM TEMPO REAL (PULSE & TELESCOPE)
+// =================================================================
+
+/**
+ * Métricas agregadas de desempenho e latência por driver MCP
+ */
+app.get('/api/observability/apm', authenticateToken, (req, res) => {
+  try {
+    const metrics = getApmMetrics();
+    const killSwitch = getKillSwitchStatus();
+    return res.json({
+      status: 'ok',
+      apm: metrics,
+      killSwitch,
+    });
+  } catch (error) {
+    console.error('Erro ao consultar APM:', error);
+    return res.status(500).json({ error: 'Falha ao obter métricas APM.' });
+  }
+});
+
+/**
+ * Traces detalhados de requisições de rede e ferramentas MCP
+ */
+app.get('/api/observability/traces', authenticateToken, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const traces = await getRecentTraces(limit);
+    return res.json({
+      status: 'ok',
+      traces,
+    });
+  } catch (error) {
+    console.error('Erro ao consultar traces:', error);
+    return res.status(500).json({ error: 'Falha ao obter traces de execução.' });
+  }
+});
+
 // Inicialização do Servidor HTTP
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`====================================================`);
@@ -2149,7 +2287,11 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log(`💬 Chatwoot Webhook: http://localhost:${PORT}/api/webhooks/chatwoot`);
   console.log(`📡 Endpoints reais: /api/gateways, /api/equipments, /api/backups`);
   console.log(`🔐 Autenticação & 2FA: /api/auth/login, /api/tenants, /api/users`);
+  console.log(`🛡️ Governança & APM: /api/flags, /api/observability/apm`);
   console.log(`====================================================`);
+
+  initFlags(prisma);
+  initApm(prisma);
 
   await bootstrapSuperadmin();
 });

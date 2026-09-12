@@ -16,7 +16,29 @@ function hashPassword(password) {
   }
   const salt = crypto.randomBytes(16).toString('hex');
   const passwordHash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return { passwordHash, salt };
+  // Retorna tanto passwordHash quanto hash para suportar ambos os padrões de desestruturação
+  return { passwordHash, hash: passwordHash, salt };
+}
+
+/**
+ * Converte strings de duração (ex: '10m', '1h', '7d') para milissegundos
+ */
+function parseDuration(duration) {
+  if (typeof duration === 'number') return duration;
+  if (typeof duration === 'string') {
+    const match = duration.match(/^(\d+)([smhd])$/i);
+    if (match) {
+      const val = parseInt(match[1], 10);
+      const unit = match[2].toLowerCase();
+      if (unit === 's') return val * 1000;
+      if (unit === 'm') return val * 60 * 1000;
+      if (unit === 'h') return val * 60 * 60 * 1000;
+      if (unit === 'd') return val * 24 * 60 * 60 * 1000;
+    }
+    const num = Number(duration);
+    if (!isNaN(num) && num > 0) return num;
+  }
+  return 7 * 24 * 60 * 60 * 1000;
 }
 
 /**
@@ -38,7 +60,8 @@ function verifyPassword(password, passwordHash, salt) {
 /**
  * Emite Token de Sessão assinado com HMAC-SHA256 (Padrão JWT leve com 0 deps extras)
  */
-function generateToken(payload, expiresInMs = 7 * 24 * 60 * 60 * 1000) {
+function generateToken(payload, expiresIn = 7 * 24 * 60 * 60 * 1000) {
+  const expiresInMs = parseDuration(expiresIn);
   const header = { alg: 'HS256', typ: 'JWT' };
   const exp = Date.now() + expiresInMs;
   const fullPayload = { ...payload, exp };

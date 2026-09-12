@@ -92,3 +92,27 @@
 - `[x]` Polling automático de telemetria a cada 30 segundos e botão de retry inteligente
 - `[x]` Cofre de Storages gerenciando destinos S3, MinIO, Wasabi, SFTP e NFS vinculados aos ativos
 - `[x]` Terminal IA integrado com RAG de telemetria em tempo real e raciocínio diagnóstico multi-caso
+
+---
+
+## 🔐 8. Autenticação Segura, Gestão de Usuários & 2FA TOTP ✅ CONCLUÍDO
+
+- `[x]` Criptografia de senhas Scrypt com salt aleatório de 16 bytes e verificação `timingSafeEqual`
+- `[x]` Bootstrap automático e resiliente do Superadmin com auto-reparo de credenciais no startup
+- `[x]` Suporte a perfis RBAC: `SUPERADMIN`, `TENANT_MASTER`, `OPERATOR`, `VIEWER`
+- `[x]` Gestão visual de usuários no Dashboard com filtros por Tenant e modal de cadastro/edição
+- `[x]` Autenticação de dois fatores (2FA TOTP) com QR Code Base32 para Google Authenticator e Authy
+- `[x]` Interceptor global no frontend para purgar sessões expiradas (HTTP 401) do `localStorage`
+
+---
+
+## ⚡ 9. Governança de IA, Feature Flags & Observabilidade APM (Fase 5) ✅ CONCLUÍDO
+
+- `[x]` Motor de Feature Flags com suporte a Redis e persistência relacional no PostgreSQL
+- `[x]` Níveis granulares de autonomia da IA: L1 (Leitura), L2 (Remediação Supervisionada), L3 (Crítico)
+- `[x]` Emergency Kill-Switch global com corte instantâneo de comandos e remediações ativas
+- `[x]` Badge dinâmico no cabeçalho alertando status de operação normal vs kill-switch ativo
+- `[x]` Motor Pulse APM medindo latência RTT em ms por driver (Proxmox, pfSense, Mikrotik, Zabbix, LLM)
+- `[x]` Telescope Inspector com histórico ponta a ponta de chamadas MCP, status code e diagnósticos de erro
+- `[x]` Aba dedicada "Governança & APM" exclusiva para superadministradores no Dashboard Web
+

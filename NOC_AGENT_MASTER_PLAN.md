@@ -122,3 +122,23 @@ Para permitir atendimento unificado entre a equipe humana de NOC e o agente IA:
 3. **Credenciais Cifradas**: Tokens e senhas armazenados com criptografia AES-256 no banco de dados.
 4. **Audit Log Criptográfico**: Toda ação solicitada por operador e executada pela IA é registrada com timestamp, identificador do operador e resultado telemetry.
 5. **Zero Dados Fictícios (Integridade Operacional)**: É estritamente proibido exibir dados fictícios, mocks, placeholders ou simulações em qualquer tela ou resposta do NOC-Agent. Toda informação deve vir de consultas reais às APIs oficiais, PostgreSQL, Storage S3 ou equipamentos de rede. Se não houver dados cadastrados, exibe-se empty state explícito.
+
+---
+
+## 7. GOVERNANÇA ENTERPRISE, FEATURE FLAGS & APM (FASE 5)
+
+Para suportar operações críticas de Data Center e escalabilidade multi-tenant (MSPs):
+
+1. **Níveis de Autonomia da IA (L1 / L2 / L3):**
+   - **L1 (Leitura Passiva):** Coleta contínua de status, métricas RTT, inventário de VMs e alertas Zabbix sem necessidade de aprovação.
+   - **L2 (Remediação Supervisionada):** Limpeza de rotas ARP, reatribuição de DHCP e reinício de serviços locais sob notificação.
+   - **L3 (Intervenção de Alto Risco):** Desligamento/reboot de hipervisores Proxmox, failover de roteadores Mikrotik e alteração de regras pfSense. Exige autorização humana explícita em 2 etapas.
+2. **Emergency Kill-Switch Imediato:**
+   - Disjuntor global com persistência em Redis e PostgreSQL.
+   - Interrompe instantaneamente qualquer comando em trânsito e reverte o motor conversacional para modo passivo.
+3. **Pulse APM de Baixa Latência:**
+   - Instrumentação das rotas e ferramentas MCP para registrar latência RTT em milissegundos agrupada por driver (Proxmox, pfSense, Mikrotik, Zabbix e modelos de IA).
+   - Detecção proativa de degradação antes de quedas de serviço.
+4. **Telescope Inspector:**
+   - Gravação de traces detalhados com endpoints, status code HTTP, duração e diagnósticos técnicos para auditoria operacional.
+

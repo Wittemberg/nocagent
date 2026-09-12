@@ -126,3 +126,40 @@ Resposta esperada: JSON com status de conexão com PostgreSQL, Redis e Chatwoot.
 ### Mensagens do Chatwoot não chegam à IA:
 - Acesse **Configurações → Webhooks** no Chatwoot e verifique o log de envios do webhook.
 - Confirme se a URL `https://nocagent.awecloudsolution.com/api/webhooks/chatwoot` é acessível publicamente.
+
+---
+
+## 9. Gestão de Acesso, Superadmin & Resolução de Falhas de Login
+
+### Acesso Inicial:
+- **URL do Console:** `https://nocagent.awecloudsolution.com`
+- **E-mail:** `admin@nocagent.local` (ou o valor de `DCC_DEVELOPER_USERNAME`)
+- **Senha Inicial:** `NocAgent@2026!` (ou o valor de `DCC_DEVELOPER_PASSWORD`)
+- O superadmin é provisionado no primeiro startup com `totpEnabled: false` para permitir login imediato sem bloqueio.
+
+### Ativação do 2FA TOTP:
+1. Após logar, clique em **• Ativar 2FA** no topo direito do dashboard.
+2. Escaneie o QR Code no Google Authenticator ou Authy.
+3. Digite o código de 6 dígitos para validar e ativar permanentemente.
+
+### Recuperação de Acesso / Auto-Reparo:
+Se por qualquer motivo as credenciais do superadmin precisarem ser restauradas para a senha padrão:
+1. Adicione a variável `DCC_RESET_ADMIN=true` no `.env` do container `core`.
+2. Reinicie o container `core`. No startup ele detectará a flag e reparará o hash Scrypt e salt imediatamente.
+3. Remova a variável `DCC_RESET_ADMIN` após a recuperação.
+
+---
+
+## 10. Governança, Feature Flags e Emergency Kill-Switch (Fase 5)
+
+### Status do Kill-Switch da IA:
+- Visível no cabeçalho do Dashboard:
+  - **Verde:** `IA: Operação Normal`
+  - **Vermelho Pulsante:** `🚨 KILL-SWITCH ATIVO`
+- Pode ser acionado ou liberado a qualquer momento em **Governança & APM** ou via API:
+  - `POST /api/flags/kill-switch` com `{ "active": true, "reason": "Motivo da pausa" }` (Requer token de Superadmin).
+
+### Telemetria APM em Tempo Real:
+- Acesse a aba **Governança & APM** para visualizar a latência RTT em milissegundos das chamadas Proxmox, Mikrotik, pfSense e modelos de IA.
+- Inspecione a tabela de **Live Traces** para diagnosticar falhas de conectividade ou timeouts de API.
+

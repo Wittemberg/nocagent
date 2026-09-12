@@ -5,13 +5,13 @@
 
 ![Mascote NOC-Agent](assets/images/mascot.jpg)
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg?style=flat-square)](ROADMAP.md)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg?style=flat-square)](ROADMAP.md)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white&style=flat-square)](STACK_SPEC.md)
 [![Node](https://img.shields.io/badge/node-v20_alpine-339933.svg?logo=nodedotjs&logoColor=white&style=flat-square)](STACK_SPEC.md)
 [![PostgreSQL](https://img.shields.io/badge/postgres-16-4169E1.svg?logo=postgresql&logoColor=white&style=flat-square)](STACK_SPEC.md)
 [![Storage](https://img.shields.io/badge/storage-S3_Compatible-FF9900.svg?logo=amazons3&logoColor=white&style=flat-square)](STACK_SPEC.md)
 [![Security](https://img.shields.io/badge/security-AES--256--GCM-success.svg?style=flat-square)](MANUAL_ILUSTRADO.md)
-[![Status](https://img.shields.io/badge/status-Fases%200%20a%204%20Concluídas-brightgreen.svg?style=flat-square)](ROADMAP.md)
+[![Status](https://img.shields.io/badge/status-Fases%200%20a%205%20Concluídas-brightgreen.svg?style=flat-square)](ROADMAP.md)
 
 [📘 Manual Ilustrado](MANUAL_ILUSTRADO.md) • [📥 Baixar PDF (5 Páginas)](MANUAL_ILUSTRADO_NOC_AGENT.pdf) • [🏗️ Especificação Técnica](STACK_SPEC.md) • [🚀 Roadmap](ROADMAP.md) • [🛡️ Setup pfSense](PFSENSE-API-SETUP.md)
 
@@ -113,6 +113,21 @@ O agente consulta o endpoint `/api/v2/status/gateways` no firewall e responde em
 - O Hermes AI Engine analisa a telemetria ao vivo via RAG antes de responder qualquer interação.
 - Identificação precisa de entidades no prompt (ex: *"como está a Loja 01 do SuperTop?"*, *"quais VMs estão no Proxmox Calvi?"*).
 - Diagnóstico estruturado com 6 padrões operacionais: Visão de Grupo/Tenant, Nó Proxmox, Gateway pfSense, Mikrotik BGP, Auditoria de Backups e Saúde Global.
+
+### 9. 🔐 Autenticação Segura, RBAC Multi-Tenant & 2FA TOTP
+- **Criptografia Scrypt nativa:** Hash de senhas com salt aleatório e verificação em tempo constante (`timingSafeEqual`).
+- **Padrão RBAC estrito:** Perfis `SUPERADMIN` (gestão global e kill-switch), `TENANT_MASTER` (administração local da organização), `OPERATOR` (diagnósticos e chamados) e `VIEWER` (somente leitura).
+- **2FA TOTP:** Suporte a autenticação em dois fatores com Google Authenticator e Authy via Base32 QR Code.
+- **Credenciais padrão iniciais:** `admin@nocagent.local` / `NocAgent@2026!` (com auto-reparo e primeiro acesso descomplicado).
+
+### 10. ⚡ Governança de Autonomia da IA, Emergency Kill-Switch & APM (Fase 5)
+- **Níveis de Autonomia da IA:**
+  - **L1:** Leitura autônoma contínua de métricas e diagnósticos sem aprovação.
+  - **L2:** Remediação não-destrutiva (limpar rotas ARP, reiniciar serviços locais).
+  - **L3:** Ações críticas de alto impacto com aprovação obrigatória em 2 etapas.
+- **Emergency Kill-Switch Global:** Disjuntor de segurança em 1 clique que interrompe instantaneamente qualquer ação ativa ou comando modificador da IA em toda a infraestrutura.
+- **Pulse APM de Baixa Latência:** Medição contínua de RTT em milissegundos para Proxmox VE REST (8006), pfSense REST (8181), Mikrotik RouterOS e provedores LLM.
+- **Telescope Inspector:** Histórico em tempo real de chamadas MCP e webhooks com código de retorno, duração e diagnósticos de erro.
 
 ---
 

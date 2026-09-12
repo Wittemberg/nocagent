@@ -40,6 +40,10 @@ import {
   Smartphone,
   UserCheck,
   Shield,
+  AlertOctagon,
+  Sliders,
+  Zap,
+  Gauge,
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -53,6 +57,20 @@ axios.interceptors.request.use((config) => {
   } catch {}
   return config;
 }, (error) => Promise.reject(error));
+
+// Interceptor global para expiração de sessão (401)
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && !error.config?.url?.includes('/api/auth/')) {
+      try {
+        localStorage.removeItem('noc_auth_token');
+        localStorage.removeItem('noc_current_user');
+      } catch {}
+    }
+    return Promise.reject(error);
+  }
+);
 
 const initialEquipmentForm = {
   name: '',
@@ -972,6 +990,79 @@ export default function App() {
     }
   };
 
+  // --- GOVERNANÇA, FEATURE FLAGS & APM ---
+  const [flagsData, setFlagsData] = useState({ killSwitch: { active: false }, flags: [] });
+  const [apmMetrics, setApmMetrics] = useState(null);
+  const [mcpTraces, setMcpTraces] = useState([]);
+  const [loadingFlags, setLoadingFlags] = useState(false);
+  const [loadingApm, setLoadingApm] = useState(false);
+  const [killSwitchReason, setKillSwitchReason] = useState('');
+  const [isKillSwitchModalOpen, setIsKillSwitchModalOpen] = useState(false);
+  const [traceFilter, setTraceFilter] = useState('ALL');
+  const [governanceTenantFilter, setGovernanceTenantFilter] = useState('ALL');
+
+  const fetchFlags = async () => {
+    setLoadingFlags(true);
+    try {
+      const url = governanceTenantFilter && governanceTenantFilter !== 'ALL'
+        ? `/api/flags?tenantId=${governanceTenantFilter}`
+        : '/api/flags';
+      const res = await axios.get(url);
+      setFlagsData(res.data);
+    } catch (err) {
+      console.error('Erro ao buscar flags:', err);
+    } finally {
+      setLoadingFlags(false);
+    }
+  };
+
+  const fetchApm = async () => {
+    setLoadingApm(true);
+    try {
+      const [apmRes, tracesRes] = await Promise.all([
+        axios.get('/api/observability/apm').catch(() => ({ data: { apm: null } })),
+        axios.get('/api/observability/traces?limit=60').catch(() => ({ data: { traces: [] } })),
+      ]);
+      if (apmRes.data?.apm) setApmMetrics(apmRes.data.apm);
+      if (apmRes.data?.killSwitch) {
+        setFlagsData((prev) => ({ ...prev, killSwitch: apmRes.data.killSwitch }));
+      }
+      if (tracesRes.data?.traces) setMcpTraces(tracesRes.data.traces);
+    } catch (err) {
+      console.error('Erro ao carregar APM:', err);
+    } finally {
+      setLoadingApm(false);
+    }
+  };
+
+  const handleToggleKillSwitch = async (activate) => {
+    try {
+      const res = await axios.post('/api/flags/kill-switch', {
+        active: activate,
+        reason: activate ? (killSwitchReason || 'Acionamento manual de emergência') : 'Retomada de operação',
+      });
+      setFlagsData((prev) => ({ ...prev, killSwitch: res.data.killSwitch }));
+      setIsKillSwitchModalOpen(false);
+      setKillSwitchReason('');
+      fetchApm();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao alternar Kill-Switch.');
+    }
+  };
+
+  const handleToggleFlag = async (key, currentEnabled, currentValue) => {
+    try {
+      await axios.post(`/api/flags/${key}/toggle`, {
+        enabled: !currentEnabled,
+        value: currentValue,
+        tenantId: governanceTenantFilter !== 'ALL' ? governanceTenantFilter : null,
+      });
+      fetchFlags();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Erro ao alterar flag.');
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'tenants' && currentUser?.role === 'SUPERADMIN') {
       fetchTenants();
@@ -982,7 +1073,29 @@ export default function App() {
         fetchTenants();
       }
     }
-  }, [activeTab, currentUser, userTenantFilter]);
+    if (activeTab === 'observability' && currentUser?.role === 'SUPERADMIN') {
+      fetchFlags();
+      fetchApm();
+      fetchTenants();
+      const interval = setInterval(() => {
+        fetchApm();
+      }, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, currentUser, userTenantFilter, governanceTenantFilter]);
+
+  // Checagem periódica global de status do Kill-Switch
+  useEffect(() => {
+    if (authToken && currentUser) {
+      axios.get('/api/flags')
+        .then((res) => {
+          if (res.data?.killSwitch) {
+            setFlagsData((prev) => ({ ...prev, killSwitch: res.data.killSwitch }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [authToken, currentUser]);
   const [chatMessages, setChatMessages] = useState([
     {
       sender: 'bot',
@@ -1778,6 +1891,23 @@ export default function App() {
 
             {currentUser && (
               <div className="flex items-center gap-2.5 pl-3 border-l border-slate-800">
+                {/* STATUS INDICATOR DO KILL-SWITCH DE EMERGÊNCIA */}
+                {flagsData.killSwitch?.active ? (
+                  <button
+                    onClick={() => setActiveTab('observability')}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-950/90 border border-red-500 text-red-300 text-xs font-bold animate-pulse hover:bg-red-900 transition shadow-lg shadow-red-950/50 mr-1"
+                    title="Emergency Kill-Switch ATIVADO! Clique para abrir Governança"
+                  >
+                    <AlertOctagon className="w-3.5 h-3.5 text-red-400" />
+                    <span>KILL-SWITCH ATIVO</span>
+                  </button>
+                ) : (
+                  <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-400 text-[11px] font-medium mr-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <span>IA: Operação Normal</span>
+                  </div>
+                )}
+
                 <div className="flex flex-col items-end">
                   <div className="flex items-center gap-1.5">
                     <span className="text-white font-medium text-xs">{currentUser.name}</span>
@@ -1836,6 +1966,7 @@ export default function App() {
             { id: 'backups', label: 'Auditoria de Backups', icon: HardDrive },
             ...(currentUser?.role === 'SUPERADMIN' ? [{ id: 'tenants', label: 'Tenants', icon: Building2 }] : []),
             ...(currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'TENANT_MASTER' ? [{ id: 'users', label: 'Usuários', icon: Users }] : []),
+            ...(currentUser?.role === 'SUPERADMIN' ? [{ id: 'observability', label: 'Governança & APM', icon: Gauge }] : []),
           ].map(tab => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -3453,6 +3584,480 @@ export default function App() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* TAB 7: GOVERNANÇA, FEATURE FLAGS & APM (EXCLUSIVO SUPERADMIN) */}
+        {activeTab === 'observability' && currentUser?.role === 'SUPERADMIN' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* CABEÇALHO DA ABA */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                  <Gauge className="w-4 h-4 text-sky-400" />
+                  Governança, Autonomia de IA & Observabilidade (APM)
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Gerenciamento de autonomia (L1/L2/L3), Emergency Kill-Switch global, métricas de latência dos drivers MCP e inspeção em tempo real.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={governanceTenantFilter}
+                  onChange={(e) => setGovernanceTenantFilter(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+                >
+                  <option value="ALL">Visualização Global (Todos)</option>
+                  {tenants.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={() => { fetchFlags(); fetchApm(); }}
+                  disabled={loadingApm || loadingFlags}
+                  className="px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs text-slate-300 flex items-center gap-1.5 transition"
+                  title="Atualizar métricas agora"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingApm || loadingFlags ? 'animate-spin' : ''}`} />
+                  Atualizar
+                </button>
+              </div>
+            </div>
+
+            {/* CARD 1: EMERGENCY KILL-SWITCH GLOBAL */}
+            <div className={`p-6 rounded-2xl border transition-all duration-300 shadow-xl ${
+              flagsData.killSwitch?.active
+                ? 'bg-gradient-to-r from-red-950/80 via-red-900/60 to-red-950/80 border-red-500/80 shadow-red-950/40'
+                : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+            }`}>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className={`p-3 rounded-2xl border flex-shrink-0 ${
+                    flagsData.killSwitch?.active
+                      ? 'bg-red-500/20 text-red-300 border-red-400 animate-bounce'
+                      : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  }`}>
+                    <AlertOctagon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-white">
+                        {flagsData.killSwitch?.active
+                          ? '🚨 EMERGENCY KILL-SWITCH GLOBAL ATIVADO'
+                          : 'Emergency Kill-Switch Global (Disjuntor de Segurança da IA)'}
+                      </h3>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                        flagsData.killSwitch?.active
+                          ? 'bg-red-900/80 text-red-200 border-red-500 animate-pulse'
+                          : 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80'
+                      }`}>
+                        {flagsData.killSwitch?.active ? 'Ações da IA Bloqueadas' : 'Operação Normal'}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+                      {flagsData.killSwitch?.active ? (
+                        <div>
+                          <span className="font-semibold text-red-200">Motivo:</span> {flagsData.killSwitch.reason || 'Segurança Operacional'} •{' '}
+                          <span className="font-semibold text-red-200">Acionado por:</span> {flagsData.killSwitch.triggeredBy || 'Superadmin'} •{' '}
+                          <span className="font-semibold text-red-200">Horário:</span> {flagsData.killSwitch.triggeredAt ? new Date(flagsData.killSwitch.triggeredAt).toLocaleString('pt-BR') : 'Recentemente'}.
+                          <span className="block text-red-300 mt-0.5 font-medium">
+                            Comandos de escrita, reinício de nós e remediações autônomas estão 100% interrompidos. Consultas passivas continuam ativas.
+                          </span>
+                        </div>
+                      ) : (
+                        <span>Permite cortar instantaneamente e em tempo real toda e qualquer ação ativa, remediação ou execução de comandos da IA sem necessidade de novo deploy ou reinício dos containers.</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-shrink-0">
+                  {flagsData.killSwitch?.active ? (
+                    <button
+                      onClick={() => handleToggleKillSwitch(false)}
+                      className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition"
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      Liberar Kill-Switch (Retomar IA)
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setIsKillSwitchModalOpen(true)}
+                      className="w-full sm:w-auto px-4 py-2.5 bg-red-950/60 hover:bg-red-900 border border-red-700/80 text-red-200 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition"
+                    >
+                      <AlertOctagon className="w-4 h-4 text-red-400" />
+                      Acionar Kill-Switch de Emergência
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* CARD 2: MATRIZ DE AUTONOMIA DA IA & FEATURE FLAGS */}
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-sky-400" />
+                    Matriz de Autonomia da IA & Feature Flags (Pennant Engine)
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Controle granular de autonomia operacional (L1, L2, L3) e liberação controlada de recursos por tenant.
+                  </p>
+                </div>
+                <span className="text-[11px] font-mono text-slate-500 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+                  {flagsData.flags?.length || 0} flags ativas
+                </span>
+              </div>
+
+              {loadingFlags ? (
+                <div className="p-8 text-center text-xs text-slate-500">Carregando catálogo de feature flags...</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {(flagsData.flags || []).map((f) => {
+                    const isAutonomousFlag = f.key.startsWith('ai-autonomous-');
+                    const isL3 = f.key.includes('l3');
+                    return (
+                      <div
+                        key={f.id || f.key}
+                        className={`p-4 rounded-xl border transition flex flex-col justify-between gap-3 ${
+                          f.enabled
+                            ? isL3 
+                              ? 'bg-amber-950/20 border-amber-800/60' 
+                              : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
+                            : 'bg-slate-950/30 border-slate-800/40 opacity-75'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-2 mb-1.5">
+                            <span className="font-mono text-xs font-bold text-sky-300 break-all">{f.key}</span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                              f.enabled
+                                ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                                : 'bg-slate-800 text-slate-400 border border-slate-700'
+                            }`}>
+                              {f.enabled ? 'Ativo' : 'Inativo'}
+                            </span>
+                          </div>
+
+                          <p className="text-[11px] text-slate-400 leading-relaxed">
+                            {f.description || 'Configuração de comportamento do sistema.'}
+                          </p>
+
+                          {f.tenant && (
+                            <div className="mt-2 text-[10px] text-sky-400 font-medium">
+                              🏢 Tenant: {f.tenant.name}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between">
+                          <span className="text-[10px] font-mono text-slate-500 uppercase">
+                            Tipo: {f.type || 'BOOLEAN'}
+                          </span>
+                          <button
+                            onClick={() => handleToggleFlag(f.key, f.enabled, f.value)}
+                            disabled={flagsData.killSwitch?.active && isAutonomousFlag}
+                            className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                              f.enabled
+                                ? 'bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/50'
+                                : 'bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/50'
+                            } ${flagsData.killSwitch?.active && isAutonomousFlag ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            title={flagsData.killSwitch?.active && isAutonomousFlag ? 'Bloqueado pelo Kill-Switch' : 'Alternar status da flag'}
+                          >
+                            {f.enabled ? 'Desativar' : 'Habilitar'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* CARD 3: MÉTRICAS APM DE BAIXA LATÊNCIA & PULSE DASHBOARD */}
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-emerald-400" />
+                    Telemetria APM dos Drivers MCP & Servidores (Pulse Engine)
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Monitoramento contínuo de latência RTT em Proxmox, Mikrotik, pfSense, Zabbix e modelos de IA.
+                  </p>
+                </div>
+                {apmMetrics?.server && (
+                  <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
+                    <span>Uptime: {Math.floor(apmMetrics.server.uptimeSeconds / 3600)}h {Math.floor((apmMetrics.server.uptimeSeconds % 3600) / 60)}m</span>
+                    <span>•</span>
+                    <span>RAM Heap: {apmMetrics.server.memoryHeapUsedMb} MB</span>
+                    <span>•</span>
+                    <span>Load 1m: {apmMetrics.server.systemLoad1m}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* CARDS DE DRIVERS MCP */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                {[
+                  { key: 'PROXMOX', name: 'Proxmox VE (8006)', icon: Server },
+                  { key: 'PFSENSE', name: 'pfSense REST (8181)', icon: Shield },
+                  { key: 'MIKROTIK', name: 'Mikrotik RouterOS', icon: Radio },
+                  { key: 'LLM', name: 'Provedores LLM', icon: Zap },
+                  { key: 'ZABBIX', name: 'Zabbix Server', icon: Activity },
+                ].map((item) => {
+                  const driverData = apmMetrics?.drivers?.[item.key] || {
+                    totalCalls: 0,
+                    avgLatencyMs: 0,
+                    errorRatePercent: 0,
+                    status: 'IDLE',
+                  };
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.key} className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-col justify-between gap-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          <Icon className="w-4 h-4 text-sky-400" />
+                          <span className="text-xs font-bold text-white">{item.name}</span>
+                        </div>
+                        <span className={`w-2 h-2 rounded-full ${
+                          driverData.status === 'HEALTHY'
+                            ? 'bg-emerald-400 animate-pulse'
+                            : driverData.status === 'DEGRADED'
+                            ? 'bg-rose-500 animate-ping'
+                            : 'bg-slate-600'
+                        }`} title={`Status: ${driverData.status}`} />
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-[11px] text-slate-500">Latência Média:</span>
+                          <span className={`text-base font-extrabold font-mono ${
+                            driverData.avgLatencyMs < 300
+                              ? 'text-emerald-400'
+                              : driverData.avgLatencyMs < 1000
+                              ? 'text-amber-400'
+                              : 'text-rose-400'
+                          }`}>
+                            {driverData.avgLatencyMs > 0 ? `${driverData.avgLatencyMs} ms` : '0 ms'}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline justify-between text-[11px] text-slate-400">
+                          <span>Total Chamadas:</span>
+                          <span className="font-mono font-medium text-slate-200">{driverData.totalCalls}</span>
+                        </div>
+                        <div className="flex items-baseline justify-between text-[11px] text-slate-400">
+                          <span>Taxa de Erro:</span>
+                          <span className={`font-mono font-medium ${driverData.errorRatePercent > 0 ? 'text-rose-400' : 'text-slate-400'}`}>
+                            {driverData.errorRatePercent}%
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${
+                            driverData.avgLatencyMs < 300
+                              ? 'bg-emerald-500'
+                              : driverData.avgLatencyMs < 1000
+                              ? 'bg-amber-500'
+                              : 'bg-rose-500'
+                          }`}
+                          style={{ width: `${Math.min(Math.max((driverData.avgLatencyMs / 1000) * 100, 5), 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* CARD 4: INSPETOR DE CHAMADAS MCP & WEBHOOKS (TELESCOPE ENGINE) */}
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-sky-400" />
+                    Inspetor de Chamadas MCP & Traces em Tempo Real (Telescope)
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Histórico ponta a ponta de requisições disparadas para equipamentos com status code, duração e diagnóstico.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {['ALL', 'PROXMOX', 'PFSENSE', 'MIKROTIK', 'LLM', 'ERRORS'].map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setTraceFilter(f)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                        traceFilter === f
+                          ? 'bg-sky-600 text-white shadow-sm'
+                          : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+                      }`}
+                    >
+                      {f === 'ALL' ? 'Todos' : f === 'ERRORS' ? 'Apenas Erros' : f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* TABELA DE TRACES */}
+              {mcpTraces.length === 0 ? (
+                <div className="p-12 text-center bg-slate-950/40 border border-dashed border-slate-800 rounded-xl">
+                  <Terminal className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                  <p className="text-xs text-slate-400">Nenhum trace de execução capturado ainda.</p>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Conforme o Hermes AI Engine e as sondas realizarem chamadas ao Proxmox, Mikrotik ou pfSense, os traces surgirão automaticamente aqui.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-800">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-950 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+                        <th className="p-3">Horário</th>
+                        <th className="p-3">Driver</th>
+                        <th className="p-3">Ferramenta / Endpoint</th>
+                        <th className="p-3">Duração</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3">Diagnóstico / Erro</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 bg-slate-950/30 font-sans">
+                      {mcpTraces
+                        .filter((t) => {
+                          if (traceFilter === 'ALL') return true;
+                          if (traceFilter === 'ERRORS') return t.error || (t.statusCode && t.statusCode >= 400);
+                          return t.driver === traceFilter;
+                        })
+                        .slice(0, 40)
+                        .map((t) => {
+                          const hasError = t.error || (t.statusCode && t.statusCode >= 400);
+                          return (
+                            <tr key={t.id} className="hover:bg-slate-900/50 transition">
+                              <td className="p-3 font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                                {new Date(t.createdAt).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
+                              </td>
+                              <td className="p-3 whitespace-nowrap">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
+                                  t.driver === 'PROXMOX'
+                                    ? 'bg-amber-950/80 text-amber-300 border border-amber-800'
+                                    : t.driver === 'PFSENSE'
+                                    ? 'bg-blue-950/80 text-blue-300 border border-blue-800'
+                                    : t.driver === 'MIKROTIK'
+                                    ? 'bg-purple-950/80 text-purple-300 border border-purple-800'
+                                    : t.driver === 'LLM'
+                                    ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
+                                    : 'bg-slate-800 text-slate-300 border border-slate-700'
+                                }`}>
+                                  {t.driver}
+                                </span>
+                              </td>
+                              <td className="p-3 font-mono text-slate-200 text-xs max-w-xs truncate" title={t.endpoint}>
+                                {t.endpoint}
+                              </td>
+                              <td className="p-3 font-mono text-xs whitespace-nowrap">
+                                <span className={`font-semibold ${
+                                  t.durationMs < 300
+                                    ? 'text-emerald-400'
+                                    : t.durationMs < 1000
+                                    ? 'text-amber-400'
+                                    : 'text-rose-400'
+                                }`}>
+                                  {t.durationMs} ms
+                                </span>
+                              </td>
+                              <td className="p-3 whitespace-nowrap">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
+                                  hasError
+                                    ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                                    : 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                                }`}>
+                                  {t.statusCode || 200}
+                                </span>
+                              </td>
+                              <td className="p-3 text-slate-400 text-xs max-w-sm truncate">
+                                {hasError ? (
+                                  <span className="text-rose-400 font-mono text-[11px]" title={t.error}>
+                                    {t.error}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-500 font-mono text-[11px]">OK</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* MODAL DE CONFIRMAÇÃO DO EMERGENCY KILL-SWITCH */}
+        {isKillSwitchModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-red-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-red-950 text-red-400 rounded-xl border border-red-800 animate-pulse">
+                    <AlertOctagon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Acionar Kill-Switch de Emergência</h3>
+                    <p className="text-xs text-red-300">Corte imediato de ações ativas da IA</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsKillSwitchModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-3.5 bg-red-950/40 border border-red-800/80 rounded-xl text-xs text-red-200 leading-relaxed">
+                ⚠️ <span className="font-bold">Atenção:</span> Esta ação suspende instantaneamente qualquer comando, reinício de nós ou remediação automática disparada pelo NOC-Agent em todos os clientes e equipamentos.
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-slate-300">
+                  Justificativa / Motivo do Acionamento (Gravado em Audit Log)
+                </label>
+                <textarea
+                  rows={3}
+                  value={killSwitchReason}
+                  onChange={(e) => setKillSwitchReason(e.target.value)}
+                  placeholder="Ex: Anomalia detectada em enlace de borda, janela emergencial de manutenção física..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-red-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsKillSwitchModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs text-slate-300 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleKillSwitch(true)}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 shadow-lg shadow-red-600/30 transition"
+                >
+                  <AlertOctagon className="w-4 h-4" />
+                  Confirmar e Ativar Kill-Switch
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
