@@ -19,7 +19,8 @@ import {
   Trash2,
   Key,
   X,
-  AlertCircle
+  AlertCircle,
+  Pencil
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -60,6 +61,57 @@ export default function App() {
     port: '',
     apiKey: '',
   });
+
+  // Modal de Edição no Cofre
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState(null);
+  const [editEquipment, setEditEquipment] = useState({
+    id: '',
+    name: '',
+    type: 'PFSENSE',
+    host: '',
+    port: '',
+    apiKey: '',
+  });
+
+  const handleOpenEditModal = (eq) => {
+    setEditError(null);
+    setEditEquipment({
+      id: eq.id,
+      name: eq.name,
+      type: eq.type,
+      host: eq.host,
+      port: eq.port != null ? String(eq.port) : '',
+      apiKey: '',
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateEquipment = async (e) => {
+    e.preventDefault();
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const payload = {
+        name: editEquipment.name.trim(),
+        type: editEquipment.type,
+        host: editEquipment.host.trim(),
+        port: editEquipment.port ? parseInt(editEquipment.port, 10) : null,
+      };
+      if (editEquipment.apiKey && editEquipment.apiKey.trim() !== '') {
+        payload.credentials = { apiKey: editEquipment.apiKey.trim() };
+      }
+      await axios.put(`/api/equipments/${editEquipment.id}`, payload);
+      setIsEditModalOpen(false);
+      await fetchEquipments();
+      await fetchEquipmentsStatus();
+    } catch (err) {
+      setEditError(err.response?.data?.error || 'Erro ao atualizar equipamento no cofre.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   // Busca status real de todos os equipamentos cadastrados no Cofre
   const fetchEquipmentsStatus = async () => {
@@ -332,11 +384,15 @@ export default function App() {
               </div>
             </div>
             <button 
-              onClick={() => setActiveTab('vault')}
+              onClick={() => {
+                const eq = equipmentList.find(e => e.status === 'auth_error') || equipments[0];
+                if (eq) handleOpenEditModal(eq);
+                else setActiveTab('vault');
+              }}
               className="px-3 py-1.5 rounded-lg bg-amber-900/40 hover:bg-amber-900/70 border border-amber-700/60 text-xs font-medium text-amber-200 flex items-center gap-1.5 transition"
             >
               <Key className="w-3.5 h-3.5" />
-              Revisar no Cofre
+              Editar Chave no Cofre
             </button>
           </div>
         )}
@@ -463,9 +519,10 @@ export default function App() {
                           </div>
                           {isAuthError && (
                             <button
-                              onClick={() => setActiveTab('vault')}
-                              className="px-2.5 py-1 bg-amber-900/60 hover:bg-amber-800 border border-amber-700 rounded-lg text-[11px] font-semibold text-amber-200 transition whitespace-nowrap"
+                              onClick={() => handleOpenEditModal(eq)}
+                              className="px-2.5 py-1 bg-amber-900/60 hover:bg-amber-800 border border-amber-700 rounded-lg text-[11px] font-semibold text-amber-200 transition whitespace-nowrap flex items-center gap-1"
                             >
+                              <Pencil className="w-3 h-3" />
                               Editar Chave
                             </button>
                           )}
@@ -688,13 +745,22 @@ export default function App() {
                           </span>
                         </td>
                         <td className="px-5 py-4 text-right">
-                          <button
-                            onClick={() => handleDeleteEquipment(eq.id, eq.name)}
-                            title="Remover do Cofre"
-                            className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleOpenEditModal(eq)}
+                              title="Editar Equipamento no Cofre"
+                              className="p-1.5 text-slate-400 hover:text-sky-400 hover:bg-sky-950/40 rounded-lg transition"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteEquipment(eq.id, eq.name)}
+                              title="Remover do Cofre"
+                              className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -826,6 +892,133 @@ export default function App() {
                       <>
                         <Lock className="w-3.5 h-3.5" />
                         Salvar no Cofre
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL DE EDIÇÃO NO COFRE */}
+        {isEditModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-sky-950 text-sky-400 rounded-xl border border-sky-800">
+                    <Pencil className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Editar Equipamento no Cofre</h3>
+                    <p className="text-xs text-slate-400">Altere parâmetros ou redefina a chave criptografada.</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {editError && (
+                <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  <span>{editError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleUpdateEquipment} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Nome do Equipamento *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editEquipment.name}
+                    onChange={e => setEditEquipment({ ...editEquipment, name: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Tipo de Equipamento *</label>
+                    <select
+                      value={editEquipment.type}
+                      onChange={e => setEditEquipment({ ...editEquipment, type: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
+                    >
+                      <option value="PFSENSE">pfSense Firewall</option>
+                      <option value="MIKROTIK">Mikrotik RouterOS</option>
+                      <option value="PROXMOX">Proxmox VE Cluster</option>
+                      <option value="ZABBIX">Zabbix Server</option>
+                      <option value="GENERIC_SNMP">SNMP Genérico</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Porta (Opcional)</label>
+                    <input
+                      type="number"
+                      placeholder="Ex: 8181"
+                      value={editEquipment.port}
+                      onChange={e => setEditEquipment({ ...editEquipment, port: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Host / URL Base *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editEquipment.host}
+                    onChange={e => setEditEquipment({ ...editEquipment, host: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500 font-mono text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Nova Chave de API / Token (Opcional)</label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      placeholder="Deixe em branco para manter a credencial atual"
+                      value={editEquipment.apiKey}
+                      onChange={e => setEditEquipment({ ...editEquipment, apiKey: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 font-mono text-xs"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-amber-400" />
+                    Se preenchido, a nova chave será criptografada com AES-256-GCM antes de ser gravada.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(false)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingEdit}
+                    className="px-4 py-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-lg shadow-sky-950/30 transition flex items-center gap-1.5"
+                  >
+                    {savingEdit ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Salvando Alterações...
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        Salvar Alterações
                       </>
                     )}
                   </button>

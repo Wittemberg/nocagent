@@ -428,6 +428,84 @@ app.post('/api/equipments', async (req, res) => {
 });
 
 /**
+ * Edição / Atualização de Equipamento no Cofre
+ */
+app.put('/api/equipments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, type, host, port, credentials, backupStorageId, backupSchedule } = req.body;
+
+    const existing = await prisma.equipment.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ error: 'Equipamento não encontrado no cofre.' });
+    }
+
+    const updateData = {};
+    if (name) updateData.name = String(name).trim();
+    if (type) {
+      const validTypes = ['PFSENSE', 'MIKROTIK', 'PROXMOX', 'ZABBIX', 'GENERIC_SNMP'];
+      const upperType = String(type).toUpperCase();
+      if (!validTypes.includes(upperType)) {
+        return res.status(400).json({ error: `Tipo inválido. Aceitos: ${validTypes.join(', ')}` });
+      }
+      updateData.type = upperType;
+    }
+    if (host) updateData.host = String(host).trim();
+    if (port !== undefined) updateData.port = port ? parseInt(port, 10) : null;
+    if (backupStorageId !== undefined) updateData.backupStorageId = backupStorageId || null;
+    if (backupSchedule !== undefined) updateData.backupSchedule = backupSchedule;
+
+    // Se forneceu novas credenciais, recriptografa no cofre AES-256-GCM
+    if (credentials && String(credentials).trim() !== '') {
+      const credsObj = typeof credentials === 'object' ? credentials : { apiKey: String(credentials).trim() };
+      const { encryptedCredentials, iv, authTag } = encryptCredentials(credsObj);
+      updateData.encryptedCredentials = encryptedCredentials;
+      updateData.iv = iv;
+      updateData.authTag = authTag;
+    }
+
+    const updated = await prisma.equipment.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        host: true,
+        port: true,
+        status: true,
+        active: true,
+        backupStorageId: true,
+        backupSchedule: true,
+        updatedAt: true,
+      },
+    });
+
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: 'EDITAR_EQUIPAMENTO',
+          target: `${updated.name} (${updated.type})`,
+          status: 'SUCCESS',
+          source: 'WEB_DASHBOARD',
+          details: { equipmentId: updated.id, host: updated.host, changedFields: Object.keys(updateData) },
+        },
+      });
+    } catch (auditErr) {
+      console.warn('Aviso ao registrar log de auditoria:', auditErr.message);
+    }
+
+    return res.json({
+      status: 'updated',
+      data: updated,
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar equipamento no cofre:', error);
+    return res.status(500).json({ error: `Falha ao atualizar no cofre: ${error.message}` });
+  }
+});
+
+/**
  * Remoção de Equipamento do Cofre
  */
 app.delete('/api/equipments/:id', async (req, res) => {

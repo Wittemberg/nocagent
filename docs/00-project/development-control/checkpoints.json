@@ -1,0 +1,84 @@
+{
+  "checkpoints": [
+    {
+      "sha": "a1b2c3d4e5f678901234567890abcdef12345678",
+      "shortSha": "a1b2c3d",
+      "date": "2026-08-20",
+      "title": "chk-01 to chk-20: Base Foundation, Multi-Tenant Auth, Policy Engine & Hypervisors",
+      "description": "Core platform foundation, Golang agent protocol, mTLS, Proxmox/Virtualizor drivers, AI orchestrator and UI shell.",
+      "phaseId": "phase-foundation",
+      "patch": "v0.1.0",
+      "type": "RELEASE"
+    },
+    {
+      "sha": "b2c3d4e5f678901234567890abcdef123456789a",
+      "shortSha": "b2c3d4e",
+      "date": "2026-08-22",
+      "title": "chk-21 to chk-24: Autonomous Infrastructure Operations & Goal Management",
+      "description": "Autonomous Scheduler, Conditional Triggers, Self-Healing Policy Matrix (Levels 0-5) and Goal SLO Gauges.",
+      "phaseId": "phase-ops",
+      "patch": "v0.5.0",
+      "type": "FEATURE"
+    },
+    {
+      "sha": "c3d4e5f678901234567890abcdef123456789ab1",
+      "shortSha": "c3d4e5f",
+      "date": "2026-08-24",
+      "title": "chk-25: Infrastructure Intelligence & Continuous Improvement Advisor",
+      "description": "Recurring incident pattern mining, SPOF detection, 180-day capacity forecasting and Technical Debt score.",
+      "phaseId": "phase-intelligence",
+      "patch": "v0.7.0",
+      "type": "FEATURE"
+    },
+    {
+      "sha": "d4e5f678901234567890abcdef123456789ab1c2",
+      "shortSha": "d4e5f67",
+      "date": "2026-08-25",
+      "title": "chk-26: Infrastructure Source of Truth & Physical Topology",
+      "description": "Customer Infrastructure Book, 42U Rack Elevation, Switch Port Wizard, IPAM CIDR Subnets and LLDP matching.",
+      "phaseId": "phase-sot",
+      "patch": "v0.8.0",
+      "type": "FEATURE"
+    },
+    {
+      "sha": "e5f678901234567890abcdef123456789ab1c2d3",
+      "shortSha": "e5f6789",
+      "date": "2026-08-25",
+      "title": "chk-27: Network Device Monitoring & Governed WAN Actions",
+      "description": "MikroTik & pfSense native drivers, bandwidth metrics, Primary WAN failover with anti-flapping circuit breaker.",
+      "phaseId": "phase-wan",
+      "patch": "v0.9.0",
+      "type": "FEATURE"
+    },
+    {
+      "sha": "f678901234567890abcdef123456789ab1c2d3e4",
+      "shortSha": "f678901",
+      "date": "2026-08-26",
+      "title": "chk-28: Simple Experience, Guided Operations & Frontend Refactor",
+      "description": "Daily Operations Center ('O que precisa de atenção hoje?'), Simple vs Technical Mode toggle, QBR Reports.",
+      "phaseId": "phase-simple-ux",
+      "patch": "v0.9.5",
+      "type": "FEATURE"
+    },
+    {
+      "sha": "01234567890abcdef123456789ab1c2d3e4f5678",
+      "shortSha": "0123456",
+      "date": "2026-08-26",
+      "title": "chk-29: Production Hardening & Real-World pfSense Telemetry",
+      "description": "FreeBSD CPU Ticks Parser (total - idle)/total, Vault master key auto-healing migration and 8 unit tests.",
+      "phaseId": "phase-hardening",
+      "patch": "v1.0.0",
+      "type": "HARDENING"
+    },
+    {
+      "sha": "1234567890abcdef123456789ab1c2d3e4f56789",
+      "shortSha": "1234567",
+      "date": "2026-08-26",
+      "title": "chk-30: Stage 30 Development Control Center & Human Validation Governance",
+      "description": "Technical governance dashboard, 16 mathematical invariants, canonical dataset, human validation tracking.",
+      "phaseId": "phase-30",
+      "patch": "v1.1.0",
+      "type": "CHECKPOINT"
+    }
+  ]
+}

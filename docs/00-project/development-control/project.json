@@ -1,0 +1,9 @@
+{
+  "id": "infraops-ai",
+  "name": "InfraOps AI",
+  "roadmapVersion": "1.0.0",
+  "currentPhaseId": "phase-30",
+  "currentPhaseName": "Stage 30 — Development Control Center & Human Validation Governance",
+  "environment": "homologation",
+  "developmentControlVersion": "0.1"
+}

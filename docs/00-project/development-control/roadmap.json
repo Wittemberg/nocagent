@@ -1,0 +1,412 @@
+{
+  "phases": [
+    {
+      "id": "phase-foundation",
+      "name": "Phase 1: Foundation & Core Governance (Stages 01–20)",
+      "description": "Monorepo bootstrap, Multi-tenancy, RBAC, Go Agent, Action Engine, Policy Engine, Audit SHA-256, Hypervisors & UI",
+      "order": 1,
+      "status": "FROZEN"
+    },
+    {
+      "id": "phase-ops",
+      "name": "Phase 2: Autonomous Operations (Stages 21–24)",
+      "description": "Scheduler, Event Triggers, Self-Healing Engine, Risk Budgets & Goal-Oriented Management",
+      "order": 2,
+      "status": "HOMOLOGATED"
+    },
+    {
+      "id": "phase-intelligence",
+      "name": "Phase 3: Infrastructure Intelligence (Stage 25)",
+      "description": "Recurring Incident Mining, SPOF Detection, Capacity Forecasting & Technical Debt Scoring",
+      "order": 3,
+      "status": "HOMOLOGATED"
+    },
+    {
+      "id": "phase-sot",
+      "name": "Phase 4: Physical Topology & Source of Truth (Stage 26)",
+      "description": "Customer Infrastructure Book, 42U Racks, IPAM CIDR, LLDP/SNMP Matching & Switch Port Wizard",
+      "order": 4,
+      "status": "HOMOLOGATED"
+    },
+    {
+      "id": "phase-wan",
+      "name": "Phase 5: Governed WAN & Network Monitoring (Stage 27)",
+      "description": "MikroTik & pfSense Drivers, Hardware Telemetry, Primary WAN Governed Failover & Anti-Flapping",
+      "order": 5,
+      "status": "HOMOLOGATED"
+    },
+    {
+      "id": "phase-simple-ux",
+      "name": "Phase 6: Simple Experience & Guided Ops (Stage 28)",
+      "description": "Daily Operations Center, Simple/Technical Mode Toggle, QBR Reports & Guided Onboarding",
+      "order": 6,
+      "status": "HOMOLOGATED"
+    },
+    {
+      "id": "phase-hardening",
+      "name": "Phase 7: Production Hardening & pfSense Telemetry (Stage 29)",
+      "description": "FreeBSD CPU Ticks Parser, Vault Auto-Migration, Sanitized Diagnostics & Responsive UI Hardening",
+      "order": 7,
+      "status": "HOMOLOGATED"
+    },
+    {
+      "id": "phase-30",
+      "name": "Phase 8: Development Control Center & Human Validation (Stage 30)",
+      "description": "Development Control Center, 16 Invariant Math Engine, Checkpoints Timeline & Human Test Coverage",
+      "order": 8,
+      "status": "VALIDATION"
+    }
+  ],
+  "modules": [
+    {
+      "id": "mod-01-foundation",
+      "name": "01. Core Foundation & Hypervisor Engine",
+      "description": "Stages 01–20: Monorepo, DB, Auth, Agent, Policy Engine, Proxmox, Virtualizor, AI, UI Base",
+      "order": 1
+    },
+    {
+      "id": "mod-21-scheduler",
+      "name": "02. Autonomous Scheduler Engine",
+      "description": "Stage 21: Cron/Interval presets, health sweep and daily briefing schedules",
+      "order": 2
+    },
+    {
+      "id": "mod-22-triggers",
+      "name": "03. Event Automation & Triggers",
+      "description": "Stage 22: Telemetry triggers with Debounce, Cooldown, Circuit Breaker & Deduplication",
+      "order": 3
+    },
+    {
+      "id": "mod-23-policies",
+      "name": "04. Autonomous Policies & Self-Healing",
+      "description": "Stage 23: Autonomy levels 0–5, risk budgets, prechecks, postchecks & escalation",
+      "order": 4
+    },
+    {
+      "id": "mod-24-goals",
+      "name": "05. Goal-Oriented Management",
+      "description": "Stage 24: Desired state enforcement, SLO gauges and automatic compliance tracking",
+      "order": 5
+    },
+    {
+      "id": "mod-25-intelligence",
+      "name": "06. Infrastructure Intelligence",
+      "description": "Stage 25: Incident mining, SPOF detection, capacity forecasting and Technical Debt score",
+      "order": 6
+    },
+    {
+      "id": "mod-26-source-of-truth",
+      "name": "07. Source of Truth & Physical Topology",
+      "description": "Stage 26: Infrastructure Book, 42U Rack visual elevation, Switch Ports, IPAM CIDR",
+      "order": 7
+    },
+    {
+      "id": "mod-27-wan-governance",
+      "name": "08. Governed WAN & Network Monitoring",
+      "description": "Stage 27: MikroTik/pfSense drivers, latency/bandwidth tracking & Primary WAN Failover",
+      "order": 8
+    },
+    {
+      "id": "mod-28-simple-ux",
+      "name": "09. Simple Experience & Guided Operations",
+      "description": "Stage 28: Daily Ops Center ('O que precisa de atenção hoje?'), Simple/Tech Mode & QBR Reports",
+      "order": 9
+    },
+    {
+      "id": "mod-29-pfsense-hardening",
+      "name": "10. Production Hardening & pfSense Telemetry",
+      "description": "Stage 29: FreeBSD Ticks Parser, Vault Auto-Healing Key Migration & Sanitized Diagnostics",
+      "order": 10
+    },
+    {
+      "id": "mod-30-dev-control",
+      "name": "11. Development Control Center",
+      "description": "Stage 30: Technical Governance Dashboard, 16 Mathematical Invariants, Human Test Coverage",
+      "order": 11
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "cap-01-monorepo-bootstrap",
+      "moduleId": "mod-01-foundation",
+      "phaseId": "phase-foundation",
+      "name": "Monorepo & Monolithic DataStore Architecture",
+      "description": "NestJS/Express API, React/Vite Frontend, Go Agent workspace with persistent file store",
+      "weight": 10,
+      "status": "FROZEN",
+      "mvp": true,
+      "priority": "P0",
+      "checkpoint": "chk-01",
+      "humanTestId": "TEN-01"
+    },
+    {
+      "id": "cap-02-auth-rbac-multitenancy",
+      "moduleId": "mod-01-foundation",
+      "phaseId": "phase-foundation",
+      "name": "Multi-Tenant Isolation & Role-Based Access Control (RBAC)",
+      "description": "Tenant Owners, Admins, Operators isolation with strict database filter enforcement",
+      "weight": 15,
+      "status": "FROZEN",
+      "mvp": true,
+      "priority": "P0",
+      "checkpoint": "chk-02",
+      "humanTestId": "LOGIN-01"
+    },
+    {
+      "id": "cap-03-policy-engine-audit",
+      "moduleId": "mod-01-foundation",
+      "phaseId": "phase-foundation",
+      "name": "Policy Engine & SHA-256 Audit Hash Chain",
+      "description": "Strict DENY overrides, action validation, cryptographic audit hash chain",
+      "weight": 20,
+      "status": "FROZEN",
+      "mvp": true,
+      "priority": "P0",
+      "checkpoint": "chk-03",
+      "humanTestId": "AUD-01"
+    },
+    {
+      "id": "cap-04-agent-protocol",
+      "moduleId": "mod-01-foundation",
+      "phaseId": "phase-foundation",
+      "name": "Golang Outbound Agent & Job Protocol",
+      "description": "Systemd daemon, mTLS token enrollment, single outbound connection",
+      "weight": 15,
+      "status": "FROZEN",
+      "mvp": true,
+      "priority": "P0",
+      "checkpoint": "chk-04",
+      "humanTestId": "NODE-01"
+    },
+    {
+      "id": "cap-05-hypervisor-integrations",
+      "moduleId": "mod-01-foundation",
+      "phaseId": "phase-foundation",
+      "name": "Native Proxmox VE & Virtualizor REST Integrations",
+      "description": "Official REST API integration for node, QEMU VM, LXC container and storage discovery",
+      "weight": 15,
+      "status": "FROZEN",
+      "mvp": true,
+      "priority": "P0",
+      "checkpoint": "chk-05",
+      "humanTestId": "INT-01"
+    },
+    {
+      "id": "cap-06-ai-orchestrator",
+      "moduleId": "mod-01-foundation",
+      "phaseId": "phase-foundation",
+      "name": "Multi-Provider AI Orchestrator & Persistent Chat",
+      "description": "Groq Cloud, OpenAI, DeepSeek, Ollama with live upstream validation and persistent chat",
+      "weight": 15,
+      "status": "HOMOLOGATED",
+      "mvp": true,
+      "priority": "P0",
+      "checkpoint": "chk-06",
+      "humanTestId": "AI-01"
+    },
+    {
+      "id": "cap-07-omnichannel-alerts",
+      "moduleId": "mod-01-foundation",
+      "phaseId": "phase-foundation",
+      "name": "Omnichannel Notification Dispatchers",
+      "description": "Chatwoot, Quepasa WhatsApp, Telegram Bot, SMTP Email and HTTP Webhooks per tenant",
+      "weight": 10,
+      "status": "HOMOLOGATED",
+      "mvp": true,
+      "priority": "P1",
+      "checkpoint": "chk-07",
+      "humanTestId": "ALT-01"
+    },
+    {
+      "id": "cap-21-autonomous-scheduler",
+      "moduleId": "mod-21-scheduler",
+      "phaseId": "phase-ops",
+      "name": "Autonomous Scheduler & Health Sweeper",
+      "description": "Cron/Interval task execution for daily briefings and backup audits",
+      "weight": 12,
+      "status": "HOMOLOGATED",
+      "mvp": true,
+      "priority": "P1",
+      "checkpoint": "chk-21",
+      "humanTestId": "AUT-01"
+    },
+    {
+      "id": "cap-22-conditional-triggers",
+      "moduleId": "mod-22-triggers",
+      "phaseId": "phase-ops",
+      "name": "Conditional Triggers & Anti-Flapping Engine",
+      "description": "Telemetry triggers with Debounce, Cooldown, Circuit Breaker and SHA-256 Deduplication",
+      "weight": 12,
+      "status": "HOMOLOGATED",
+      "mvp": true,
+      "priority": "P1",
+      "checkpoint": "chk-22",
+      "humanTestId": "AUT-02"
+    },
+    {
+      "id": "cap-23-autonomous-policies",
+      "moduleId": "mod-23-policies",
+      "phaseId": "phase-ops",
+      "name": "Autonomous Policies & Self-Healing Matrix",
+      "description": "Levels 0 to 5 autonomy matrix, risk budgets, prechecks/postchecks and auto-escalation",
+      "weight": 14,
+      "status": "HOMOLOGATED",
+      "mvp": true,
+      "priority": "P1",
+      "checkpoint": "chk-23",
+      "humanTestId": "AUT-03"
+    },
+    {
+      "id": "cap-24-goal-management",
+      "moduleId": "mod-24-goals",
+      "phaseId": "phase-ops",
+      "name": "Goal-Oriented Infrastructure Management",
+      "description": "SLO management, compliance visual gauges (Storage >= 20%, Backup RPO <= 24h)",
+      "weight": 12,
+      "status": "HOMOLOGATED",
+      "mvp": true,
+      "priority": "P1",
+      "checkpoint": "chk-24",
+      "humanTestId": "AUT-04"
+    },
+    {
+      "id": "cap-25-infra-intelligence",
+      "moduleId": "mod-25-intelligence",
+      "phaseId": "phase-intelligence",
+      "name": "Infrastructure Intelligence & Capacity Advisor",
+      "description": "Recurring incident mining, SPOF detection, 180-day forecasting and Technical Debt score",
+      "weight": 16,
+      "status": "HOMOLOGATED",
+      "mvp": false,
+      "priority": "P2",
+      "checkpoint": "chk-25",
+      "humanTestId": "ADV-01"
+    },
+    {
+      "id": "cap-26-source-of-truth",
+      "moduleId": "mod-26-source-of-truth",
+      "phaseId": "phase-sot",
+      "name": "Customer Infrastructure Book & 42U Rack Elevation",
+      "description": "Physical asset catalog, 42U rack visualizer, Switch Port Wizard, IPAM CIDR Subnets",
+      "weight": 18,
+      "status": "FROZEN",
+      "mvp": false,
+      "priority": "P2",
+      "checkpoint": "chk-26",
+      "humanTestId": "INV-01"
+    },
+    {
+      "id": "cap-27-wan-governance",
+      "moduleId": "mod-27-wan-governance",
+      "phaseId": "phase-wan",
+      "name": "Network Device Monitoring & Governed WAN Actions",
+      "description": "MikroTik & pfSense drivers, hardware metrics, latency tracking & primary link failover",
+      "weight": 18,
+      "status": "HOMOLOGATED",
+      "mvp": false,
+      "priority": "P2",
+      "checkpoint": "chk-27",
+      "humanTestId": "MTK-01"
+    },
+    {
+      "id": "cap-28-simple-ux",
+      "moduleId": "mod-28-simple-ux",
+      "phaseId": "phase-simple-ux",
+      "name": "Simple Experience & Daily Operations Center",
+      "description": "Daily Operations Center ('O que precisa de atenção hoje?'), Simple/Tech mode, QBR Reports",
+      "weight": 16,
+      "status": "HOMOLOGATED",
+      "mvp": true,
+      "priority": "P1",
+      "checkpoint": "chk-28",
+      "humanTestId": "ONB-01"
+    },
+    {
+      "id": "cap-29-pfsense-hardening",
+      "moduleId": "mod-29-pfsense-hardening",
+      "phaseId": "phase-hardening",
+      "name": "Production Hardening & pfSense Telemetry",
+      "description": "FreeBSD cumulative CPU ticks parser, Vault master key auto-migration & sanitized diagnostics",
+      "weight": 18,
+      "status": "FROZEN",
+      "mvp": true,
+      "priority": "P0",
+      "checkpoint": "chk-29",
+      "humanTestId": "PFS-01"
+    },
+    {
+      "id": "cap-30a-dev-control-service",
+      "moduleId": "mod-30-dev-control",
+      "phaseId": "phase-30",
+      "name": "Development Control Mathematical Engine & Invariants",
+      "description": "Backend service executing 16 mathematical invariants, canonical JSON parsing, weight calculations",
+      "weight": 7,
+      "status": "VALIDATION",
+      "mvp": false,
+      "priority": "P2",
+      "checkpoint": "chk-30"
+    },
+    {
+      "id": "cap-30b-dev-control-ui",
+      "moduleId": "mod-30-dev-control",
+      "phaseId": "phase-30",
+      "name": "Development Control React UI & Governance View",
+      "description": "SuperAdmin governance panel with executive cards, status grid, health badges, frozen table and timeline",
+      "weight": 7,
+      "status": "VALIDATION",
+      "mvp": false,
+      "priority": "P2",
+      "checkpoint": "chk-30"
+    }
+  ],
+  "frozenComponents": [
+    {
+      "id": "fc-policy-engine-audit",
+      "name": "Policy Engine & Cryptographic Audit Hash Chain",
+      "description": "Core security kernel enforcing DENY policy overrides, action signatures and SHA-256 tamper-proof chain.",
+      "frozenAt": "2026-08-20",
+      "checkpoint": "chk-03",
+      "reason": "Security and compliance critical kernel. Must prevent unauthorized action execution or audit tampering.",
+      "protectedPaths": [
+        "packages/policy-engine/**",
+        "packages/audit/**"
+      ]
+    },
+    {
+      "id": "fc-hypervisor-integrations",
+      "name": "Proxmox VE & Virtualizor Native Drivers",
+      "description": "Official REST API integration drivers for node, QEMU VM, LXC container and storage discovery.",
+      "frozenAt": "2026-08-22",
+      "checkpoint": "chk-05",
+      "reason": "Production hypervisor driver core. Zero fake data guarantee.",
+      "protectedPaths": [
+        "apps/api/src/integrations/**"
+      ]
+    },
+    {
+      "id": "fc-pfsense-telemetry",
+      "name": "pfSense FreeBSD CPU Ticks Parser & Vault Auto-Healing",
+      "description": "FreeBSD ticks CPU calculation formula (total - idle)/total and Vault master key migration.",
+      "frozenAt": "2026-08-26",
+      "checkpoint": "chk-29",
+      "reason": "Homologated hardware telemetry math and master key self-healing mechanism.",
+      "protectedPaths": [
+        "apps/api/src/network-devices/**",
+        "apps/api/src/security/secret_vault.service.ts"
+      ]
+    },
+    {
+      "id": "fc-source-of-truth-ipam",
+      "name": "Infrastructure Book & IPAM CIDR Subnet Matcher",
+      "description": "Customer Infrastructure Book, 42U rack elevation visualizer, and deterministic IPAM subnet matcher.",
+      "frozenAt": "2026-08-25",
+      "checkpoint": "chk-26",
+      "reason": "Physical topology source of truth for all customer sites.",
+      "protectedPaths": [
+        "apps/api/src/inventory/**",
+        "apps/api/src/topology/**",
+        "apps/api/src/network/**"
+      ]
+    }
+  ]
+}
