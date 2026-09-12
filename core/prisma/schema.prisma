@@ -17,6 +17,8 @@ enum Role {
 enum EquipmentType {
   PFSENSE
   MIKROTIK
+  LINUX_SERVER
+  WINDOWS_SERVER
   PROXMOX
   ZABBIX
   GENERIC_SNMP
@@ -99,7 +101,14 @@ model Equipment {
   lastLossPercent      Float?
   lastCheck            DateTime?
   active               Boolean       @default(true)
-  
+  // Modo de conexão e Agente de Host Outbound (Linux & Windows)
+  connectionMode       String?       @default("DIRECT") // DIRECT (API/SSH/WinRM) ou AGENT (Outbound)
+  enrollmentToken      String?       @unique
+  enrollmentExpiresAt  DateTime?
+  agentToken           String?       // Token persistente após auto-registro
+  agentVersion         String?
+  osInfo               Json?         // Informações de SO, CPU, RAM, Disco e Uptime reportadas pelo agente
+
   // Vínculo com Storage de Destino para Backups
   backupStorageId      String?
   backupStorage        Storage?      @relation(fields: [backupStorageId], references: [id], onDelete: SetNull)
