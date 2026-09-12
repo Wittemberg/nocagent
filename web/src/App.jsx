@@ -951,6 +951,13 @@ export default function App() {
   useEffect(() => {
     fetchEquipmentsStatus();
     fetchStorages();
+
+    // Atualização automática a cada 30 segundos
+    const timer = setInterval(() => {
+      fetchEquipmentsStatus();
+    }, 30000);
+
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -1590,12 +1597,21 @@ export default function App() {
                 </button>
               </div>
             ) : statusError ? (
-              <div className="p-6 rounded-2xl bg-amber-950/30 border border-amber-800/60 text-amber-200 text-xs flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
-                <div>
-                  <p className="font-semibold">{statusError}</p>
-                  <p className="text-amber-300/80 mt-0.5">Verifique a conectividade com o banco ou com os equipamentos no Cofre.</p>
+              <div className="p-5 rounded-2xl bg-amber-950/40 border border-amber-800/70 text-amber-200 text-xs flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                  <div>
+                    <p className="font-semibold">{statusError}</p>
+                    <p className="text-amber-300/80 mt-0.5">O container ou a conexão com o banco pode estar sincronizando.</p>
+                  </div>
                 </div>
+                <button
+                  onClick={fetchEquipmentsStatus}
+                  className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                  Tentar Novamente
+                </button>
               </div>
             ) : equipmentList.length === 0 ? (
               <div className="p-8 text-center bg-slate-900/40 border border-slate-800 rounded-2xl text-xs text-slate-400">
