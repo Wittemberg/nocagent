@@ -308,7 +308,6 @@ app.get('/api/equipments/status', async (req, res) => {
             const isFresh = eq.lastCheck && (Date.now() - new Date(eq.lastCheck).getTime() < 180000);
             item.status = isFresh ? 'online' : 'offline';
             if (!isFresh) item.error = 'Agente desconectado (sem telemetria recente nos últimos 3 min)';
-            item.subItems = eq.osInfo ? [eq.osInfo] : [];
           } else {
             const port = eq.port || 22;
             const probe = await probeTcpPort(eq.host, port, 4000);
@@ -334,7 +333,6 @@ app.get('/api/equipments/status', async (req, res) => {
             const isFresh = eq.lastCheck && (Date.now() - new Date(eq.lastCheck).getTime() < 180000);
             item.status = isFresh ? 'online' : 'offline';
             if (!isFresh) item.error = 'Agente desconectado (sem telemetria recente nos últimos 3 min)';
-            item.subItems = eq.osInfo ? [eq.osInfo] : [];
           } else {
             const port = eq.port || 5985;
             const probe = await probeTcpPort(eq.host, port, 4000);
@@ -370,7 +368,17 @@ app.get('/api/equipments/status', async (req, res) => {
               item.lastLatency = 2;
               item.lastCheck = new Date();
               item.proxmoxData = pveMetrics;
-              item.osInfo = pveMetrics;
+
+              const pveOsInfo = {
+                hostname: pveMetrics.node,
+                os: pveMetrics.pveVersion,
+                cpu: `${pveMetrics.cpu?.percent ?? 0}%`,
+                memoryPercent: `${pveMetrics.memory?.percent ?? 0}%`,
+                diskFreeGb: pveMetrics.storages?.[0] ? `${pveMetrics.storages[0].name} (${100 - (pveMetrics.storages[0].usedPercent || 0)}% livre)` : undefined,
+                workloads: pveMetrics.workloads,
+                storages: pveMetrics.storages,
+              };
+              item.osInfo = pveOsInfo;
 
               prisma.equipment.update({
                 where: { id: eq.id },
@@ -378,7 +386,7 @@ app.get('/api/equipments/status', async (req, res) => {
                   status: 'online',
                   lastLossPercent: 0,
                   lastCheck: item.lastCheck,
-                  osInfo: pveMetrics,
+                  osInfo: pveOsInfo,
                 },
               }).catch(() => {});
             } catch (pveErr) {
@@ -573,10 +581,33 @@ app.get('/api/equipments', async (req, res) => {
       },
     });
 
+    const sanitizedEquipments = equipments.map((eq) => {
+      let osInfo = eq.osInfo;
+      let proxmoxData = null;
+      if (osInfo && typeof osInfo === 'object') {
+        if (osInfo.workloads && (osInfo.cpu?.percent != null || typeof osInfo.cpu === 'string')) {
+          proxmoxData = osInfo;
+        }
+        // Garante que cpu e memoryPercent sejam strings escalares para não quebrar React
+        if (osInfo.cpu && typeof osInfo.cpu === 'object') {
+          osInfo = {
+            ...osInfo,
+            cpu: `${osInfo.cpu.percent ?? 0}%`,
+            memoryPercent: typeof osInfo.memory === 'object' ? `${osInfo.memory.percent ?? 0}%` : osInfo.memoryPercent,
+          };
+        }
+      }
+      return {
+        ...eq,
+        osInfo,
+        proxmoxData: proxmoxData || undefined,
+      };
+    });
+
     return res.json({
       status: 'ok',
-      count: equipments.length,
-      data: equipments,
+      count: sanitizedEquipments.length,
+      data: sanitizedEquipments,
     });
   } catch (error) {
     console.error('Erro ao listar equipamentos:', error);

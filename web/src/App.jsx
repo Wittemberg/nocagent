@@ -1092,26 +1092,33 @@ export default function App() {
                   const isOnline = eq.status === 'online';
                   const isDegraded = eq.status === 'degraded';
                   const isAuthError = eq.status === 'auth_error';
+                  const pveData = eq.proxmoxData || (eq.type === 'PROXMOX' && eq.osInfo?.workloads ? eq.osInfo : null);
+
                   const borderClass = isOnline 
-                    ? 'border-emerald-900/60 hover:border-emerald-700/80 shadow-lg shadow-emerald-950/20' 
+                    ? 'border-emerald-500/30 hover:border-emerald-500/60 shadow-lg shadow-emerald-950/20' 
                     : isDegraded 
-                    ? 'border-amber-900/60 hover:border-amber-700/80 shadow-lg shadow-amber-950/20' 
-                    : isAuthError
-                    ? 'border-amber-700/60 hover:border-amber-600/80 shadow-lg shadow-amber-950/20'
-                    : 'border-red-900/60 hover:border-red-700/80 shadow-lg shadow-red-950/20';
-                  const badgeClass = isOnline 
-                    ? 'bg-emerald-950 text-emerald-400 border-emerald-800' 
-                    : isDegraded 
-                    ? 'bg-amber-950 text-amber-400 border-amber-800' 
-                    : isAuthError
-                    ? 'bg-amber-950 text-amber-300 border-amber-700'
-                    : 'bg-red-950 text-red-400 border-red-800';
+                    ? 'border-amber-500/30 hover:border-amber-500/60 shadow-lg shadow-amber-950/20' 
+                    : isAuthError 
+                    ? 'border-amber-600/40 hover:border-amber-600/70 shadow-lg shadow-amber-950/30' 
+                    : 'border-slate-800 hover:border-slate-700';
+
                   const dotClass = isOnline 
-                    ? 'bg-emerald-400 animate-pulse' 
-                    : isDegraded || isAuthError 
-                    ? 'bg-amber-400 animate-pulse' 
+                    ? 'bg-emerald-500 animate-pulse' 
+                    : isDegraded 
+                    ? 'bg-amber-500' 
+                    : isAuthError 
+                    ? 'bg-amber-500 animate-pulse' 
                     : 'bg-red-500';
-                  const badgeText = isOnline 
+
+                  const statusBadgeClass = isOnline 
+                    ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800' 
+                    : isDegraded 
+                    ? 'bg-amber-950/80 text-amber-300 border-amber-800' 
+                    : isAuthError 
+                    ? 'bg-amber-900/60 text-amber-200 border-amber-700' 
+                    : 'bg-red-950/80 text-red-300 border-red-800';
+
+                  const statusText = isOnline 
                     ? 'ONLINE' 
                     : isDegraded 
                     ? 'DEGRADADO' 
@@ -1138,17 +1145,23 @@ export default function App() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-mono bg-slate-800 text-sky-400 border border-slate-700">
-                            {eq.type}
-                          </span>
-                          <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider border ${badgeClass}`}>
-                            {badgeText}
+                          <button
+                            onClick={() => handleOpenEditModal(eq)}
+                            title="Editar Equipamento no Cofre"
+                            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700/80 transition"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${statusBadgeClass}`}>
+                            {statusText}
                           </span>
                         </div>
                       </div>
 
-                      <div className="text-xs bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 mb-3 font-mono text-slate-300 truncate">
-                        <span className="text-slate-500 block text-[11px]">Endpoint / Host:</span>
+                      <div className="text-xs font-mono text-slate-400 mb-3 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                        <span className="text-slate-500 block text-[11px]">Tipo de Ativo:</span>
+                        <span className="text-sky-400 font-semibold">{eq.type}</span>
+                        <span className="text-slate-500 block text-[11px] mt-1.5">Endpoint / Host:</span>
                         {eq.host || (eq.connectionMode === 'AGENT' ? 'Conexão via Agente Outbound' : '—')}
                       </div>
 
@@ -1173,7 +1186,7 @@ export default function App() {
                       {/* CARD ESPECÍFICO POR TIPO DE EQUIPAMENTO */}
                       {eq.type === 'PROXMOX' ? (
                         <div className="space-y-3 pt-1 mb-2">
-                          {eq.proxmoxData ? (
+                          {pveData ? (
                             <>
                               {/* CPU & RAM DO NÓ PROXMOX */}
                               <div className="grid grid-cols-2 gap-2">
@@ -1183,16 +1196,16 @@ export default function App() {
                                       <Cpu className="w-3.5 h-3.5 text-sky-400" />
                                       CPU do Host
                                     </span>
-                                    <span className="font-mono text-sky-400 font-bold">{eq.proxmoxData.cpu?.percent ?? 0}%</span>
+                                    <span className="font-mono text-sky-400 font-bold">{pveData.cpu?.percent ?? 0}%</span>
                                   </div>
                                   <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                                     <div 
                                       className="bg-sky-500 h-full rounded-full transition-all duration-500" 
-                                      style={{ width: `${Math.min(eq.proxmoxData.cpu?.percent ?? 0, 100)}%` }} 
+                                      style={{ width: `${Math.min(pveData.cpu?.percent ?? 0, 100)}%` }} 
                                     />
                                   </div>
                                   <span className="text-[10px] text-slate-500 block mt-1 truncate">
-                                    {eq.proxmoxData.cpu?.cores ? `${eq.proxmoxData.cpu.cores} vCPUs (${eq.proxmoxData.node})` : `Nó: ${eq.proxmoxData.node}`}
+                                    {pveData.cpu?.cores ? `${pveData.cpu.cores} vCPUs (${pveData.node})` : `Nó: ${pveData.node}`}
                                   </span>
                                 </div>
 
@@ -1202,16 +1215,16 @@ export default function App() {
                                       <HardDrive className="w-3.5 h-3.5 text-amber-400" />
                                       RAM Alocada
                                     </span>
-                                    <span className="font-mono text-amber-400 font-bold">{eq.proxmoxData.memory?.percent ?? 0}%</span>
+                                    <span className="font-mono text-amber-400 font-bold">{pveData.memory?.percent ?? 0}%</span>
                                   </div>
                                   <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                                     <div 
                                       className="bg-amber-500 h-full rounded-full transition-all duration-500" 
-                                      style={{ width: `${Math.min(eq.proxmoxData.memory?.percent ?? 0, 100)}%` }} 
+                                      style={{ width: `${Math.min(pveData.memory?.percent ?? 0, 100)}%` }} 
                                     />
                                   </div>
                                   <span className="text-[10px] text-slate-400 font-mono block mt-1 truncate">
-                                    {eq.proxmoxData.memory?.usedGB || '0'} GB / {eq.proxmoxData.memory?.totalGB || '0'} GB
+                                    {pveData.memory?.usedGB || '0'} GB / {pveData.memory?.totalGB || '0'} GB
                                   </span>
                                 </div>
                               </div>
@@ -1221,35 +1234,35 @@ export default function App() {
                                 <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300 mb-2">
                                   <span className="flex items-center gap-1.5 uppercase tracking-wider text-[10px] text-slate-400">
                                     <Layers className="w-3 h-3 text-emerald-400" />
-                                    Workloads ({eq.proxmoxData.pveVersion || 'Proxmox VE'})
+                                    Workloads ({pveData.pveVersion || 'Proxmox VE'})
                                   </span>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 text-xs">
                                   <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800/60">
                                     <span className="text-[10px] text-slate-400 block mb-0.5">VMs (QEMU)</span>
                                     <div className="flex items-baseline gap-1.5">
-                                      <span className="text-emerald-400 font-bold font-mono text-sm">{eq.proxmoxData.workloads?.runningVMs ?? 0}</span>
+                                      <span className="text-emerald-400 font-bold font-mono text-sm">{pveData.workloads?.runningVMs ?? 0}</span>
                                       <span className="text-[11px] text-slate-400">ativas</span>
                                       <span className="text-slate-600">/</span>
-                                      <span className="text-slate-400 font-mono text-xs">{eq.proxmoxData.workloads?.stoppedVMs ?? 0} off</span>
+                                      <span className="text-slate-400 font-mono text-xs">{pveData.workloads?.stoppedVMs ?? 0} off</span>
                                     </div>
                                   </div>
                                   <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800/60">
                                     <span className="text-[10px] text-slate-400 block mb-0.5">Containers (LXC)</span>
                                     <div className="flex items-baseline gap-1.5">
-                                      <span className="text-sky-400 font-bold font-mono text-sm">{eq.proxmoxData.workloads?.runningLXCs ?? 0}</span>
+                                      <span className="text-sky-400 font-bold font-mono text-sm">{pveData.workloads?.runningLXCs ?? 0}</span>
                                       <span className="text-[11px] text-slate-400">ativos</span>
                                       <span className="text-slate-600">/</span>
-                                      <span className="text-slate-400 font-mono text-xs">{eq.proxmoxData.workloads?.stoppedLXCs ?? 0} off</span>
+                                      <span className="text-slate-400 font-mono text-xs">{pveData.workloads?.stoppedLXCs ?? 0} off</span>
                                     </div>
                                   </div>
                                 </div>
                               </div>
 
                               {/* STORAGES DO PROXMOX */}
-                              {eq.proxmoxData.storages && eq.proxmoxData.storages.length > 0 && (
+                              {pveData.storages && pveData.storages.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                  {eq.proxmoxData.storages.slice(0, 3).map((st, idx) => (
+                                  {pveData.storages.slice(0, 3).map((st, idx) => (
                                     <span key={idx} className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-950/80 border border-slate-800 text-slate-300">
                                       {st.name}: <strong className={st.usedPercent > 85 ? 'text-red-400' : 'text-emerald-400'}>{st.usedPercent}%</strong>
                                     </span>
@@ -1316,34 +1329,40 @@ export default function App() {
                       )}
 
                       {/* TELEMETRIA DO AGENTE HOST (CPU, RAM, DISCO, UPTIME) */}
-                      {eq.osInfo && (
+                      {eq.osInfo && eq.type !== 'PROXMOX' && eq.type !== 'MIKROTIK' && (
                         <div className="mt-3 pt-3 border-t border-slate-800 space-y-2">
                           <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400">
                             <span className="uppercase tracking-wider flex items-center gap-1.5 text-slate-300">
                               <Server className="w-3.5 h-3.5 text-sky-400" />
-                              Telemetria ({eq.osInfo.os || eq.osInfo.hostname || 'Host'})
+                              Telemetria ({typeof eq.osInfo.os === 'string' ? eq.osInfo.os : typeof eq.osInfo.hostname === 'string' ? eq.osInfo.hostname : 'Host'})
                             </span>
                             {eq.agentVersion && (
-                              <span className="text-[10px] text-slate-500 font-mono">v{eq.agentVersion}</span>
+                              <span className="text-[10px] text-slate-500 font-mono">v{String(eq.agentVersion)}</span>
                             )}
                           </div>
                           <div className="grid grid-cols-3 gap-2">
                             {eq.osInfo.cpu != null && (
                               <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800 text-center">
                                 <span className="text-[10px] text-slate-500 block">CPU</span>
-                                <span className="font-mono font-bold text-sky-400 text-xs">{eq.osInfo.cpu}</span>
+                                <span className="font-mono font-bold text-sky-400 text-xs">
+                                  {typeof eq.osInfo.cpu === 'object' ? `${eq.osInfo.cpu.percent ?? 0}%` : String(eq.osInfo.cpu)}
+                                </span>
                               </div>
                             )}
                             {eq.osInfo.memoryPercent != null && (
                               <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800 text-center">
                                 <span className="text-[10px] text-slate-500 block">Memória</span>
-                                <span className="font-mono font-bold text-amber-400 text-xs">{eq.osInfo.memoryPercent}</span>
+                                <span className="font-mono font-bold text-amber-400 text-xs">
+                                  {typeof eq.osInfo.memoryPercent === 'object' ? `${eq.osInfo.memoryPercent.percent ?? 0}%` : String(eq.osInfo.memoryPercent)}
+                                </span>
                               </div>
                             )}
                             {(eq.osInfo.diskFreeGb != null || eq.osInfo.diskFreePct != null) && (
                               <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800 text-center">
                                 <span className="text-[10px] text-slate-500 block">Disco Livre</span>
-                                <span className="font-mono font-bold text-emerald-400 text-xs">{eq.osInfo.diskFreeGb || eq.osInfo.diskFreePct}</span>
+                                <span className="font-mono font-bold text-emerald-400 text-xs">
+                                  {typeof eq.osInfo.diskFreeGb === 'object' ? '' : String(eq.osInfo.diskFreeGb || eq.osInfo.diskFreePct)}
+                                </span>
                               </div>
                             )}
                           </div>
