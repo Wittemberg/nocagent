@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ShieldCheck, 
   Activity, 
@@ -55,7 +55,38 @@ const initialEquipmentForm = {
   realm: 'pam',
 };
 
-function EquipmentCredentialInputs({ form, setForm, storages = [], isEdit = false, existingGroups = [], existingSubgroups = [] }) {
+function EquipmentCredentialInputs({ form, setForm, storages = [], isEdit = false, existingGroups = [], existingSubgroups = [], allEquipments = [] }) {
+  // Lista unificada de grupos existentes
+  const availableGroups = useMemo(() => {
+    const set = new Set(existingGroups.filter(Boolean));
+    set.add('Geral');
+    if (form.group && form.group.trim()) set.add(form.group.trim());
+    return Array.from(set).sort();
+  }, [existingGroups, form.group]);
+
+  // Controle de digitação de novo grupo vs seleção em dropdown
+  const [isNewGroup, setIsNewGroup] = useState(() => {
+    return form.group && !existingGroups.includes(form.group) && form.group !== 'Geral';
+  });
+
+  // Lista de subgrupos existentes ESPECÍFICOS para o grupo selecionado
+  const currentGroupSubgroups = useMemo(() => {
+    const currentGroup = form.group?.trim() || 'Geral';
+    return Array.from(
+      new Set(
+        allEquipments
+          .filter(e => (e.group?.trim() || 'Geral') === currentGroup)
+          .map(e => e.subgroup?.trim())
+          .filter(Boolean)
+      )
+    ).sort();
+  }, [allEquipments, form.group]);
+
+  // Controle de digitação de nova unidade/subgrupo vs seleção em dropdown
+  const [isNewSubgroup, setIsNewSubgroup] = useState(() => {
+    return form.subgroup && !currentGroupSubgroups.includes(form.subgroup);
+  });
+
   return (
     <>
       <div>
@@ -71,48 +102,128 @@ function EquipmentCredentialInputs({ form, setForm, storages = [], isEdit = fals
       </div>
 
       {/* HIERARQUIA MULTI-TENANT: GRUPO & SUBGRUPO */}
-      <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-2.5">
+      <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 space-y-3">
         <div className="flex items-center justify-between">
-          <label className="text-slate-300 font-medium text-xs flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5 text-sky-400" />
+          <label className="text-slate-200 font-semibold text-xs flex items-center gap-1.5">
+            <Building2 className="w-4 h-4 text-sky-400" />
             Organização Multi-Tenant & Localidade
           </label>
           <span className="text-[10px] text-slate-500 font-mono">Filtros & Correlação NOC</span>
         </div>
-        <div className="grid grid-cols-2 gap-2.5">
+
+        <div className="grid grid-cols-2 gap-3">
+          {/* CAMPO: GRUPO / CLIENTE (TENANT) */}
           <div>
-            <label className="block text-slate-400 text-[11px] font-medium mb-1">Grupo / Cliente (Tenant)</label>
-            <input
-              type="text"
-              list="groups-datalist"
-              placeholder="Ex: SuperTop, Matriz"
-              value={form.group || ''}
-              onChange={e => setForm({ ...form, group: e.target.value })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
-            />
-            <datalist id="groups-datalist">
-              {existingGroups.map(g => (
-                <option key={g} value={g} />
-              ))}
-            </datalist>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-slate-400 text-[11px] font-medium">Grupo / Cliente (Tenant)</label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isNewGroup) {
+                    setIsNewGroup(false);
+                    if (!availableGroups.includes(form.group)) {
+                      setForm({ ...form, group: availableGroups[0] || 'Geral' });
+                    }
+                  } else {
+                    setIsNewGroup(true);
+                  }
+                }}
+                className="text-[10px] text-sky-400 hover:text-sky-300 transition underline font-medium"
+              >
+                {isNewGroup ? '↩ Escolher da Lista' : '+ Novo Grupo'}
+              </button>
+            </div>
+
+            {isNewGroup ? (
+              <input
+                type="text"
+                autoFocus
+                placeholder="Ex: SuperTop, Matriz, Cliente ABC"
+                value={form.group || ''}
+                onChange={e => setForm({ ...form, group: e.target.value })}
+                className="w-full bg-slate-900 border border-sky-500/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-400"
+              />
+            ) : (
+              <select
+                value={form.group || 'Geral'}
+                onChange={e => {
+                  if (e.target.value === '__NEW__') {
+                    setIsNewGroup(true);
+                    setForm({ ...form, group: '' });
+                  } else {
+                    setForm({ ...form, group: e.target.value });
+                  }
+                }}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-sky-500 cursor-pointer"
+              >
+                {availableGroups.map(g => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+                <option value="__NEW__" className="text-sky-400 font-semibold bg-slate-950">
+                  + Digitar Novo Grupo...
+                </option>
+              </select>
+            )}
           </div>
+
+          {/* CAMPO: SUBGRUPO / UNIDADE / FILIAL */}
           <div>
-            <label className="block text-slate-400 text-[11px] font-medium mb-1">Subgrupo / Unidade / Filial</label>
-            <input
-              type="text"
-              list="subgroups-datalist"
-              placeholder="Ex: Loja 01, CD, VMs"
-              value={form.subgroup || ''}
-              onChange={e => setForm({ ...form, subgroup: e.target.value })}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
-            />
-            <datalist id="subgroups-datalist">
-              {existingSubgroups.map(sg => (
-                <option key={sg} value={sg} />
-              ))}
-            </datalist>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-slate-400 text-[11px] font-medium">Subgrupo / Unidade / Filial</label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isNewSubgroup) {
+                    setIsNewSubgroup(false);
+                  } else {
+                    setIsNewSubgroup(true);
+                  }
+                }}
+                className="text-[10px] text-sky-400 hover:text-sky-300 transition underline font-medium"
+              >
+                {isNewSubgroup 
+                  ? (currentGroupSubgroups.length > 0 ? '↩ Escolher da Lista' : '') 
+                  : '+ Nova Unidade'}
+              </button>
+            </div>
+
+            {isNewSubgroup || currentGroupSubgroups.length === 0 ? (
+              <input
+                type="text"
+                placeholder={currentGroupSubgroups.length === 0 ? "Ex: Loja 01, CD, VMs" : "Nova Unidade / Loja..."}
+                value={form.subgroup || ''}
+                onChange={e => setForm({ ...form, subgroup: e.target.value })}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+              />
+            ) : (
+              <select
+                value={form.subgroup || ''}
+                onChange={e => {
+                  if (e.target.value === '__NEW__') {
+                    setIsNewSubgroup(true);
+                    setForm({ ...form, subgroup: '' });
+                  } else {
+                    setForm({ ...form, subgroup: e.target.value });
+                  }
+                }}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-sky-500 cursor-pointer"
+              >
+                <option value="">— Sem subgrupo (Raiz do Grupo) —</option>
+                {currentGroupSubgroups.map(sg => (
+                  <option key={sg} value={sg}>
+                    {sg}
+                  </option>
+                ))}
+                <option value="__NEW__" className="text-sky-400 font-semibold bg-slate-950">
+                  + Digitar Nova Unidade...
+                </option>
+              </select>
+            )}
           </div>
         </div>
+
         <div>
           <label className="block text-slate-400 text-[11px] font-medium mb-1">Tags / Etiquetas (Opcional, separadas por vírgula)</label>
           <input
@@ -2077,6 +2188,7 @@ export default function App() {
                   isEdit={false}
                   existingGroups={distinctGroups}
                   existingSubgroups={distinctSubgroups}
+                  allEquipments={equipmentList.length > 0 ? equipmentList : equipments}
                 />
 
                 <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
@@ -2147,6 +2259,7 @@ export default function App() {
                   isEdit={true}
                   existingGroups={distinctGroups}
                   existingSubgroups={distinctSubgroups}
+                  allEquipments={equipmentList.length > 0 ? equipmentList : equipments}
                 />
 
                 <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
