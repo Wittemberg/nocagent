@@ -92,65 +92,160 @@ async function createProxmoxClient(host, credentials, port = 8006) {
 async function getProxmoxMetrics(host, credentials, port = 8006) {
   const client = await createProxmoxClient(host, credentials, port);
 
-  // 1. Coleta lista de nós do cluster
-  const nodesRes = await client.get('/nodes');
-  const nodes = nodesRes.data?.data || [];
-
-  if (nodes.length === 0) {
-    throw new Error('Nenhum nó do Proxmox VE retornado pela API.');
+  // 1. Coleta recursos globais do cluster (/cluster/resources)
+  let clusterResources = [];
+  try {
+    const clusterRes = await client.get('/cluster/resources');
+    clusterResources = clusterRes.data?.data || [];
+  } catch (err) {
+    console.warn(`[Proxmox] /cluster/resources não disponível ou sem permissão em ${host}:`, err.message);
   }
 
-  const primaryNode = nodes[0];
-  const nodeName = primaryNode.node;
+  // 2. Coleta lista de nós (/nodes)
+  let nodes = [];
+  try {
+    const nodesRes = await client.get('/nodes');
+    nodes = nodesRes.data?.data || [];
+  } catch (err) {
+    console.warn(`[Proxmox] /nodes não disponível em ${host}:`, err.message);
+  }
 
-  // 2. Coleta status detalhado do nó primário (CPU, RAM, Uptime, Versão PVE)
-  let nodeStatus = primaryNode;
+  if (nodes.length === 0 && clusterResources.length === 0) {
+    throw new Error('Nenhum nó ou recurso do Proxmox VE retornado pela API. Verifique token e permissões no cofre.');
+  }
+
+  // Identifica o nó ativo principal
+  const onlineNode = nodes.find((n) => n.status === 'online') || nodes[0];
+  const nodeResource = clusterResources.find((r) => r.type === 'node' && r.status === 'online') || clusterResources.find((r) => r.type === 'node');
+  const nodeName = onlineNode?.node || nodeResource?.node || 'pve';
+
+  let primaryNode = onlineNode || nodeResource || {};
+
+  // 3. Tenta status detalhado do nó primário (/nodes/{node}/status)
+  let nodeStatus = { ...primaryNode };
   try {
     const statusRes = await client.get(`/nodes/${nodeName}/status`);
     if (statusRes.data?.data) {
       nodeStatus = { ...nodeStatus, ...statusRes.data.data };
     }
   } catch (err) {
-    console.warn(`[Proxmox] Aviso ao buscar status do nó ${nodeName}:`, err.message);
+    console.warn(`[Proxmox] Aviso ao buscar status de ${nodeName}:`, err.message);
   }
 
-  // 3. Coleta inventário de VMs QEMU e Containers LXC do nó
+  // 4. Versão limpa do Proxmox VE
+  let rawVersion = nodeStatus.pveversion || primaryNode.pveversion || '';
+  if (!rawVersion) {
+    try {
+      const verRes = await client.get('/version');
+      if (verRes.data?.data) {
+        rawVersion = verRes.data.data.release || verRes.data.data.version || '';
+      }
+    } catch {}
+  }
+  // Extrai versão limpa (ex: "8.4.21" a partir de "pve-manager/8.4.21/...")
+  const versionMatch = rawVersion.match(/(\d+\.\d+[\.\-\w]*)/);
+  const cleanVersion = versionMatch ? `PVE v${versionMatch[1]}` : (rawVersion ? `PVE ${rawVersion}` : 'Proxmox VE');
+
+  // 5. Coleta inventário de VMs QEMU e Containers LXC
   let vms = [];
   let lxcs = [];
   try {
     const [vmsRes, lxcsRes] = await Promise.all([
-      client.get(`/nodes/${nodeName}/qemu`).catch(() => ({ data: { data: [] } })),
-      client.get(`/nodes/${nodeName}/lxc`).catch(() => ({ data: { data: [] } })),
+      client.get(`/nodes/${nodeName}/qemu`).catch(() => null),
+      client.get(`/nodes/${nodeName}/lxc`).catch(() => null),
     ]);
-    vms = vmsRes.data?.data || [];
-    lxcs = lxcsRes.data?.data || [];
+    if (vmsRes?.data?.data) vms = vmsRes.data.data;
+    if (lxcsRes?.data?.data) lxcs = lxcsRes.data.data;
   } catch (err) {
-    console.warn(`[Proxmox] Erro ao buscar VMs/LXCs de ${nodeName}:`, err.message);
+    console.warn(`[Proxmox] Aviso ao listar VMs/LXCs locais:`, err.message);
   }
 
-  // 4. Coleta storages do nó
+  // Fallback para clusterResources se a consulta direta retornou vazio ou 403
+  if (vms.length === 0 && clusterResources.length > 0) {
+    vms = clusterResources
+      .filter((r) => r.type === 'qemu')
+      .map((v) => ({
+        vmid: v.vmid,
+        name: v.name || `VM ${v.vmid}`,
+        status: v.status || 'unknown',
+        cpu: v.cpu,
+        mem: v.mem,
+        maxmem: v.maxmem,
+      }));
+  }
+
+  if (lxcs.length === 0 && clusterResources.length > 0) {
+    lxcs = clusterResources
+      .filter((r) => r.type === 'lxc')
+      .map((c) => ({
+        vmid: c.vmid,
+        name: c.name || `CT ${c.vmid}`,
+        status: c.status || 'unknown',
+        cpu: c.cpu,
+        mem: c.mem,
+        maxmem: c.maxmem,
+      }));
+  }
+
+  // 6. Coleta storages com múltiplos fallbacks (nó -> cluster/resources -> config global /storage)
   let storages = [];
   try {
     const storagesRes = await client.get(`/nodes/${nodeName}/storage`);
-    storages = (storagesRes.data?.data || []).map((s) => ({
-      name: s.storage,
-      type: s.type,
-      active: !!s.active,
-      usedBytes: s.used || 0,
-      totalBytes: s.total || 0,
-      usedPercent: s.total > 0 ? Math.round(((s.used || 0) / s.total) * 100) : 0,
-    }));
+    if (Array.isArray(storagesRes.data?.data)) {
+      storages = storagesRes.data.data.map((s) => ({
+        name: s.storage,
+        type: s.type,
+        active: !!s.active,
+        usedBytes: s.used || 0,
+        totalBytes: s.total || 0,
+        usedPercent: s.total > 0 ? Math.round(((s.used || 0) / s.total) * 100) : 0,
+      }));
+    }
   } catch (err) {
-    console.warn(`[Proxmox] Erro ao buscar storages de ${nodeName}:`, err.message);
+    console.warn(`[Proxmox] Aviso ao buscar storages locais de ${nodeName}:`, err.message);
   }
 
-  // Cálculos de CPU e Memória
-  const cpuPercent = nodeStatus.cpu != null ? Math.round(nodeStatus.cpu * 100) : 0;
-  const memUsedBytes = nodeStatus.memory?.used ?? nodeStatus.mem ?? 0;
-  const memTotalBytes = nodeStatus.memory?.total ?? nodeStatus.maxmem ?? 0;
+  // Fallback 1: storages listados em /cluster/resources
+  if (storages.length === 0 && clusterResources.length > 0) {
+    const clusterStorages = clusterResources.filter((r) => r.type === 'storage');
+    storages = clusterStorages.map((s) => ({
+      name: s.storage,
+      type: s.plugintype || s.type || 'storage',
+      active: true,
+      usedBytes: s.disk || 0,
+      totalBytes: s.maxdisk || 0,
+      usedPercent: s.maxdisk > 0 ? Math.round(((s.disk || 0) / s.maxdisk) * 100) : 0,
+    }));
+  }
+
+  // Fallback 2: /storage global de configuração
+  if (storages.length === 0) {
+    try {
+      const globalStorageRes = await client.get('/storage');
+      if (Array.isArray(globalStorageRes.data?.data)) {
+        storages = globalStorageRes.data.data.map((s) => ({
+          name: s.storage,
+          type: s.type || 'storage',
+          active: true,
+          usedBytes: 0,
+          totalBytes: 0,
+          usedPercent: 0,
+        }));
+      }
+    } catch {}
+  }
+
+  // 7. Cálculos resilientes de CPU e Memória
+  let rawCpu = nodeStatus.cpu ?? primaryNode.cpu ?? nodeResource?.cpu ?? 0;
+  if (rawCpu > 1) rawCpu = rawCpu / 100;
+  const cpuPercent = Math.round(rawCpu * 100);
+
+  const memUsedBytes = nodeStatus.memory?.used ?? nodeStatus.mem ?? primaryNode.mem ?? nodeResource?.mem ?? 0;
+  const memTotalBytes = nodeStatus.memory?.total ?? nodeStatus.maxmem ?? primaryNode.maxmem ?? nodeResource?.maxmem ?? 0;
   const memPercent = memTotalBytes > 0 ? Math.round((memUsedBytes / memTotalBytes) * 100) : 0;
   const memUsedGB = (memUsedBytes / (1024 * 1024 * 1024)).toFixed(1);
   const memTotalGB = (memTotalBytes / (1024 * 1024 * 1024)).toFixed(1);
+  const cores = nodeStatus.cpuinfo?.cpus || primaryNode.maxcpu || nodeResource?.maxcpu || 0;
 
   // Contagem de VMs
   const runningVms = vms.filter((v) => v.status === 'running').length;
@@ -162,11 +257,11 @@ async function getProxmoxMetrics(host, credentials, port = 8006) {
 
   return {
     node: nodeName,
-    pveVersion: nodeStatus.pveversion || 'Proxmox VE',
-    uptimeSeconds: nodeStatus.uptime || 0,
+    pveVersion: cleanVersion,
+    uptimeSeconds: nodeStatus.uptime || primaryNode.uptime || nodeResource?.uptime || 0,
     cpu: {
       percent: cpuPercent,
-      cores: nodeStatus.cpuinfo?.cpus || primaryNode.maxcpu || 0,
+      cores,
       model: nodeStatus.cpuinfo?.model || '',
     },
     memory: {
@@ -187,7 +282,7 @@ async function getProxmoxMetrics(host, credentials, port = 8006) {
         vmid: v.vmid,
         name: v.name,
         status: v.status,
-        cpuPercent: v.cpu != null ? Math.round(v.cpu * 100) : 0,
+        cpuPercent: v.cpu != null ? Math.round((v.cpu > 1 ? v.cpu : v.cpu * 100)) : 0,
         memUsedMB: Math.round((v.mem || 0) / (1024 * 1024)),
       })),
       lxcsList: lxcs.map((c) => ({

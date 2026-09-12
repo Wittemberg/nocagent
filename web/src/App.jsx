@@ -1087,7 +1087,7 @@ export default function App() {
                 Nenhum equipamento retornado pelo cofre.
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5">
                 {equipmentList.map(eq => {
                   const isOnline = eq.status === 'online';
                   const isDegraded = eq.status === 'degraded';
@@ -1095,316 +1095,280 @@ export default function App() {
                   const pveData = eq.proxmoxData || (eq.type === 'PROXMOX' && eq.osInfo?.workloads ? eq.osInfo : null);
 
                   const borderClass = isOnline 
-                    ? 'border-emerald-500/30 hover:border-emerald-500/60 shadow-lg shadow-emerald-950/20' 
+                    ? 'border-emerald-500/30 hover:border-emerald-500/60 shadow-md shadow-emerald-950/20' 
                     : isDegraded 
-                    ? 'border-amber-500/30 hover:border-amber-500/60 shadow-lg shadow-amber-950/20' 
+                    ? 'border-amber-500/30 hover:border-amber-500/60 shadow-md shadow-amber-950/20' 
                     : isAuthError 
-                    ? 'border-amber-600/40 hover:border-amber-600/70 shadow-lg shadow-amber-950/30' 
+                    ? 'border-amber-600/40 hover:border-amber-600/70 shadow-md shadow-amber-950/30' 
                     : 'border-slate-800 hover:border-slate-700';
 
                   const dotClass = isOnline 
-                    ? 'bg-emerald-500 animate-pulse' 
+                    ? 'bg-emerald-400 animate-pulse' 
                     : isDegraded 
-                    ? 'bg-amber-500' 
+                    ? 'bg-amber-400' 
                     : isAuthError 
-                    ? 'bg-amber-500 animate-pulse' 
-                    : 'bg-red-500';
+                    ? 'bg-amber-400 animate-pulse' 
+                    : 'bg-red-400';
 
                   const statusBadgeClass = isOnline 
-                    ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800' 
+                    ? 'bg-emerald-950/70 text-emerald-300 border-emerald-800/80' 
                     : isDegraded 
-                    ? 'bg-amber-950/80 text-amber-300 border-amber-800' 
+                    ? 'bg-amber-950/70 text-amber-300 border-amber-800/80' 
                     : isAuthError 
                     ? 'bg-amber-900/60 text-amber-200 border-amber-700' 
-                    : 'bg-red-950/80 text-red-300 border-red-800';
+                    : 'bg-red-950/70 text-red-300 border-red-800/80';
 
                   const statusText = isOnline 
                     ? 'ONLINE' 
                     : isDegraded 
                     ? 'DEGRADADO' 
                     : isAuthError 
-                    ? 'CHAVE RECUSADA (401)' 
+                    ? 'AUTH 401' 
                     : 'OFFLINE';
 
                   return (
                     <div 
                       key={eq.id} 
-                      className={`p-5 rounded-2xl border bg-slate-900/70 transition-all duration-300 ${borderClass}`}
+                      className={`p-3.5 rounded-xl border bg-slate-900/80 hover:bg-slate-900 transition-all duration-200 flex flex-col justify-between ${borderClass}`}
                     >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-3 h-3 rounded-full ${dotClass}`} />
-                          <div>
-                            <h3 className="font-bold text-lg text-white">{eq.name}</h3>
-                            {eq.connectionMode === 'AGENT' && (
-                              <span className="text-[10px] text-sky-400 font-mono flex items-center gap-1">
-                                <Terminal className="w-2.5 h-2.5" />
-                                Agente Outbound
+                      {/* CABEÇALHO COMPACTO: Nome, Tipo, Host e Status */}
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotClass}`} />
+                              <h3 className="font-bold text-sm text-white truncate" title={eq.name}>
+                                {eq.name}
+                              </h3>
+                              {eq.connectionMode === 'AGENT' && (
+                                <span className="text-[10px] text-sky-400 font-mono flex items-center gap-0.5" title="Conexão via Agente Outbound">
+                                  <Terminal className="w-2.5 h-2.5" />
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono mt-0.5">
+                              <span className="text-sky-400 font-semibold">{eq.type}</span>
+                              <span className="text-slate-600">•</span>
+                              <span className="text-slate-400 truncate max-w-[160px]" title={eq.host || 'Agente'}>
+                                {eq.host || (eq.connectionMode === 'AGENT' ? 'Agente Outbound' : '—')}
                               </span>
-                            )}
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleOpenEditModal(eq)}
-                            title="Editar Equipamento no Cofre"
-                            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700/80 transition"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${statusBadgeClass}`}>
-                            {statusText}
-                          </span>
-                        </div>
-                      </div>
 
-                      <div className="text-xs font-mono text-slate-400 mb-3 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
-                        <span className="text-slate-500 block text-[11px]">Tipo de Ativo:</span>
-                        <span className="text-sky-400 font-semibold">{eq.type}</span>
-                        <span className="text-slate-500 block text-[11px] mt-1.5">Endpoint / Host:</span>
-                        {eq.host || (eq.connectionMode === 'AGENT' ? 'Conexão via Agente Outbound' : '—')}
-                      </div>
-
-                      {eq.error && (
-                        <div className="mb-3 p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 text-amber-300 text-xs flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                            <span>{eq.error}</span>
-                          </div>
-                          {isAuthError && (
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
                             <button
                               onClick={() => handleOpenEditModal(eq)}
-                              className="px-2.5 py-1 bg-amber-900/60 hover:bg-amber-800 border border-amber-700 rounded-lg text-[11px] font-semibold text-amber-200 transition whitespace-nowrap flex items-center gap-1"
+                              title="Editar Credenciais no Cofre"
+                              className="p-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700/60 transition"
                             >
                               <Pencil className="w-3 h-3" />
-                              Editar Chave
                             </button>
-                          )}
-                        </div>
-                      )}
-
-                      {/* CARD ESPECÍFICO POR TIPO DE EQUIPAMENTO */}
-                      {eq.type === 'PROXMOX' ? (
-                        <div className="space-y-3 pt-1 mb-2">
-                          {pveData ? (
-                            <>
-                              {/* CPU & RAM DO NÓ PROXMOX */}
-                              <div className="grid grid-cols-2 gap-2">
-                                <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/80">
-                                  <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
-                                    <span className="flex items-center gap-1 font-semibold text-slate-300">
-                                      <Cpu className="w-3.5 h-3.5 text-sky-400" />
-                                      CPU do Host
-                                    </span>
-                                    <span className="font-mono text-sky-400 font-bold">{pveData.cpu?.percent ?? 0}%</span>
-                                  </div>
-                                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                                    <div 
-                                      className="bg-sky-500 h-full rounded-full transition-all duration-500" 
-                                      style={{ width: `${Math.min(pveData.cpu?.percent ?? 0, 100)}%` }} 
-                                    />
-                                  </div>
-                                  <span className="text-[10px] text-slate-500 block mt-1 truncate">
-                                    {pveData.cpu?.cores ? `${pveData.cpu.cores} vCPUs (${pveData.node})` : `Nó: ${pveData.node}`}
-                                  </span>
-                                </div>
-
-                                <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/80">
-                                  <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
-                                    <span className="flex items-center gap-1 font-semibold text-slate-300">
-                                      <HardDrive className="w-3.5 h-3.5 text-amber-400" />
-                                      RAM Alocada
-                                    </span>
-                                    <span className="font-mono text-amber-400 font-bold">{pveData.memory?.percent ?? 0}%</span>
-                                  </div>
-                                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                                    <div 
-                                      className="bg-amber-500 h-full rounded-full transition-all duration-500" 
-                                      style={{ width: `${Math.min(pveData.memory?.percent ?? 0, 100)}%` }} 
-                                    />
-                                  </div>
-                                  <span className="text-[10px] text-slate-400 font-mono block mt-1 truncate">
-                                    {pveData.memory?.usedGB || '0'} GB / {pveData.memory?.totalGB || '0'} GB
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* WORKLOADS: VMs QEMU & CONTAINERS LXC */}
-                              <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/70">
-                                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300 mb-2">
-                                  <span className="flex items-center gap-1.5 uppercase tracking-wider text-[10px] text-slate-400">
-                                    <Layers className="w-3 h-3 text-emerald-400" />
-                                    Workloads ({pveData.pveVersion || 'Proxmox VE'})
-                                  </span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2 text-xs">
-                                  <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800/60">
-                                    <span className="text-[10px] text-slate-400 block mb-0.5">VMs (QEMU)</span>
-                                    <div className="flex items-baseline gap-1.5">
-                                      <span className="text-emerald-400 font-bold font-mono text-sm">{pveData.workloads?.runningVMs ?? 0}</span>
-                                      <span className="text-[11px] text-slate-400">ativas</span>
-                                      <span className="text-slate-600">/</span>
-                                      <span className="text-slate-400 font-mono text-xs">{pveData.workloads?.stoppedVMs ?? 0} off</span>
-                                    </div>
-                                  </div>
-                                  <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800/60">
-                                    <span className="text-[10px] text-slate-400 block mb-0.5">Containers (LXC)</span>
-                                    <div className="flex items-baseline gap-1.5">
-                                      <span className="text-sky-400 font-bold font-mono text-sm">{pveData.workloads?.runningLXCs ?? 0}</span>
-                                      <span className="text-[11px] text-slate-400">ativos</span>
-                                      <span className="text-slate-600">/</span>
-                                      <span className="text-slate-400 font-mono text-xs">{pveData.workloads?.stoppedLXCs ?? 0} off</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* STORAGES DO PROXMOX */}
-                              {pveData.storages && pveData.storages.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                  {pveData.storages.slice(0, 3).map((st, idx) => (
-                                    <span key={idx} className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-950/80 border border-slate-800 text-slate-300">
-                                      {st.name}: <strong className={st.usedPercent > 85 ? 'text-red-400' : 'text-emerald-400'}>{st.usedPercent}%</strong>
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center space-y-1.5">
-                              <span className="text-xs text-slate-400 block font-semibold">Hypervisor Proxmox VE</span>
-                              <p className="text-xs text-slate-500">
-                                {isOnline ? 'Aguardando telemetria detalhada da API REST...' : 'Hypervisor offline ou inacessível.'}
-                              </p>
-                              {isAuthError && (
-                                <button
-                                  onClick={() => handleOpenEditModal(eq)}
-                                  className="mt-1 px-3 py-1 bg-amber-900/60 hover:bg-amber-800 border border-amber-700 rounded-lg text-xs font-semibold text-amber-200 inline-flex items-center gap-1.5 transition"
-                                >
-                                  <Key className="w-3.5 h-3.5" />
-                                  Configurar Token de API
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ) : eq.type === 'MIKROTIK' && eq.mikrotikData ? (
-                        <div className="space-y-2 pt-1 mb-2">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <span className="text-xs text-slate-400">Latência RTT:</span>
-                              <p className={`text-xl font-mono font-bold ${isOnline ? 'text-emerald-400' : 'text-slate-500'}`}>
-                                {eq.lastLatency != null && eq.lastLatency > 0 ? `${eq.lastLatency} ms` : '—'}
-                              </p>
-                            </div>
-                            <div>
-                              <span className="text-xs text-slate-400">CPU do RouterOS:</span>
-                              <p className="text-xl font-mono font-bold text-sky-400">
-                                {eq.mikrotikData.cpuLoadPercent != null ? `${eq.mikrotikData.cpuLoadPercent}%` : '—'}
-                              </p>
-                            </div>
-                          </div>
-                          {eq.mikrotikData.version && (
-                            <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between bg-slate-950/40 px-2 py-1 rounded-lg border border-slate-800/60">
-                              <span>RouterOS: {eq.mikrotikData.version}</span>
-                              {eq.mikrotikData.boardName && <span>{eq.mikrotikData.boardName}</span>}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-4 pt-1 mb-2">
-                          <div>
-                            <span className="text-xs text-slate-400">Latência Média (RTT):</span>
-                            <p className={`text-xl font-mono font-bold ${isOnline ? 'text-emerald-400' : isDegraded ? 'text-amber-400' : 'text-slate-500'}`}>
-                              {eq.lastLatency != null && eq.lastLatency > 0 ? `${eq.lastLatency} ms` : '—'}
-                            </p>
-                          </div>
-                          <div>
-                            <span className="text-xs text-slate-400">Perda de Pacotes:</span>
-                            <p className={`text-xl font-mono font-bold ${eq.lastLossPercent === 0 ? 'text-emerald-400' : eq.lastLossPercent > 0 && eq.lastLossPercent < 100 ? 'text-amber-400' : eq.lastLossPercent === 100 ? 'text-red-400' : 'text-slate-500'}`}>
-                              {eq.lastLossPercent != null ? `${eq.lastLossPercent}%` : '0%'}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* TELEMETRIA DO AGENTE HOST (CPU, RAM, DISCO, UPTIME) */}
-                      {eq.osInfo && eq.type !== 'PROXMOX' && eq.type !== 'MIKROTIK' && (
-                        <div className="mt-3 pt-3 border-t border-slate-800 space-y-2">
-                          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400">
-                            <span className="uppercase tracking-wider flex items-center gap-1.5 text-slate-300">
-                              <Server className="w-3.5 h-3.5 text-sky-400" />
-                              Telemetria ({typeof eq.osInfo.os === 'string' ? eq.osInfo.os : typeof eq.osInfo.hostname === 'string' ? eq.osInfo.hostname : 'Host'})
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold border ${statusBadgeClass}`}>
+                              {statusText}
                             </span>
-                            {eq.agentVersion && (
-                              <span className="text-[10px] text-slate-500 font-mono">v{String(eq.agentVersion)}</span>
+                          </div>
+                        </div>
+
+                        {/* ALERTA DE ERRO COMPACTO */}
+                        {eq.error && (
+                          <div className="mb-2.5 p-2 rounded-lg bg-amber-950/40 border border-amber-800/60 text-amber-300 text-[11px] flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                              <span className="truncate">{eq.error}</span>
+                            </div>
+                            {isAuthError && (
+                              <button
+                                onClick={() => handleOpenEditModal(eq)}
+                                className="px-2 py-0.5 bg-amber-900/80 hover:bg-amber-800 border border-amber-700 rounded text-[10px] font-semibold text-amber-200 transition whitespace-nowrap flex items-center gap-1"
+                              >
+                                <Key className="w-2.5 h-2.5" />
+                                Ajustar
+                              </button>
                             )}
                           </div>
-                          <div className="grid grid-cols-3 gap-2">
+                        )}
+
+                        {/* CORPO DO CARD CONFORME TIPO */}
+                        {eq.type === 'PROXMOX' ? (
+                          <div className="space-y-2 text-xs">
+                            {pveData ? (
+                              <>
+                                {/* CPU e RAM em barras compactas */}
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/70">
+                                    <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                                      <span className="flex items-center gap-1 font-semibold text-slate-300">
+                                        <Cpu className="w-3 h-3 text-sky-400" />
+                                        CPU
+                                      </span>
+                                      <span className="font-mono text-sky-400 font-bold">{pveData.cpu?.percent ?? 0}%</span>
+                                    </div>
+                                    <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                      <div 
+                                        className="bg-sky-500 h-full rounded-full transition-all duration-300" 
+                                        style={{ width: `${Math.min(pveData.cpu?.percent ?? 0, 100)}%` }} 
+                                      />
+                                    </div>
+                                    <span className="text-[9px] text-slate-500 block mt-1 truncate">
+                                      {pveData.cpu?.cores ? `${pveData.cpu.cores} vCPUs` : `Nó: ${pveData.node || 'pve'}`}
+                                    </span>
+                                  </div>
+
+                                  <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/70">
+                                    <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                                      <span className="flex items-center gap-1 font-semibold text-slate-300">
+                                        <HardDrive className="w-3 h-3 text-amber-400" />
+                                        RAM
+                                      </span>
+                                      <span className="font-mono text-amber-400 font-bold">{pveData.memory?.percent ?? 0}%</span>
+                                    </div>
+                                    <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                      <div 
+                                        className="bg-amber-500 h-full rounded-full transition-all duration-300" 
+                                        style={{ width: `${Math.min(pveData.memory?.percent ?? 0, 100)}%` }} 
+                                      />
+                                    </div>
+                                    <span className="text-[9px] text-slate-400 font-mono block mt-1 truncate">
+                                      {pveData.memory?.usedGB || '0'} / {pveData.memory?.totalGB || '0'} GB
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Workloads & Versão compactos */}
+                                <div className="bg-slate-950/50 px-2 py-1.5 rounded-lg border border-slate-800/60 flex items-center justify-between text-[10px]">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-slate-400 font-medium">VMs:</span>
+                                    <span className="text-emerald-400 font-bold font-mono">{pveData.workloads?.runningVMs ?? 0} on</span>
+                                    <span className="text-slate-600">/</span>
+                                    <span className="text-slate-400 font-mono">{pveData.workloads?.stoppedVMs ?? 0} off</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-slate-500 font-mono">
+                                    <span className="truncate max-w-[120px]" title={pveData.pveVersion}>{pveData.pveVersion || 'PVE'}</span>
+                                  </div>
+                                </div>
+
+                                {/* Storages em mini badges */}
+                                {pveData.storages && pveData.storages.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 pt-0.5">
+                                    {pveData.storages.slice(0, 3).map((st, idx) => (
+                                      <span key={idx} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-950/80 border border-slate-800 text-slate-300">
+                                        {st.name}: <strong className={st.usedPercent > 85 ? 'text-red-400' : 'text-emerald-400'}>{st.usedPercent}%</strong>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="p-2.5 rounded-lg bg-slate-950/40 border border-slate-800/60 text-center text-slate-400 text-[11px]">
+                                <span>{isOnline ? 'Sincronizando métricas do nó...' : 'Proxmox offline'}</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : eq.type === 'MIKROTIK' && eq.mikrotikData ? (
+                          <div className="space-y-1.5 text-xs">
+                            <div className="grid grid-cols-2 gap-2 bg-slate-950/60 p-2 rounded-lg border border-slate-800/70">
+                              <div>
+                                <span className="text-[10px] text-slate-400 block">Latência RTT:</span>
+                                <span className="font-mono font-bold text-emerald-400 text-sm">
+                                  {eq.lastLatency != null && eq.lastLatency > 0 ? `${eq.lastLatency} ms` : '—'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-slate-400 block">CPU RouterOS:</span>
+                                <span className="font-mono font-bold text-sky-400 text-sm">
+                                  {eq.mikrotikData.cpuLoadPercent != null ? `${eq.mikrotikData.cpuLoadPercent}%` : '—'}
+                                </span>
+                              </div>
+                            </div>
+                            {eq.mikrotikData.version && (
+                              <div className="text-[9px] text-slate-400 font-mono flex items-center justify-between bg-slate-950/40 px-2 py-1 rounded border border-slate-800/50">
+                                <span>RouterOS {eq.mikrotikData.version}</span>
+                                {eq.mikrotikData.boardName && <span>{eq.mikrotikData.boardName}</span>}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5 text-xs">
+                            <div className="grid grid-cols-2 gap-2 bg-slate-950/60 p-2 rounded-lg border border-slate-800/70">
+                              <div>
+                                <span className="text-[10px] text-slate-400 block">Latência (RTT):</span>
+                                <span className={`font-mono font-bold text-sm ${isOnline ? 'text-emerald-400' : isDegraded ? 'text-amber-400' : 'text-slate-500'}`}>
+                                  {eq.lastLatency != null && eq.lastLatency > 0 ? `${eq.lastLatency} ms` : '—'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-slate-400 block">Perda de Pacotes:</span>
+                                <span className={`font-mono font-bold text-sm ${eq.lastLossPercent === 0 ? 'text-emerald-400' : eq.lastLossPercent > 0 && eq.lastLossPercent < 100 ? 'text-amber-400' : 'text-red-400'}`}>
+                                  {eq.lastLossPercent != null ? `${eq.lastLossPercent}%` : '0%'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* TELEMETRIA DO AGENTE HOST */}
+                        {eq.osInfo && eq.type !== 'PROXMOX' && eq.type !== 'MIKROTIK' && (
+                          <div className="mt-2 pt-2 border-t border-slate-800/60 grid grid-cols-3 gap-1.5 text-center text-[9px] font-mono">
                             {eq.osInfo.cpu != null && (
-                              <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800 text-center">
-                                <span className="text-[10px] text-slate-500 block">CPU</span>
-                                <span className="font-mono font-bold text-sky-400 text-xs">
+                              <div className="bg-slate-950/50 p-1 rounded border border-slate-800/50">
+                                <span className="text-slate-500 block">CPU</span>
+                                <span className="text-sky-400 font-bold">
                                   {typeof eq.osInfo.cpu === 'object' ? `${eq.osInfo.cpu.percent ?? 0}%` : String(eq.osInfo.cpu)}
                                 </span>
                               </div>
                             )}
                             {eq.osInfo.memoryPercent != null && (
-                              <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800 text-center">
-                                <span className="text-[10px] text-slate-500 block">Memória</span>
-                                <span className="font-mono font-bold text-amber-400 text-xs">
+                              <div className="bg-slate-950/50 p-1 rounded border border-slate-800/50">
+                                <span className="text-slate-500 block">RAM</span>
+                                <span className="text-amber-400 font-bold">
                                   {typeof eq.osInfo.memoryPercent === 'object' ? `${eq.osInfo.memoryPercent.percent ?? 0}%` : String(eq.osInfo.memoryPercent)}
                                 </span>
                               </div>
                             )}
                             {(eq.osInfo.diskFreeGb != null || eq.osInfo.diskFreePct != null) && (
-                              <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800 text-center">
-                                <span className="text-[10px] text-slate-500 block">Disco Livre</span>
-                                <span className="font-mono font-bold text-emerald-400 text-xs">
+                              <div className="bg-slate-950/50 p-1 rounded border border-slate-800/50">
+                                <span className="text-slate-500 block">Disco</span>
+                                <span className="text-emerald-400 font-bold">
                                   {typeof eq.osInfo.diskFreeGb === 'object' ? '' : String(eq.osInfo.diskFreeGb || eq.osInfo.diskFreePct)}
                                 </span>
                               </div>
                             )}
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {/* BOTÃO DO AGENTE OUTBOUND */}
-                      {eq.connectionMode === 'AGENT' && (
-                        <div className="mt-3 pt-2.5 flex items-center justify-between border-t border-slate-800/80 text-xs">
-                          <span className="text-slate-400 text-[11px] flex items-center gap-1">
-                            <Terminal className="w-3 h-3 text-sky-400" />
-                            Agente de Host
-                          </span>
-                          <button
-                            onClick={() => handleOpenAgentModal(eq)}
-                            className="px-2.5 py-1 bg-sky-950 hover:bg-sky-900 border border-sky-800 rounded-lg text-sky-300 text-[11px] font-semibold flex items-center gap-1 transition"
-                          >
-                            <Terminal className="w-3 h-3" />
-                            Script 1-Clique
-                          </button>
-                        </div>
-                      )}
-
-                      {eq.subItems && eq.subItems.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-slate-800 space-y-2">
-                          <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Links / Gateways Monitorados:</span>
-                          <div className="space-y-1.5">
-                            {eq.subItems.map((sub, idx) => (
-                              <div key={idx} className="flex items-center justify-between text-xs bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/60">
-                                <div className="flex items-center gap-2">
-                                  <span className={`w-2 h-2 rounded-full ${sub.status === 'online' ? 'bg-emerald-400' : 'bg-red-500'}`} />
-                                  <span className="font-semibold text-white">{sub.name}</span>
-                                  <span className="text-slate-500 text-[11px]">({sub.srcip || sub.monitorip || 'WAN'})</span>
+                        {/* GATEWAYS MONITORADOS (PFSENSE) */}
+                        {eq.subItems && eq.subItems.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-slate-800/60 space-y-1">
+                            {eq.subItems.slice(0, 3).map((sub, idx) => (
+                              <div key={idx} className="flex items-center justify-between text-[10px] bg-slate-950/40 px-2 py-1 rounded border border-slate-800/50">
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sub.status === 'online' ? 'bg-emerald-400' : 'bg-red-500'}`} />
+                                  <span className="font-medium text-white truncate">{sub.name}</span>
                                 </div>
-                                <div className="flex items-center gap-3 font-mono text-[11px]">
-                                  <span className={sub.status === 'online' ? 'text-emerald-400' : 'text-red-400'}>{(sub.status || 'UNKNOWN').toUpperCase()}</span>
+                                <div className="flex items-center gap-2 font-mono text-[9px] flex-shrink-0">
+                                  <span className={sub.status === 'online' ? 'text-emerald-400' : 'text-red-400'}>{(sub.status || 'OFF').toUpperCase()}</span>
                                   <span className="text-slate-400">{sub.delay ?? 0}ms</span>
-                                  <span className={sub.loss === 0 ? 'text-slate-400' : 'text-red-400'}>{sub.loss ?? 0}% perda</span>
                                 </div>
                               </div>
                             ))}
                           </div>
+                        )}
+                      </div>
+
+                      {/* BOTÃO DO AGENTE OUTBOUND */}
+                      {eq.connectionMode === 'AGENT' && (
+                        <div className="mt-2 pt-2 flex items-center justify-between border-t border-slate-800/80 text-[10px]">
+                          <span className="text-slate-400 flex items-center gap-1">
+                            <Terminal className="w-2.5 h-2.5 text-sky-400" />
+                            Agente Host
+                          </span>
+                          <button
+                            onClick={() => handleOpenAgentModal(eq)}
+                            className="px-2 py-0.5 bg-sky-950 hover:bg-sky-900 border border-sky-800 rounded text-sky-300 font-semibold flex items-center gap-1 transition"
+                          >
+                            <Terminal className="w-2.5 h-2.5" />
+                            Script 1-Clique
+                          </button>
                         </div>
                       )}
                     </div>
