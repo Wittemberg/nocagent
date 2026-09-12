@@ -1870,7 +1870,7 @@ export default function App() {
                   SISTEMA ONLINE
                 </span>
               </div>
-              <p className="text-xs text-slate-400">nocagent.awecloudsolution.com • IA Operacional 24/7 (v1.1.1)</p>
+              <p className="text-xs text-slate-400">nocagent.awecloudsolution.com • IA Operacional 24/7 (v1.3.0)</p>
             </div>
           </div>
 
@@ -2013,11 +2013,12 @@ export default function App() {
               {loginStep === 'CREDENTIALS' ? (
                 <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs">
                   <div>
-                    <label className="block text-slate-300 font-semibold mb-1.5">E-mail Corporativo</label>
+                    <label className="block text-slate-300 font-semibold mb-1.5">E-mail ou Usuário Corporativo</label>
                     <input
-                      type="email"
+                      type="text"
                       required
-                      placeholder="operador@nocagent.local"
+                      autoComplete="username"
+                      placeholder="admin@nocagent.local ou superadmin"
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 transition"
