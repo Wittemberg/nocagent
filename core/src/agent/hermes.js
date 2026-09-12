@@ -1,57 +1,18 @@
 const { SYSTEM_PROMPT } = require('./prompts');
 const { createApprovalRequest, verifyApproval } = require('./approvals');
 const { decryptCredentials } = require('../security/vault');
+const { MCP_TOOLS_DEFINITIONS, executeMcpTool } = require('./mcpTools');
 const { PrismaClient } = require('@prisma/client');
 const axios = require('axios');
 
 const prisma = new PrismaClient();
 
-// Ferramentas disponíveis para a IA
-const TOOLS_DEFINITIONS = [
-  {
-    name: 'consultar_gateways_pfsense',
-    description: 'Consulta o status de todos os gateways de internet configurados no pfSense (latência, perda de pacotes, status online/down).',
-    input_schema: {
-      type: 'object',
-      properties: {
-        equipmentId: {
-          type: 'string',
-          description: 'ID ou nome do pfSense a ser consultado (opcional)',
-        },
-      },
-    },
-  },
-  {
-    name: 'auditar_backups_s3',
-    description: 'Verifica a saúde dos backups de equipamentos (Proxmox, pfSense, Mikrotik) armazenados no Storage S3 e checa atrasos.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        periodHours: {
-          type: 'number',
-          description: 'Janela de tempo em horas para auditoria (padrão: 24 horas)',
-        },
-      },
-    },
-  },
-  {
-    name: 'solicitar_acao_critica',
-    description: 'Dispara a trava de segurança Human-in-the-Loop quando o operador pede reinicialização de VM, desligamento de roteador ou queda de link.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        action: { type: 'string', description: 'Nome da ação (ex: REINICIAR_VM, REINICIAR_ROTEADOR)' },
-        target: { type: 'string', description: 'Alvo técnico da ação' },
-      },
-      required: ['action', 'target'],
-    },
-  },
-];
-
 /**
- * Processador principal de mensagens do Hermes AI Engine
+ * Processador principal de mensagens do Hermes AI Engine com suporte a MCP
  */
 async function processMessage({ text, senderPhone, senderName }) {
+  const normalized = (text || '').toLowerCase().trim();
+
   // 1. Checa se é uma resposta de aprovação humana (ex: "APROVAR 4821")
   if (/APROVAR\s+\d{4}/i.test(text)) {
     const verification = verifyApproval(text, senderPhone);
@@ -68,7 +29,7 @@ async function processMessage({ text, senderPhone, senderName }) {
     return `🛑 *Ação cancelada pelo operador.* Nenhuma modificação foi realizada nos equipamentos de rede.`;
   }
 
-  // 3. Ações de impacto solicitadas em linguagem natural (exige 2FA / aprovação humana)
+  // 3. Ações de impacto solicitadas em linguagem natural (exige 2FA / aprovação humana L2)
   if (normalized.includes('reiniciar') || normalized.includes('desligar') || normalized.includes('reboot') || normalized.includes('derrubar')) {
     const action = 'REINICIAR_EQUIPAMENTO';
     const target = text;
@@ -76,7 +37,100 @@ async function processMessage({ text, senderPhone, senderName }) {
     return approval.challengeMessage;
   }
 
-  // 4. Auditoria REAL de Backups nos Storages e Equipamentos (prioritário sobre consultas genéricas)
+  // 4. Proxmox VE (Nós, CPU, RAM, VMs QEMU e Containers LXC via MCP)
+  if (
+    normalized.includes('proxmox') ||
+    normalized.includes('hypervisor') ||
+    normalized.includes('vm') ||
+    normalized.includes('vms') ||
+    normalized.includes('lxc') ||
+    normalized.includes('qemu')
+  ) {
+    try {
+      if (normalized.includes('vm') || normalized.includes('lxc') || normalized.includes('workload') || normalized.includes('maquina')) {
+        const workloads = await executeMcpTool('proxmox_list_workloads');
+        let msg = `🖥️ *INVENTÁRIO DE WORKLOADS PROXMOX VE*\n\n`;
+        msg += `• *Servidor:* ${workloads.equipment} (Nó: \`${workloads.node}\`)\n`;
+        msg += `• *VMs QEMU:* ${workloads.vms.running} ativas / ${workloads.vms.stopped} paradas (Total: ${workloads.vms.total})\n`;
+        if (workloads.vms.list.length > 0) {
+          workloads.vms.list.slice(0, 8).forEach((v) => {
+            const icon = v.status === 'running' ? '🟢' : '⚪';
+            msg += `  └ ${icon} *[VM ${v.vmid}] ${v.name}*: ${v.status.toUpperCase()} | CPU: ${v.cpuPercent}% | RAM: ${v.memUsedMB}MB\n`;
+          });
+        }
+        msg += `\n• *Containers LXC:* ${workloads.lxcs.running} ativos / ${workloads.lxcs.stopped} parados (Total: ${workloads.lxcs.total})\n`;
+        if (workloads.lxcs.list.length > 0) {
+          workloads.lxcs.list.slice(0, 5).forEach((c) => {
+            const icon = c.status === 'running' ? '🟢' : '⚪';
+            msg += `  └ ${icon} *[CT ${c.vmid}] ${c.name}*: ${c.status.toUpperCase()}\n`;
+          });
+        }
+        return msg;
+      }
+
+      const nodeStatus = await executeMcpTool('proxmox_get_node_status');
+      let msg = `⚡ *STATUS DO HYPERVISOR PROXMOX VE*\n\n`;
+      msg += `• *Servidor:* ${nodeStatus.equipment} (Nó: \`${nodeStatus.node}\`)\n`;
+      msg += `• *Uso de CPU:* ${nodeStatus.cpuPercent}\n`;
+      msg += `• *Memória RAM:* ${nodeStatus.memoryUsage}\n`;
+      msg += `• *Uptime do Host:* ${nodeStatus.uptime}\n`;
+      if (nodeStatus.storages && nodeStatus.storages.length > 0) {
+        msg += `\n💾 *Pools de Storage:*\n`;
+        nodeStatus.storages.forEach((st) => {
+          msg += `  └ *${st.name}* (${st.type}): ${st.usedPercent}% usado\n`;
+        });
+      }
+      return msg;
+    } catch (pveErr) {
+      return `⚠️ *Aviso Proxmox:* ${pveErr.message}`;
+    }
+  }
+
+  // 5. Mikrotik RouterOS (Interfaces, CPU, RTT via MCP)
+  if (normalized.includes('mikrotik') || normalized.includes('routeros')) {
+    try {
+      const mkt = await executeMcpTool('mikrotik_get_status');
+      let msg = `📶 *STATUS MIKROTIK ROUTEROS*\n\n`;
+      msg += `• *Equipamento:* ${mkt.equipment}\n`;
+      msg += `• *Status da Conexão:* ${mkt.status.toUpperCase()}\n`;
+      msg += `• *Latência RTT:* ${mkt.latency}\n`;
+      msg += `• *Uso de CPU:* ${mkt.cpuLoad}\n`;
+      if (mkt.version) msg += `• *RouterOS:* ${mkt.version}\n`;
+      if (mkt.interfaces && mkt.interfaces.length > 0) {
+        msg += `\n🔌 *Interfaces Principais:*\n`;
+        mkt.interfaces.slice(0, 6).forEach((iface) => {
+          const icon = iface.running ? '🟢' : '⚪';
+          msg += `  └ ${icon} *${iface.name}* (${iface.type}): ${iface.running ? 'LINK UP' : 'DOWN'}\n`;
+        });
+      }
+      return msg;
+    } catch (mktErr) {
+      return `⚠️ *Aviso Mikrotik:* ${mktErr.message}`;
+    }
+  }
+
+  // 6. Zabbix (Alarmes e Triggers via MCP)
+  if (normalized.includes('zabbix') || normalized.includes('alarme') || normalized.includes('trigger')) {
+    try {
+      const zbx = await executeMcpTool('zabbix_get_active_triggers');
+      let msg = `🚨 *ALARMES CRÍTICOS DO ZABBIX*\n\n`;
+      msg += `• *Servidor:* ${zbx.equipment}\n`;
+      msg += `• *Total de Incidentes Ativos:* ${zbx.count}\n\n`;
+      if (zbx.triggers && zbx.triggers.length > 0) {
+        zbx.triggers.slice(0, 6).forEach((trig) => {
+          const icon = trig.priority === 'DISASTER' ? '🔥' : '⚠️';
+          msg += `${icon} *[${trig.priority}] ${trig.host}:* ${trig.description}\n`;
+        });
+      } else {
+        msg += `✅ Nenhum incidente crítico ou desastre ativo no Zabbix no momento!`;
+      }
+      return msg;
+    } catch (zbxErr) {
+      return `⚠️ *Aviso Zabbix:* ${zbxErr.message}`;
+    }
+  }
+
+  // 7. Auditoria REAL de Backups nos Storages e Equipamentos
   if (
     normalized.includes('backup') ||
     normalized.includes('auditar') ||
@@ -144,16 +198,13 @@ async function processMessage({ text, senderPhone, senderName }) {
     }
   }
 
-  // 5. Consulta geral de Status dos Equipamentos / Links / Conectividade
+  // 8. Consulta geral de Status dos Equipamentos / Links / Conectividade
   if (
     normalized.includes('equipamento') ||
     normalized.includes('status') ||
     normalized.includes('link') ||
     normalized.includes('gateway') ||
     normalized.includes('pfsense') ||
-    normalized.includes('mikrotik') ||
-    normalized.includes('proxmox') ||
-    normalized.includes('zabbix') ||
     normalized.includes('rede') ||
     normalized.includes('internet') ||
     normalized.includes('conectividade')
@@ -217,7 +268,7 @@ async function processMessage({ text, senderPhone, senderName }) {
     }
   }
 
-  // 6. Integração com LLM (Anthropic Claude ou OpenAI)
+  // 9. Integração com LLM (Anthropic Claude ou OpenAI) com MCP Tools
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (anthropicKey && anthropicKey.startsWith('sk-ant')) {
     try {
@@ -258,15 +309,18 @@ async function processMessage({ text, senderPhone, senderName }) {
     }
   }
 
-  // 7. Resposta padrão caso nenhuma LLM responda
+  // 10. Resposta padrão caso nenhuma LLM responda
   return (
     `🤖 *NOC-Agent operacional (Modo Resiliente)*\n\n` +
     `Olá, *${senderName || 'Operador'}*! Recebi sua solicitação:\n` +
     `> "${text}"\n\n` +
-    `Você pode me perguntar:\n` +
-    `• *"Como estão os links do pfSense?"*\n` +
+    `Você pode consultar via MCP:\n` +
+    `• *"Qual é o status do Proxmox e uso de CPU/RAM?"*\n` +
+    `• *"Listar VMs e containers do Proxmox"*\n` +
+    `• *"Como estão as interfaces e CPU do Mikrotik?"*\n` +
+    `• *"Como estão os gateways do pfSense?"*\n` +
     `• *"Auditar backups recentes dos equipamentos"*\n` +
-    `• *"Qual é o status das VMs do Proxmox?"*`
+    `• *"Listar alarmes ativos do Zabbix"*`
   );
 }
 

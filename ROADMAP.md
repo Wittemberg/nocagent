@@ -57,22 +57,26 @@ FASE 5: Enterprise Engine, Observabilidade & Feature Flags (Pennant + Telescope 
 ---
 
 ## 📌 FASE 2: SERVIDORES MCP & DRIVERS DE REDE
-- [ ] **Proxmox MCP Server & Driver API REST (`/api2/json`)**:
+- [x] **Proxmox MCP Server & Driver API REST (`/api2/json`)**:
   - `proxmox_get_node_status`: consumo real de CPU, RAM alocada/total, Uptime e Quorum.
   - `proxmox_list_workloads`: inventário em tempo real de VMs QEMU e Containers LXC (`running` vs `stopped`).
   - `proxmox_storage_pools`: ocupação de storages locais/ZFS/Ceph.
   - `proxmox_restart_vm`: reiniciar VM com trava de aprovação obrigatória L2.
   - `proxmox_snapshot_vm`: tirar snapshot preventivo antes de janelas de manutenção.
-- [ ] **Mikrotik RouterOS MCP Server**:
+- [x] **Mikrotik RouterOS MCP Server**:
   - `mikrotik_ping`: teste de latência e perda de pacotes via porta 8728.
-  - `mikrotik_bgp_status`: checagem de sessões BGP e peerings.
+  - `mikrotik_bgp_status`: checagem de sessões e interfaces de rede ativas.
   - `mikrotik_interface_traffic`: leitura de tráfego por interface.
-  - `mikrotik_dhcp_leases`: consulta de clientes e concessões.
-- [ ] **pfSense MCP Server**:
-  - Leitura de status de gateways, VPNs IPsec/OpenVPN e regras de firewall via REST API estrita (`Accept: application/json`).
-- [ ] **Zabbix MCP Server**:
-  - `zabbix_get_active_triggers`: consulta de alertas críticos ativos.
-  - `zabbix_acknowledge_event`: reconhecimento de alarmes pelo operador.
+- [x] **pfSense MCP Server**:
+  - Leitura de status de gateways, perda de pacotes e latência via REST API estrita (`Accept: application/json`).
+- [x] **Zabbix MCP Server**:
+  - `zabbix_get_active_triggers`: consulta de alertas críticos ativos via JSON-RPC 2.0.
+  - `zabbix_acknowledge_event`: suporte a reconhecimento e mapeamento de host.
+- [x] **Frontend Cards Especializados (`web/src/App.jsx`)**:
+  - Proxmox com card de Hypervisor dedicado (CPU do Host, RAM Alocada, Workloads VMs/LXCs e Storages).
+  - Alerta com botão direto "Configurar Token de API" em caso de erro 401/403.
+- [x] **Hermes AI Engine MCP Integration (`core/src/agent/hermes.js`)**:
+  - Processamento em linguagem natural conectado às ferramentas MCP de Proxmox, Mikrotik, pfSense e Zabbix.
 
 ---
 

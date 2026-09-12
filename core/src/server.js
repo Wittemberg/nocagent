@@ -7,6 +7,11 @@ const { PrismaClient } = require('@prisma/client');
 const { handleChatwootWebhook } = require('./chatwoot/bridge');
 const { processMessage } = require('./agent/hermes');
 const { encryptCredentials, decryptCredentials } = require('./security/vault');
+const { getProxmoxMetrics } = require('./drivers/proxmox');
+const { getMikrotikMetrics } = require('./drivers/mikrotik');
+const { getPfSenseMetrics } = require('./drivers/pfsense');
+const { getZabbixActiveTriggers } = require('./drivers/zabbix');
+const { MCP_TOOLS_DEFINITIONS, executeMcpTool } = require('./agent/mcpTools');
 
 const crypto = require('crypto');
 const net = require('net');
@@ -270,19 +275,30 @@ app.get('/api/equipments/status', async (req, res) => {
         // Se for Mikrotik RouterOS
         if (eq.type === 'MIKROTIK') {
           const port = eq.port || 8728;
-          const probe = await probeTcpPort(eq.host, port, 4000);
-          if (probe.online) {
-            item.status = 'online';
-            item.lastLatency = probe.rtt;
-            item.lastLossPercent = 0;
-            item.lastCheck = new Date();
-          } else {
-            item.status = 'offline';
-            item.error = `Não foi possível conectar na porta ${port} do Mikrotik (${probe.error}).`;
+          let creds = null;
+          try {
+            creds = decryptCredentials(eq.encryptedCredentials, eq.iv, eq.authTag);
+          } catch {}
+
+          const mktMetrics = await getMikrotikMetrics(eq.host, creds, port);
+          item.status = mktMetrics.status;
+          item.lastLatency = mktMetrics.lastLatency;
+          item.lastLossPercent = mktMetrics.lastLossPercent;
+          if (mktMetrics.error) item.error = mktMetrics.error;
+          if (mktMetrics.hasRestApi) {
+            item.mikrotikData = mktMetrics;
+            item.subItems = mktMetrics.interfaces || [];
           }
+
           prisma.equipment.update({
             where: { id: eq.id },
-            data: { status: item.status, lastLatency: item.lastLatency, lastLossPercent: item.lastLossPercent, lastCheck: item.lastCheck },
+            data: {
+              status: item.status,
+              lastLatency: item.lastLatency,
+              lastLossPercent: item.lastLossPercent,
+              lastCheck: new Date(),
+              osInfo: mktMetrics.hasRestApi ? mktMetrics : undefined,
+            },
           }).catch(() => {});
         }
 
@@ -338,22 +354,94 @@ app.get('/api/equipments/status', async (req, res) => {
           }).catch(() => {});
         }
 
-        // Se for Proxmox VE
+        // Se for Proxmox VE (Consulta profunda da API REST)
         if (eq.type === 'PROXMOX') {
           const port = eq.port || 8006;
-          const probe = await probeTcpPort(eq.host, port, 4000);
-          if (probe.online) {
-            item.status = 'online';
-            item.lastLatency = probe.rtt;
-            item.lastLossPercent = 0;
-            item.lastCheck = new Date();
+          let creds = null;
+          try {
+            creds = decryptCredentials(eq.encryptedCredentials, eq.iv, eq.authTag);
+          } catch {}
+
+          if (creds && (creds.tokenId || creds.tokenSecret || creds.password)) {
+            try {
+              const pveMetrics = await getProxmoxMetrics(eq.host, creds, port);
+              item.status = 'online';
+              item.lastLossPercent = 0;
+              item.lastLatency = 2;
+              item.lastCheck = new Date();
+              item.proxmoxData = pveMetrics;
+              item.osInfo = pveMetrics;
+
+              prisma.equipment.update({
+                where: { id: eq.id },
+                data: {
+                  status: 'online',
+                  lastLossPercent: 0,
+                  lastCheck: item.lastCheck,
+                  osInfo: pveMetrics,
+                },
+              }).catch(() => {});
+            } catch (pveErr) {
+              const httpStatus = pveErr.response?.status;
+              if (httpStatus === 401 || httpStatus === 403) {
+                item.status = 'auth_error';
+                item.error = 'Token de API ou senha do Proxmox recusada (HTTP 401/403). Verifique no cofre.';
+              } else {
+                const probe = await probeTcpPort(eq.host, port, 4000);
+                if (probe.online) {
+                  item.status = 'online';
+                  item.lastLatency = probe.rtt;
+                  item.lastLossPercent = 0;
+                  item.error = `API Proxmox com aviso: ${pveErr.message}`;
+                } else {
+                  item.status = 'offline';
+                  item.error = `Proxmox inacessível na porta ${port} (${probe.error}).`;
+                }
+              }
+            }
           } else {
-            item.status = 'offline';
-            item.error = `Porta Proxmox (${port}) inacessível (${probe.error}).`;
+            // Sem credenciais completas: executa probe de porta TCP
+            const probe = await probeTcpPort(eq.host, port, 4000);
+            if (probe.online) {
+              item.status = 'online';
+              item.lastLatency = probe.rtt;
+              item.lastLossPercent = 0;
+              item.lastCheck = new Date();
+            } else {
+              item.status = 'offline';
+              item.error = `Porta Proxmox (${port}) inacessível (${probe.error}).`;
+            }
+            prisma.equipment.update({
+              where: { id: eq.id },
+              data: { status: item.status, lastLatency: item.lastLatency, lastLossPercent: item.lastLossPercent, lastCheck: item.lastCheck },
+            }).catch(() => {});
+          }
+        }
+
+        // Se for Zabbix Server
+        if (eq.type === 'ZABBIX') {
+          const port = eq.port || 80;
+          let creds = null;
+          try {
+            creds = decryptCredentials(eq.encryptedCredentials, eq.iv, eq.authTag);
+          } catch {}
+
+          try {
+            const triggers = await getZabbixActiveTriggers(eq.host, creds, port);
+            item.status = triggers.some(t => t.priority >= 4) ? 'degraded' : 'online';
+            item.lastLossPercent = 0;
+            item.lastLatency = 15;
+            item.zabbixData = triggers;
+            item.subItems = triggers.map(t => ({ name: t.description, status: t.severityText.toLowerCase(), host: t.hostName }));
+          } catch (zbErr) {
+            const probe = await probeTcpPort(eq.host, port, 4000);
+            item.status = probe.online ? 'online' : 'offline';
+            item.lastLatency = probe.rtt;
+            if (!probe.online) item.error = `Zabbix inacessível na porta ${port} (${probe.error}).`;
           }
           prisma.equipment.update({
             where: { id: eq.id },
-            data: { status: item.status, lastLatency: item.lastLatency, lastLossPercent: item.lastLossPercent, lastCheck: item.lastCheck },
+            data: { status: item.status, lastLatency: item.lastLatency, lastLossPercent: item.lastLossPercent, lastCheck: new Date() },
           }).catch(() => {});
         }
 
@@ -1259,6 +1347,30 @@ app.get('/api/audit-logs', async (req, res) => {
   } catch (error) {
     console.error('Erro ao listar audit logs:', error);
     return res.status(500).json({ error: 'Erro ao consultar logs de auditoria.' });
+  }
+});
+
+/**
+ * Catálogo de Ferramentas MCP Ativas
+ */
+app.get('/api/mcp/tools', (req, res) => {
+  return res.json({ status: 'ok', tools: MCP_TOOLS_DEFINITIONS });
+});
+
+/**
+ * Execução de Ferramenta MCP Direta
+ */
+app.post('/api/mcp/execute', async (req, res) => {
+  try {
+    const { toolName, args } = req.body;
+    if (!toolName) {
+      return res.status(400).json({ error: 'toolName é obrigatório.' });
+    }
+    const result = await executeMcpTool(toolName, args);
+    return res.json({ status: 'ok', toolName, result });
+  } catch (error) {
+    console.error('Erro ao executar ferramenta MCP:', error);
+    return res.status(500).json({ error: error.message || 'Falha na execução da ferramenta MCP.' });
   }
 });
 

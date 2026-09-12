@@ -24,8 +24,9 @@ import {
   Copy,
   Check,
   Terminal,
-  ExternalLink,
-  Folder
+  Folder,
+  Cpu,
+  Layers
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -1169,20 +1170,150 @@ export default function App() {
                         </div>
                       )}
 
-                      <div className="grid grid-cols-2 gap-4 pt-1 mb-2">
-                        <div>
-                          <span className="text-xs text-slate-400">Latência Média (RTT):</span>
-                          <p className={`text-xl font-mono font-bold ${isOnline ? 'text-emerald-400' : isDegraded ? 'text-amber-400' : 'text-slate-500'}`}>
-                            {eq.lastLatency != null && eq.lastLatency > 0 ? `${eq.lastLatency} ms` : '—'}
-                          </p>
+                      {/* CARD ESPECÍFICO POR TIPO DE EQUIPAMENTO */}
+                      {eq.type === 'PROXMOX' ? (
+                        <div className="space-y-3 pt-1 mb-2">
+                          {eq.proxmoxData ? (
+                            <>
+                              {/* CPU & RAM DO NÓ PROXMOX */}
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/80">
+                                  <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                                    <span className="flex items-center gap-1 font-semibold text-slate-300">
+                                      <Cpu className="w-3.5 h-3.5 text-sky-400" />
+                                      CPU do Host
+                                    </span>
+                                    <span className="font-mono text-sky-400 font-bold">{eq.proxmoxData.cpu?.percent ?? 0}%</span>
+                                  </div>
+                                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                    <div 
+                                      className="bg-sky-500 h-full rounded-full transition-all duration-500" 
+                                      style={{ width: `${Math.min(eq.proxmoxData.cpu?.percent ?? 0, 100)}%` }} 
+                                    />
+                                  </div>
+                                  <span className="text-[10px] text-slate-500 block mt-1 truncate">
+                                    {eq.proxmoxData.cpu?.cores ? `${eq.proxmoxData.cpu.cores} vCPUs (${eq.proxmoxData.node})` : `Nó: ${eq.proxmoxData.node}`}
+                                  </span>
+                                </div>
+
+                                <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/80">
+                                  <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                                    <span className="flex items-center gap-1 font-semibold text-slate-300">
+                                      <HardDrive className="w-3.5 h-3.5 text-amber-400" />
+                                      RAM Alocada
+                                    </span>
+                                    <span className="font-mono text-amber-400 font-bold">{eq.proxmoxData.memory?.percent ?? 0}%</span>
+                                  </div>
+                                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                    <div 
+                                      className="bg-amber-500 h-full rounded-full transition-all duration-500" 
+                                      style={{ width: `${Math.min(eq.proxmoxData.memory?.percent ?? 0, 100)}%` }} 
+                                    />
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 font-mono block mt-1 truncate">
+                                    {eq.proxmoxData.memory?.usedGB || '0'} GB / {eq.proxmoxData.memory?.totalGB || '0'} GB
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* WORKLOADS: VMs QEMU & CONTAINERS LXC */}
+                              <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/70">
+                                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-300 mb-2">
+                                  <span className="flex items-center gap-1.5 uppercase tracking-wider text-[10px] text-slate-400">
+                                    <Layers className="w-3 h-3 text-emerald-400" />
+                                    Workloads ({eq.proxmoxData.pveVersion || 'Proxmox VE'})
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                  <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800/60">
+                                    <span className="text-[10px] text-slate-400 block mb-0.5">VMs (QEMU)</span>
+                                    <div className="flex items-baseline gap-1.5">
+                                      <span className="text-emerald-400 font-bold font-mono text-sm">{eq.proxmoxData.workloads?.runningVMs ?? 0}</span>
+                                      <span className="text-[11px] text-slate-400">ativas</span>
+                                      <span className="text-slate-600">/</span>
+                                      <span className="text-slate-400 font-mono text-xs">{eq.proxmoxData.workloads?.stoppedVMs ?? 0} off</span>
+                                    </div>
+                                  </div>
+                                  <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800/60">
+                                    <span className="text-[10px] text-slate-400 block mb-0.5">Containers (LXC)</span>
+                                    <div className="flex items-baseline gap-1.5">
+                                      <span className="text-sky-400 font-bold font-mono text-sm">{eq.proxmoxData.workloads?.runningLXCs ?? 0}</span>
+                                      <span className="text-[11px] text-slate-400">ativos</span>
+                                      <span className="text-slate-600">/</span>
+                                      <span className="text-slate-400 font-mono text-xs">{eq.proxmoxData.workloads?.stoppedLXCs ?? 0} off</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* STORAGES DO PROXMOX */}
+                              {eq.proxmoxData.storages && eq.proxmoxData.storages.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                  {eq.proxmoxData.storages.slice(0, 3).map((st, idx) => (
+                                    <span key={idx} className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-950/80 border border-slate-800 text-slate-300">
+                                      {st.name}: <strong className={st.usedPercent > 85 ? 'text-red-400' : 'text-emerald-400'}>{st.usedPercent}%</strong>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center space-y-1.5">
+                              <span className="text-xs text-slate-400 block font-semibold">Hypervisor Proxmox VE</span>
+                              <p className="text-xs text-slate-500">
+                                {isOnline ? 'Aguardando telemetria detalhada da API REST...' : 'Hypervisor offline ou inacessível.'}
+                              </p>
+                              {isAuthError && (
+                                <button
+                                  onClick={() => handleOpenEditModal(eq)}
+                                  className="mt-1 px-3 py-1 bg-amber-900/60 hover:bg-amber-800 border border-amber-700 rounded-lg text-xs font-semibold text-amber-200 inline-flex items-center gap-1.5 transition"
+                                >
+                                  <Key className="w-3.5 h-3.5" />
+                                  Configurar Token de API
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div>
-                          <span className="text-xs text-slate-400">Perda de Pacotes:</span>
-                          <p className={`text-xl font-mono font-bold ${eq.lastLossPercent === 0 ? 'text-emerald-400' : eq.lastLossPercent > 0 && eq.lastLossPercent < 100 ? 'text-amber-400' : eq.lastLossPercent === 100 ? 'text-red-400' : 'text-slate-500'}`}>
-                            {eq.lastLossPercent != null ? `${eq.lastLossPercent}%` : '0%'}
-                          </p>
+                      ) : eq.type === 'MIKROTIK' && eq.mikrotikData ? (
+                        <div className="space-y-2 pt-1 mb-2">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <span className="text-xs text-slate-400">Latência RTT:</span>
+                              <p className={`text-xl font-mono font-bold ${isOnline ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                {eq.lastLatency != null && eq.lastLatency > 0 ? `${eq.lastLatency} ms` : '—'}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-xs text-slate-400">CPU do RouterOS:</span>
+                              <p className="text-xl font-mono font-bold text-sky-400">
+                                {eq.mikrotikData.cpuLoadPercent != null ? `${eq.mikrotikData.cpuLoadPercent}%` : '—'}
+                              </p>
+                            </div>
+                          </div>
+                          {eq.mikrotikData.version && (
+                            <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between bg-slate-950/40 px-2 py-1 rounded-lg border border-slate-800/60">
+                              <span>RouterOS: {eq.mikrotikData.version}</span>
+                              {eq.mikrotikData.boardName && <span>{eq.mikrotikData.boardName}</span>}
+                            </div>
+                          )}
                         </div>
-                      </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-4 pt-1 mb-2">
+                          <div>
+                            <span className="text-xs text-slate-400">Latência Média (RTT):</span>
+                            <p className={`text-xl font-mono font-bold ${isOnline ? 'text-emerald-400' : isDegraded ? 'text-amber-400' : 'text-slate-500'}`}>
+                              {eq.lastLatency != null && eq.lastLatency > 0 ? `${eq.lastLatency} ms` : '—'}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-xs text-slate-400">Perda de Pacotes:</span>
+                            <p className={`text-xl font-mono font-bold ${eq.lastLossPercent === 0 ? 'text-emerald-400' : eq.lastLossPercent > 0 && eq.lastLossPercent < 100 ? 'text-amber-400' : eq.lastLossPercent === 100 ? 'text-red-400' : 'text-slate-500'}`}>
+                              {eq.lastLossPercent != null ? `${eq.lastLossPercent}%` : '0%'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
 
                       {/* TELEMETRIA DO AGENTE HOST (CPU, RAM, DISCO, UPTIME) */}
                       {eq.osInfo && (
