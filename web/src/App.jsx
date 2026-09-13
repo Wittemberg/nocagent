@@ -1530,7 +1530,30 @@ export default function App() {
   const [overviewTypeFilter, setOverviewTypeFilter] = useState('ALL');
   const [overviewGroupFilter, setOverviewGroupFilter] = useState('ALL');
   const [overviewSubgroupFilter, setOverviewSubgroupFilter] = useState('ALL');
-  const [groupByUnit, setGroupByUnit] = useState(false);
+
+  // Modo de visualização (Grade vs Por Unidade) persistido por usuário
+  const [groupByUnit, setGroupByUnit] = useState(() => {
+    try {
+      const uid = currentUser?.id || currentUser?.email || 'default';
+      const saved = localStorage.getItem(`noc_view_group_by_unit_${uid}`);
+      return saved !== null ? saved === 'true' : false;
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleGroupByUnit = () => {
+    setGroupByUnit(prev => {
+      const next = !prev;
+      try {
+        const uid = currentUser?.id || currentUser?.email || 'default';
+        localStorage.setItem(`noc_view_group_by_unit_${uid}`, String(next));
+      } catch (e) {
+        console.error('Erro ao salvar preferência de visualização por unidade:', e);
+      }
+      return next;
+    });
+  };
 
   // Listas distintas de Grupos e Subgrupos calculadas dinamicamente
   const distinctGroups = Array.from(
@@ -1565,7 +1588,7 @@ export default function App() {
     }
   });
 
-  // Sincroniza ordenação personalizada e trava de layout sempre que o usuário ativo mudar
+  // Sincroniza ordenação personalizada, trava de layout e modo de visualização sempre que o usuário ativo mudar
   useEffect(() => {
     try {
       const uid = currentUser?.id || currentUser?.email || 'default';
@@ -1574,9 +1597,13 @@ export default function App() {
 
       const savedLock = localStorage.getItem(`noc_layout_locked_${uid}`);
       setIsLayoutLocked(savedLock !== null ? savedLock === 'true' : true);
+
+      const savedGroupByUnit = localStorage.getItem(`noc_view_group_by_unit_${uid}`);
+      setGroupByUnit(savedGroupByUnit !== null ? savedGroupByUnit === 'true' : false);
     } catch {
       setCustomCardOrder([]);
       setIsLayoutLocked(true);
+      setGroupByUnit(false);
     }
   }, [currentUser?.id, currentUser?.email]);
 
@@ -3556,7 +3583,7 @@ export default function App() {
 
                   {/* TOGGLE AGRUPAR POR UNIDADE / VISÃO POR GRADE */}
                   <button
-                    onClick={() => setGroupByUnit(!groupByUnit)}
+                    onClick={handleToggleGroupByUnit}
                     title={groupByUnit ? "Alternar para visão contínua por grade" : "Agrupar cards por Unidade / Loja"}
                     className={`text-xs flex items-center gap-1.5 transition px-3 py-1.5 border rounded-xl shadow-sm font-medium ${
                       groupByUnit

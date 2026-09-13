@@ -95,6 +95,11 @@ Para garantir harmonia visual e usabilidade ergonômica em telas de qualquer res
 
 ## 6. Arquitetura Técnica & Chaves do Armazenamento Local
 
+- **Modo de Visualização (Grade vs. Por Unidade):**
+  - Chave: `noc_view_group_by_unit_${uid}`
+  - Valores: `"true"` (agrupado por unidade) ou `"false"` (visão contínua por grade)
+  - Valor inicial caso inexistente: `false` (Visão por Grade)
+  - Comportamento: Persiste a preferência individual de cada usuário entre sessões e recarregamentos.
 - **Trava de Layout:**
   - Chave: `noc_layout_locked_${uid}`
   - Valores: `"true"` (travado) ou `"false"` (livre)
