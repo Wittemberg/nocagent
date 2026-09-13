@@ -31,6 +31,7 @@ const {
   getAllFlags,
   setFeatureFlag,
 } = require('./security/flags');
+const { validateKeySecurity } = require('./security/fileSecurity');
 const {
   initApm,
   getApmMetrics,
@@ -1505,6 +1506,14 @@ app.post('/api/equipments', authenticateToken, async (req, res) => {
       }
     }
 
+    // Validação de segurança Anti-ZipBomb e binary injection nas credenciais
+    if (credentials && credentials.privateKey) {
+      const secCheck = validateKeySecurity(credentials.privateKey);
+      if (!secCheck.valid) {
+        return res.status(400).json({ error: secCheck.error });
+      }
+    }
+
     // Normaliza credenciais: se string, converte em objeto
     const credsObj = credentials
       ? (typeof credentials === 'object' ? credentials : { apiKey: String(credentials).trim() })
@@ -1635,8 +1644,14 @@ app.put('/api/equipments/:id', authenticateToken, async (req, res) => {
         : [];
     }
 
-    // Se forneceu novas credenciais, recriptografa no cofre AES-256-GCM
+    // Se forneceu novas credenciais, valida contra ZipBomb e recriptografa no cofre AES-256-GCM
     if (credentials && (typeof credentials === 'object' ? Object.keys(credentials).length > 0 : String(credentials).trim() !== '')) {
+      if (typeof credentials === 'object' && credentials.privateKey) {
+        const secCheck = validateKeySecurity(credentials.privateKey);
+        if (!secCheck.valid) {
+          return res.status(400).json({ error: secCheck.error });
+        }
+      }
       const credsObj = typeof credentials === 'object' ? credentials : { apiKey: String(credentials).trim() };
       const { encryptedCredentials, iv, authTag } = encryptCredentials(credsObj);
       updateData.encryptedCredentials = encryptedCredentials;

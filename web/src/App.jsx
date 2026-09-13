@@ -52,6 +52,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import QRCodeLib from 'qrcode';
+import { validateSshKeyFile } from './utils/fileSecurity';
 
 // Interceptor global do Axios para autenticação Bearer Token
 axios.interceptors.request.use((config) => {
@@ -166,17 +167,24 @@ function EquipmentCredentialInputs({ form, setForm, storages = [], isEdit = fals
   // Estados e manipuladores para Upload / Drag & Drop de Chave SSH
   const [isDraggingKey, setIsDraggingKey] = useState(false);
   const [keyFileName, setKeyFileName] = useState('');
+  const [keyFileError, setKeyFileError] = useState('');
   const fileInputRef = useRef(null);
 
-  const handleKeyFileSelected = (file) => {
+  const handleKeyFileSelected = async (file) => {
     if (!file) return;
+    setKeyFileError('');
+
+    // Validação profunda com proteção Anti-ZipBomb, limite de 128KB e inspeção de Magic Bytes
+    const validation = await validateSshKeyFile(file);
+    if (!validation.valid) {
+      setKeyFileError(validation.error);
+      setKeyFileName('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     setKeyFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target.result || '';
-      setForm((prev) => ({ ...prev, privateKey: content }));
-    };
-    reader.readAsText(file);
+    setForm((prev) => ({ ...prev, privateKey: validation.content }));
   };
 
   // Estados e gerador do script PowerShell de preparação WinRM
@@ -637,13 +645,38 @@ winrm enumerate winrm/config/listener
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="block text-slate-300 font-medium">Chave Privada SSH (.pem / id_rsa) *</label>
-                {keyFileName && (
-                  <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" />
-                    {keyFileName}
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 text-[9px] text-emerald-400 bg-emerald-950/70 border border-emerald-800/80 px-1.5 py-0.5 rounded font-mono font-medium">
+                    <ShieldCheck className="w-2.5 h-2.5" />
+                    Anti-ZipBomb Ativo
                   </span>
-                )}
+                  {keyFileName && (
+                    <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      {keyFileName}
+                    </span>
+                  )}
+                </div>
               </div>
+
+              {/* MENSAGEM DE ALERTA DE SEGURANÇA SE BLOQUEADO POR ZIPBOMB OU LIMITE */}
+              {keyFileError && (
+                <div className="p-2.5 bg-rose-950/60 border border-rose-800 rounded-xl text-[11px] text-rose-200 flex items-start gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <span className="font-semibold block">Arquivo Bloqueado por Segurança:</span>
+                    <span>{keyFileError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setKeyFileError('')}
+                    className="text-rose-400 hover:text-rose-200 p-0.5"
+                    title="Fechar alerta"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
 
               {/* ZONA DE ARRASTAR OU CLICAR PARA SELECIONAR ARQUIVO */}
               <div
@@ -680,7 +713,7 @@ winrm enumerate winrm/config/listener
                       {keyFileName ? `Arquivo carregado: ${keyFileName}` : 'Arraste o arquivo da chave aqui ou clique para selecionar'}
                     </p>
                     <p className="text-[10px] text-slate-500">
-                      Suporta .pem, .key, id_rsa, id_ed25519 ou arquivo de texto
+                      Formatos aceitos: .pem, .key, id_rsa, id_ed25519 ou texto • Máx 128 KB
                     </p>
                   </div>
                 </div>
