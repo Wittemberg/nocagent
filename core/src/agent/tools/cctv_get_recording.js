@@ -40,7 +40,7 @@ module.exports = {
         return { success: false, error: 'Credenciais (usuário e senha) não configuradas para este equipamento no Vault.' };
       }
       const timestamp = Date.now();
-      const fileName = `clip_${equipmentId}_cam${channel}_${timestamp}.mp4`;
+      const fileName = `clip_${equipmentId}_cam${channel}_${timestamp}.dav`;
       const mediaDir = path.resolve(__dirname, '../../../../public/media');
       const filePath = path.join(mediaDir, fileName);
       
@@ -51,15 +51,11 @@ module.exports = {
       const ip = equipment.port ? `${equipment.host}:${equipment.port}` : equipment.host;
       
       // Formatação de datas para a API da Dahua/Intelbras
-      // NOTA: Dahua C parser não gosta de URL encode agressivo (%3A para :).
-      // Ele espera o formato exato: YYYY-MM-DD%20HH:MM:SS
       const stUrl = startTime.trim().replace(/ /g, '%20');
       const etUrl = endTime.trim().replace(/ /g, '%20');
       
       let url = '';
       if (vendor.toLowerCase() === 'intelbras' || vendor.toLowerCase() === 'dahua') {
-        // CGI Dahua/Intelbras: /cgi-bin/loadfile.cgi?action=startLoad...
-        // O firmware recusa (400) se mandar parâmetros extras como subtype na loadfile
         url = `http://${ip}/cgi-bin/loadfile.cgi?action=startLoad&channel=${channel}&startTime=${stUrl}&endTime=${etUrl}`;
       } else {
         return { success: false, error: 'Download de gravação só suportado atualmente para Intelbras/Dahua.' };
@@ -71,7 +67,6 @@ module.exports = {
       const cmd = `curl -s -g -w "%{http_code}" --anyauth -u "${creds.username}:${creds.password}" "${url}" -o "${filePath}"`;
       
       try {
-        // 120 segundos de timeout para dar tempo de baixar trechos pesados em links remotos
         const { stdout } = await execPromise(cmd, { timeout: 120000 }); 
         const httpCode = stdout.trim();
         
@@ -88,12 +83,12 @@ module.exports = {
           return { success: false, error: errorMsg };
         }
         
-        // Verifica se o arquivo baixado é suspeitosamente pequeno (Dahua as vezes retorna 200 OK com HTML de erro)
+        // Verifica se o arquivo baixado é suspeitosamente pequeno
         if (fs.existsSync(filePath)) {
           const stats = fs.statSync(filePath);
-          if (stats.size < 100 * 1024) { // Menos de 100KB para 4 min de vídeo é falso
+          if (stats.size < 100 * 1024) { 
             const snippet = fs.readFileSync(filePath, 'utf8').substring(0, 500);
-            fs.unlinkSync(filePath); // Apaga o lixo
+            fs.unlinkSync(filePath);
             return { success: false, error: `O DVR fingiu que enviou o vídeo (HTTP 200), mas enviou um arquivo de apenas ${(stats.size / 1024).toFixed(2)} KB. Conteúdo recebido do DVR: "${snippet.trim()}". Isso indica que a API CGI recusou o comando de download silenciosamente.` };
           }
         } else {
@@ -109,7 +104,7 @@ module.exports = {
         success: true,
         message: 'Gravação obtida com sucesso.',
         videoUrl: publicUrl,
-        markdown: `🎥 [Gravação Câmera ${channel}](${publicUrl})\n\n[🔗 Abrir vídeo em nova aba](${publicUrl})`
+        markdown: `✅ Gravação baixada com sucesso (Formato Original: .dav)!\n\nO DVR envia o arquivo no formato bruto e proprietário da Intelbras (.dav). Como o navegador não consegue tocar esse formato nativamente, você precisa baixar o arquivo e usar o VLC Media Player ou o Intelbras SmartPlayer para assistir.\n\n[📥 Clique aqui para baixar o arquivo de vídeo (.dav)](${publicUrl})`
       };
       
     } catch (err) {
