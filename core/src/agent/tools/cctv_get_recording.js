@@ -65,16 +65,20 @@ module.exports = {
       const publicUrl = `/api/media/${fileName}`;
       
       // Executar CURL com Digest Auth que salva direto no arquivo
-      const cmd = `curl -s -f -g --anyauth -u "${creds.username}:${creds.password}" "${url}" -o "${filePath}"`;
+      const cmd = `curl -s -g -w "%{http_code}" --anyauth -u "${creds.username}:${creds.password}" "${url}" -o "${filePath}"`;
       
       try {
         // 120 segundos de timeout para dar tempo de baixar trechos pesados em links remotos
-        await execPromise(cmd, { timeout: 120000 }); 
+        const { stdout } = await execPromise(cmd, { timeout: 120000 }); 
+        const httpCode = stdout.trim();
+        
+        if (httpCode && httpCode !== "200") {
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+          return { success: false, error: `DVR retornou código HTTP ${httpCode}. A porta HTTP está correta, mas a requisição falhou (401=Senha Incorreta, 404=URL Inválida, 400=Erro de Parâmetro).` };
+        }
       } catch (curlError) {
         console.error('Falha real ao baixar gravação:', curlError.message);
-        // Fallback: Criar vídeo dummy apenas se estiver em lab, mas como o usuário reclamou, 
-        // vamos retornar o erro real para ele saber se o IP responde.
-        return { success: false, error: `Falha de comunicação com o DVR ao baixar vídeo: ${curlError.message}` };
+        return { success: false, error: `Falha de rede com o DVR ao baixar vídeo: ${curlError.message}` };
       }
       
       return {

@@ -63,17 +63,29 @@ module.exports = {
         return { success: false, error: 'Fabricante não suportado nativamente para snapshots via API HTTP.' };
       }
       
-      // 4. Executar CURL com Digest Auth que salva direto no arquivo
-      // --anyauth negocia Basic ou Digest automaticamente
-      const cmd = `curl -s -f -g --anyauth -u "${creds.username}:${creds.password}" "${url}" -o "${filePath}"`;
+      // Executar CURL com Digest Auth que salva direto no arquivo
+      // Removida a flag -f para que possamos ver o erro HTTP exato que o DVR retorna
+      const cmd = `curl -s -g -w "%{http_code}" --anyauth -u "${creds.username}:${creds.password}" "${url}" -o "${filePath}"`;
       
       try {
-        await execPromise(cmd, { timeout: 10000 }); // 10s timeout
+        const { stdout, stderr } = await execPromise(cmd, { timeout: 10000 }); // 10s timeout
+        const httpCode = stdout.trim();
+        
+        if (httpCode && httpCode !== "200") {
+          // Exclui o arquivo que foi criado com a página de erro HTML/texto do DVR
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+          
+          return { 
+            success: false, 
+            error: `Falha de comunicação com o DVR via HTTP. O DVR retornou código HTTP ${httpCode}. Isso indica que a porta responde, mas a requisição foi negada (401=Senha Incorreta, 404=Câmera/URL não existe, 400=Parâmetro inválido).`
+          };
+        }
+        
       } catch (curlError) {
         console.error('Falha real ao buscar snapshot:', curlError.message);
         return { 
           success: false, 
-          error: `Falha de comunicação com o DVR via HTTP. Verifique se a porta configurada no cofre é a porta HTTP (padrão 80) e não a porta de serviço (37777). Erro: ${curlError.message}`
+          error: `Falha de rede ao tentar conectar na porta HTTP do DVR. Erro: ${curlError.message}`
         };
       }
       
