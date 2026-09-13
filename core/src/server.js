@@ -1065,7 +1065,7 @@ app.get('/api/equipments/status', authenticateToken, async (req, res) => {
           item.lastLatency = mktMetrics.lastLatency;
           item.lastLossPercent = mktMetrics.lastLossPercent;
           if (mktMetrics.error) item.error = mktMetrics.error;
-          if (mktMetrics.hasRestApi) {
+          if (mktMetrics.hasData || mktMetrics.hasRestApi || mktMetrics.wanLinks) {
             item.mikrotikData = mktMetrics;
             item.subItems = (mktMetrics.wanLinks && mktMetrics.wanLinks.length > 0) ? mktMetrics.wanLinks : (mktMetrics.interfaces || []);
           }
@@ -1077,7 +1077,7 @@ app.get('/api/equipments/status', authenticateToken, async (req, res) => {
               lastLatency: item.lastLatency,
               lastLossPercent: item.lastLossPercent,
               lastCheck: new Date(),
-              osInfo: mktMetrics.hasRestApi ? mktMetrics : undefined,
+              osInfo: (mktMetrics.hasData || mktMetrics.hasRestApi) ? mktMetrics : undefined,
             },
           }).catch(() => {});
         }

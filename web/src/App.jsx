@@ -2012,9 +2012,11 @@ export default function App() {
                 })
               ) : (
                 <div className="p-2 bg-slate-950/40 rounded-lg border border-slate-800/50 text-[10px] text-slate-400">
-                  <p className="flex items-center gap-1 text-slate-400">
-                    <Info className="w-3 h-3 text-sky-400 flex-shrink-0" />
-                    <span>Adicione comentários nas portas WAN do Mikrotik (ex: <code>VIVO FIBRA</code>, <code>CLARO BACKUP</code>) para leitura em tempo real.</span>
+                  <p className="flex items-center gap-1.5 text-slate-300">
+                    <Info className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
+                    <span>
+                      Habilite o serviço de API no RouterOS (<strong>IP → Services → api</strong> na porta {eq.port || '8728'}) com as credenciais salvas no Cofre para telemetria dos links e failover em tempo real.
+                    </span>
                   </p>
                 </div>
               )}
