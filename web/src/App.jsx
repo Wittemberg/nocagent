@@ -1579,6 +1579,7 @@ export default function App() {
   const [noEquipment, setNoEquipment] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [statusError, setStatusError] = useState(null);
+  const [isSystemOnline, setIsSystemOnline] = useState(true);
 
   // Filtros hierárquicos multi-tenant na visão geral (Cliente / Unidade / Tipo)
   const [overviewTypeFilter, setOverviewTypeFilter] = useState('ALL');
