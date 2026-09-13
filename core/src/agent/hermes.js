@@ -1,7 +1,7 @@
 const { SYSTEM_PROMPT } = require('./prompts');
 const { createApprovalRequest, verifyApproval } = require('./approvals');
 const { decryptCredentials } = require('../security/vault');
-const { MCP_TOOLS_DEFINITIONS, executeMcpTool } = require('./mcpTools');
+const { MCP_TOOLS_DEFINITIONS, executeMcpTool } = require('./toolRegistry');
 const { isGlobalKillSwitchActive, getKillSwitchStatus, isFeatureEnabled } = require('../security/flags');
 const { recordMcpTrace } = require('../observability/apm');
 const { PrismaClient } = require('@prisma/client');
@@ -558,54 +558,129 @@ function autonomousDiagnosticReasoner({ text, normalized, matchedEquipment, tele
 async function callLlmReasoning({ systemPrompt, telemetryContext, userPrompt, senderName }) {
   const enrichedUserPrompt = `${telemetryContext}\n\n[SOLICITAÇÃO DO OPERADOR (${senderName || 'Técnico'})]\n${userPrompt}`;
 
-  // 1. Anthropic Claude
+  // 1. Anthropic Claude (Com suporte a Tool Calling)
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (anthropicKey && anthropicKey.startsWith('sk-ant')) {
     try {
       const Anthropic = require('@anthropic-ai/sdk');
       const anthropic = new Anthropic({ apiKey: anthropicKey });
+      
+      const tools = MCP_TOOLS_DEFINITIONS.map(def => ({
+        name: def.name,
+        description: def.description,
+        input_schema: def.parameters
+      }));
 
-      const response = await anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1500,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: enrichedUserPrompt }],
-      });
+      const messages = [{ role: 'user', content: enrichedUserPrompt }];
+      let attempts = 0;
+      
+      while(attempts < 5) {
+        attempts++;
+        const response = await anthropic.messages.create({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 1500,
+          system: systemPrompt,
+          messages,
+          tools: tools.length > 0 ? tools : undefined
+        });
 
-      const reply = response.content[0]?.text;
-      if (reply) return reply;
+        if (response.stop_reason === 'tool_use') {
+          messages.push({ role: 'assistant', content: response.content });
+          const toolResultsContent = [];
+          
+          for (const block of response.content) {
+            if (block.type === 'tool_use') {
+              try {
+                const toolResult = await executeMcpTool(block.name, block.input);
+                toolResultsContent.push({
+                  type: 'tool_result',
+                  tool_use_id: block.id,
+                  content: JSON.stringify(toolResult)
+                });
+              } catch (err) {
+                toolResultsContent.push({
+                  type: 'tool_result',
+                  tool_use_id: block.id,
+                  content: JSON.stringify({ error: err.message }),
+                  is_error: true
+                });
+              }
+            }
+          }
+          messages.push({ role: 'user', content: toolResultsContent });
+        } else {
+          const textBlock = response.content.find(c => c.type === 'text');
+          if (textBlock) return textBlock.text;
+          break;
+        }
+      }
     } catch (llmErr) {
       console.warn('[Hermes LLM] Falha ao chamar Anthropic Claude:', llmErr.message);
     }
   }
 
-  // 2. OpenAI GPT-4o
+  // 2. OpenAI GPT-4o (Com suporte a Tool Calling)
   const openaiKey = process.env.OPENAI_API_KEY;
   if (openaiKey && openaiKey.startsWith('sk-')) {
     try {
       const OpenAI = require('openai');
       const openai = new OpenAI({ apiKey: openaiKey });
 
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: enrichedUserPrompt },
-        ],
-        max_tokens: 1500,
-      });
+      const tools = MCP_TOOLS_DEFINITIONS.map(def => ({ type: 'function', function: def }));
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: enrichedUserPrompt },
+      ];
 
-      const reply = response.choices[0]?.message?.content;
-      if (reply) return reply;
+      let attempts = 0;
+      while (attempts < 5) {
+        attempts++;
+        const response = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages,
+          max_tokens: 1500,
+          tools: tools.length > 0 ? tools : undefined,
+          tool_choice: tools.length > 0 ? 'auto' : undefined,
+        });
+
+        const choice = response.choices[0];
+        const replyMsg = choice.message;
+        messages.push(replyMsg);
+
+        if (replyMsg.tool_calls && replyMsg.tool_calls.length > 0) {
+          for (const tc of replyMsg.tool_calls) {
+            try {
+              const args = JSON.parse(tc.function.arguments || '{}');
+              const toolResult = await executeMcpTool(tc.function.name, args);
+              messages.push({
+                role: 'tool',
+                tool_call_id: tc.id,
+                name: tc.function.name,
+                content: JSON.stringify(toolResult),
+              });
+            } catch (err) {
+              messages.push({
+                role: 'tool',
+                tool_call_id: tc.id,
+                name: tc.function.name,
+                content: JSON.stringify({ error: err.message }),
+              });
+            }
+          }
+        } else {
+          return replyMsg.content;
+        }
+      }
     } catch (llmErr) {
       console.warn('[Hermes LLM] Falha ao chamar OpenAI:', llmErr.message);
     }
   }
 
-  // 3. Google Gemini via REST API
+  // 3. Google Gemini via REST API (Sem Tool Calling avançado por enquanto)
   const geminiKey = process.env.GEMINI_API_KEY;
   if (geminiKey) {
     try {
+      const axios = require('axios');
       const geminiRes = await axios.post(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
         {
@@ -625,10 +700,11 @@ async function callLlmReasoning({ systemPrompt, telemetryContext, userPrompt, se
     }
   }
 
-  // 4. Ollama Local LLM (se configurado)
+  // 4. Ollama Local LLM (Sem Tool Calling avançado)
   const ollamaUrl = process.env.OLLAMA_BASE_URL;
   if (ollamaUrl) {
     try {
+      const axios = require('axios');
       const cleanOllama = ollamaUrl.replace(/\/+$/, '');
       const ollamaRes = await axios.post(
         `${cleanOllama}/api/generate`,
@@ -648,7 +724,6 @@ async function callLlmReasoning({ systemPrompt, telemetryContext, userPrompt, se
 
   return null;
 }
-
 /**
  * Processador principal de mensagens do Hermes AI Engine com Telemetria RAG e Raciocínio Diagnóstico
  */

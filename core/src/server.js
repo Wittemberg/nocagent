@@ -12,7 +12,7 @@ const { getProxmoxMetrics } = require('./drivers/proxmox');
 const { getMikrotikMetrics } = require('./drivers/mikrotik');
 const { getPfSenseMetrics } = require('./drivers/pfsense');
 const { getZabbixActiveTriggers } = require('./drivers/zabbix');
-const { MCP_TOOLS_DEFINITIONS, executeMcpTool } = require('./agent/mcpTools');
+const { MCP_TOOLS_DEFINITIONS, executeMcpTool } = require('./agent/toolRegistry');
 const {
   hashPassword,
   verifyPassword,
