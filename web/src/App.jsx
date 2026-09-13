@@ -2374,157 +2374,186 @@ export default function App() {
 
         {/* BOTTOM SECTION */}
         <div className="flex gap-3 h-[90px]">
-          {/* LEFT: Latency & Packet Loss OR Storage & Uptime */}
-          <div className="flex gap-2">
-            {(eq.type === 'PROXMOX' || eq.type === 'SERVER' || eq.osInfo) ? (
-              <>
-                <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
-                  <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
-                    <HardDrive className="w-3.5 h-3.5 text-emerald-500" /> Armazen.
-                  </span>
-                  <div className="font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-700 mt-1 truncate w-full">
-                    {eq.osInfo?.diskFreePct ? eq.osInfo.diskFreePct : (eq.osInfo?.diskFreeGb ? eq.osInfo.diskFreeGb : (pveData?.storage?.free ?? '—'))}
-                  </div>
+          {eq.type === 'PROXMOX' ? (
+            <>
+              {/* PROXMOX RESOURCES LEFT */}
+              <div className="flex gap-2 shrink-0">
+                <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-slate-800/50 text-center rounded-xl p-2 w-[55px] border border-slate-200 dark:border-slate-700/50 shadow-sm">
+                  <span className="text-[9px] text-slate-500 dark:text-slate-400 font-medium mb-1">CPU</span>
+                  <div className="font-mono text-[11px] font-bold text-sky-600 dark:text-sky-400">{pveData?.cpu?.percent ?? 0}%</div>
                 </div>
-                <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
-                  <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
-                    <Clock className="w-3.5 h-3.5 text-sky-500" /> Uptime
-                  </span>
-                  <div className="font-mono text-[11px] font-bold text-sky-600 dark:text-sky-700 mt-1 truncate w-full">
-                    {eq.osInfo?.uptime || pveData?.uptime || 'Online'}
-                  </div>
+                <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-slate-800/50 text-center rounded-xl p-2 w-[55px] border border-slate-200 dark:border-slate-700/50 shadow-sm">
+                  <span className="text-[9px] text-slate-500 dark:text-slate-400 font-medium mb-1">RAM</span>
+                  <div className="font-mono text-[11px] font-bold text-amber-600 dark:text-amber-400">{pveData?.memory?.percent ?? 0}%</div>
                 </div>
-              </>
-            ) : (
-              <>
-                <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
-                  <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
-                    <Activity className="w-3.5 h-3.5 text-sky-500" /> Latência<br/>(RTT)
-                  </span>
-                  <div className="font-mono text-[13px] font-bold text-emerald-600 dark:text-emerald-700 mt-1">
-                    {eq.lastLatency != null ? (
-                      <>
-                        {eq.lastLatency} <span className="text-[10px] font-normal">ms</span>
-                      </>
-                    ) : (
-                      '—'
-                    )}
-                  </div>
+                <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-slate-800/50 text-center rounded-xl p-2 w-[55px] border border-slate-200 dark:border-slate-700/50 shadow-sm">
+                  <span className="text-[9px] text-slate-500 dark:text-slate-400 font-medium mb-1">VMs</span>
+                  <div className="font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-400">{pveData?.workloads?.runningVMs ?? 0}</div>
                 </div>
-                
-                <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
-                  <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
-                    <WifiOff className="w-3.5 h-3.5 text-slate-400" /> Perda de<br/>Pacotes
-                  </span>
-                  <div className={`font-mono text-sm font-bold mt-1 ${eq.lastLossPercent > 0 ? 'text-amber-600' : 'text-slate-700 dark:text-slate-800'}`}>
-                    {eq.lastLossPercent != null ? `${eq.lastLossPercent}%` : '0%'}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* RIGHT: WAN / Failover or Resource Info */}
-          <div className="flex-1 min-w-0 flex flex-col justify-center">
-            {eq.type === 'MIKROTIK' ? (
-              <>
-                <div className="text-[10px] font-bold text-sky-600 dark:text-[#00c6ff] flex items-center gap-1 mb-1.5">
-                  <Network className="w-3 h-3" /> Links WAN / Failover
-                </div>
-                <div className="space-y-1.5">
-                  {/* Link 1 */}
-                  <div className="flex items-center justify-between text-[9px] font-mono px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 dark:bg-[#cbb5b5] dark:text-[#5e2121] border border-emerald-200 dark:border-transparent shadow-sm truncate">
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-[#b52a2a] flex-shrink-0" />
-                      <span className="truncate font-semibold dark:text-[#3a1b1b]">{eq.mikrotikData?.activeWanName || eq.subItems?.[0]?.name || 'PPPoE-...'}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <span className="opacity-80 dark:text-[#3a1b1b]">
-                        {eq.subItems?.[0]?.formattedRx 
-                          ? `↓${eq.subItems[0].formattedRx.replace(' ', '')} ↑${(eq.subItems[0].formattedTx || '').replace(' ', '')}`
-                          : '↓5.4TB ↑823.5GB'}
-                      </span>
-                      <span className="px-1.5 py-0.5 rounded bg-emerald-200/50 dark:bg-[#d8c3c3] text-[8px] font-bold dark:text-[#8b3d3d] border dark:border-[#a88282]/50">
-                        {eq.subItems?.[0]?.formattedRx ? 'UP' : 'DOWN'}
-                      </span>
-                    </div>
-                  </div>
-                  {/* Link 2 */}
-                  {(eq.subItems && eq.subItems.length > 1) ? (
-                    <div className="flex items-center justify-between text-[9px] font-mono px-2 py-1.5 rounded-lg bg-rose-50 text-rose-800 dark:bg-[#cbb5b5] dark:text-[#5e2121] border border-rose-200 dark:border-transparent shadow-sm truncate">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 dark:bg-[#b52a2a] flex-shrink-0" />
-                        <span className="truncate font-semibold dark:text-[#3a1b1b]">{eq.subItems[1].name}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className="opacity-80 dark:text-[#3a1b1b]">
-                          {eq.subItems[1].formattedRx 
-                            ? `↓${eq.subItems[1].formattedRx.replace(' ', '')} ↑${(eq.subItems[1].formattedTx || '').replace(' ', '')}`
-                            : '↓0B ↑0B'}
-                        </span>
-                        <span className="px-1.5 py-0.5 rounded bg-rose-200/50 dark:bg-[#d8c3c3] text-[8px] font-bold dark:text-[#8b3d3d] border dark:border-[#a88282]/50">DOWN</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between text-[9px] font-mono px-2 py-1.5 rounded-lg bg-rose-50 text-rose-800 dark:bg-[#cbb5b5] dark:text-[#5e2121] border border-rose-200 dark:border-transparent shadow-sm truncate">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 dark:bg-[#b52a2a] flex-shrink-0" />
-                        <span className="truncate font-semibold dark:text-[#3a1b1b]">pppoe-link2</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className="opacity-80 dark:text-[#3a1b1b]">↓0B ↑0B</span>
-                        <span className="px-1.5 py-0.5 rounded bg-rose-200/50 dark:bg-[#d8c3c3] text-[8px] font-bold dark:text-[#8b3d3d] border dark:border-[#a88282]/50">DOWN</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : eq.type === 'PROXMOX' ? (
-              <>
-                <div className="text-[10px] font-bold text-sky-600 dark:text-[#00c6ff] flex items-center gap-1 mb-1.5">
-                  <Server className="w-3 h-3" /> Recursos do Host
-                </div>
-                <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono h-[55px]">
-                  <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg flex flex-col items-center justify-center shadow-sm">
-                    <span className="text-slate-500 dark:text-slate-400 mb-0.5">CPU</span>
-                    <span className="font-bold text-sky-600 dark:text-sky-400">{pveData?.cpu?.percent ?? 0}%</span>
-                  </div>
-                  <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg flex flex-col items-center justify-center shadow-sm">
-                    <span className="text-slate-500 dark:text-slate-400 mb-0.5">RAM</span>
-                    <span className="font-bold text-amber-600 dark:text-amber-400">{pveData?.memory?.percent ?? 0}%</span>
-                  </div>
-                  <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg flex flex-col items-center justify-center shadow-sm">
-                    <span className="text-slate-500 dark:text-slate-400 mb-0.5">VMs</span>
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400">{pveData?.workloads?.runningVMs ?? 0}</span>
-                  </div>
-                </div>
-              </>
-            ) : eq.osInfo ? (
-              <>
-                <div className="text-[10px] font-bold text-sky-600 dark:text-[#00c6ff] flex items-center gap-1 mb-1.5">
-                  <HardDrive className="w-3 h-3" /> Recursos (Agente)
-                </div>
-                <div className="flex flex-col gap-1.5 h-[55px]">
-                  {eq.osInfo.cpu != null && (
-                    <div className="flex-1 flex items-center justify-between px-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm text-[10px] font-mono">
-                      <span className="text-slate-500 dark:text-slate-400">CPU</span>
-                      <strong className="text-sky-600 dark:text-sky-400">{typeof eq.osInfo.cpu === 'object' ? `${eq.osInfo.cpu.percent ?? 0}%` : String(eq.osInfo.cpu)}</strong>
-                    </div>
-                  )}
-                  {eq.osInfo.memoryPercent != null && (
-                    <div className="flex-1 flex items-center justify-between px-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm text-[10px] font-mono">
-                      <span className="text-slate-500 dark:text-slate-400">RAM</span>
-                      <strong className="text-amber-600 dark:text-amber-400">{typeof eq.osInfo.memoryPercent === 'object' ? `${eq.osInfo.memoryPercent.percent ?? 0}%` : String(eq.osInfo.memoryPercent)}</strong>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="flex h-full items-center justify-center text-[10px] text-slate-400 italic">
-                Sem telemetria extra
               </div>
-            )}
-          </div>
+
+              {/* PROXMOX STORAGES RIGHT */}
+              <div className="flex-1 min-w-0 flex flex-col">
+                <div className="text-[10px] font-bold text-emerald-600 dark:text-[#00c6ff] flex items-center gap-1 mb-1.5">
+                  <HardDrive className="w-3 h-3" /> Storages do Host
+                </div>
+                <div className="space-y-1.5 overflow-y-auto pr-1 scrollbar-thin">
+                  {pveData?.storages && pveData.storages.length > 0 ? pveData.storages.map((st, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-[9px] font-mono px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 shadow-sm truncate">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.usedPercent >= 85 ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                        <span className="truncate font-semibold">{st.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="opacity-80">{st.usedPercent ?? 0}% uso</span>
+                        {st.type && (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-200/50 dark:bg-emerald-800/50 text-[8px] font-bold border border-emerald-300 dark:border-emerald-700/50 uppercase">
+                            {st.type}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="text-[10px] text-slate-400 italic flex h-full items-center">Sem discos listados</div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* LEFT: Latency & Packet Loss OR Storage & Uptime */}
+              <div className="flex gap-2">
+                {eq.type === 'SERVER' || eq.osInfo ? (
+                  <>
+                    <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
+                        <HardDrive className="w-3.5 h-3.5 text-emerald-500" /> Armazen.
+                      </span>
+                      <div className="font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-700 mt-1 truncate w-full">
+                        {eq.osInfo?.diskFreePct ? eq.osInfo.diskFreePct : (eq.osInfo?.diskFreeGb ? eq.osInfo.diskFreeGb : '—')}
+                      </div>
+                    </div>
+                    <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
+                        <Clock className="w-3.5 h-3.5 text-sky-500" /> Uptime
+                      </span>
+                      <div className="font-mono text-[11px] font-bold text-sky-600 dark:text-sky-700 mt-1 truncate w-full">
+                        {eq.osInfo?.uptime || 'Online'}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
+                        <Activity className="w-3.5 h-3.5 text-sky-500" /> Latência<br/>(RTT)
+                      </span>
+                      <div className="font-mono text-[13px] font-bold text-emerald-600 dark:text-emerald-700 mt-1">
+                        {eq.lastLatency != null ? (
+                          <>
+                            {eq.lastLatency} <span className="text-[10px] font-normal">ms</span>
+                          </>
+                        ) : (
+                          '—'
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
+                        <WifiOff className="w-3.5 h-3.5 text-slate-400" /> Perda de<br/>Pacotes
+                      </span>
+                      <div className={`font-mono text-sm font-bold mt-1 ${eq.lastLossPercent > 0 ? 'text-amber-600' : 'text-slate-700 dark:text-slate-800'}`}>
+                        {eq.lastLossPercent != null ? `${eq.lastLossPercent}%` : '0%'}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* RIGHT: WAN / Failover or Resource Info */}
+              <div className="flex-1 min-w-0 flex flex-col justify-center">
+                {eq.type === 'MIKROTIK' ? (
+                  <>
+                    <div className="text-[10px] font-bold text-sky-600 dark:text-[#00c6ff] flex items-center gap-1 mb-1.5">
+                      <Network className="w-3 h-3" /> Links WAN / Failover
+                    </div>
+                    <div className="space-y-1.5">
+                      {/* Link 1 */}
+                      <div className="flex items-center justify-between text-[9px] font-mono px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 dark:bg-[#cbb5b5] dark:text-[#5e2121] border border-emerald-200 dark:border-transparent shadow-sm truncate">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-[#b52a2a] flex-shrink-0" />
+                          <span className="truncate font-semibold dark:text-[#3a1b1b]">{eq.mikrotikData?.activeWanName || eq.subItems?.[0]?.name || 'PPPoE-...'}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="opacity-80 dark:text-[#3a1b1b]">
+                            {eq.subItems?.[0]?.formattedRx 
+                              ? `↓${eq.subItems[0].formattedRx.replace(' ', '')} ↑${(eq.subItems[0].formattedTx || '').replace(' ', '')}`
+                              : '↓5.4TB ↑823.5GB'}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-200/50 dark:bg-[#d8c3c3] text-[8px] font-bold dark:text-[#8b3d3d] border dark:border-[#a88282]/50">
+                            {eq.subItems?.[0]?.formattedRx ? 'UP' : 'DOWN'}
+                          </span>
+                        </div>
+                      </div>
+                      {/* Link 2 */}
+                      {(eq.subItems && eq.subItems.length > 1) ? (
+                        <div className="flex items-center justify-between text-[9px] font-mono px-2 py-1.5 rounded-lg bg-rose-50 text-rose-800 dark:bg-[#cbb5b5] dark:text-[#5e2121] border border-rose-200 dark:border-transparent shadow-sm truncate">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 dark:bg-[#b52a2a] flex-shrink-0" />
+                            <span className="truncate font-semibold dark:text-[#3a1b1b]">{eq.subItems[1].name}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className="opacity-80 dark:text-[#3a1b1b]">
+                              {eq.subItems[1].formattedRx 
+                                ? `↓${eq.subItems[1].formattedRx.replace(' ', '')} ↑${(eq.subItems[1].formattedTx || '').replace(' ', '')}`
+                                : '↓0B ↑0B'}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-rose-200/50 dark:bg-[#d8c3c3] text-[8px] font-bold dark:text-[#8b3d3d] border dark:border-[#a88282]/50">DOWN</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between text-[9px] font-mono px-2 py-1.5 rounded-lg bg-rose-50 text-rose-800 dark:bg-[#cbb5b5] dark:text-[#5e2121] border border-rose-200 dark:border-transparent shadow-sm truncate">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 dark:bg-[#b52a2a] flex-shrink-0" />
+                            <span className="truncate font-semibold dark:text-[#3a1b1b]">pppoe-link2</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className="opacity-80 dark:text-[#3a1b1b]">↓0B ↑0B</span>
+                            <span className="px-1.5 py-0.5 rounded bg-rose-200/50 dark:bg-[#d8c3c3] text-[8px] font-bold dark:text-[#8b3d3d] border dark:border-[#a88282]/50">DOWN</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : eq.osInfo ? (
+                  <>
+                    <div className="text-[10px] font-bold text-sky-600 dark:text-[#00c6ff] flex items-center gap-1 mb-1.5">
+                      <HardDrive className="w-3 h-3" /> Recursos (Agente)
+                    </div>
+                    <div className="flex flex-col gap-1.5 h-[55px]">
+                      {eq.osInfo.cpu != null && (
+                        <div className="flex-1 flex items-center justify-between px-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm text-[10px] font-mono">
+                          <span className="text-slate-500 dark:text-slate-400">CPU</span>
+                          <strong className="text-sky-600 dark:text-sky-400">{typeof eq.osInfo.cpu === 'object' ? `${eq.osInfo.cpu.percent ?? 0}%` : String(eq.osInfo.cpu)}</strong>
+                        </div>
+                      )}
+                      {eq.osInfo.memoryPercent != null && (
+                        <div className="flex-1 flex items-center justify-between px-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm text-[10px] font-mono">
+                          <span className="text-slate-500 dark:text-slate-400">RAM</span>
+                          <strong className="text-amber-600 dark:text-amber-400">{typeof eq.osInfo.memoryPercent === 'object' ? `${eq.osInfo.memoryPercent.percent ?? 0}%` : String(eq.osInfo.memoryPercent)}</strong>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-[10px] text-slate-400 italic">
+                    Sem telemetria extra
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
