@@ -68,8 +68,8 @@ module.exports = {
       const cmd = `curl -s -f -g --anyauth -u "${creds.username}:${creds.password}" "${url}" -o "${filePath}"`;
       
       try {
-        // 60 segundos de timeout para dar tempo de baixar um trecho curto
-        await execPromise(cmd, { timeout: 60000 }); 
+        // 120 segundos de timeout para dar tempo de baixar trechos pesados em links remotos
+        await execPromise(cmd, { timeout: 120000 }); 
       } catch (curlError) {
         console.error('Falha real ao baixar gravação:', curlError.message);
         // Fallback: Criar vídeo dummy apenas se estiver em lab, mas como o usuário reclamou, 
