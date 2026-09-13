@@ -51,7 +51,7 @@ module.exports = {
       
       // 3. Montar a requisição cURL baseado no vendor
       let url = '';
-      const ip = equipment.ipAddress;
+      const ip = equipment.port ? `${equipment.host}:${equipment.port}` : equipment.host;
       
       if (vendor.toLowerCase() === 'hikvision') {
         // ISAPI Hikvision: /ISAPI/Streaming/channels/101/picture (canal 1, stream principal)
