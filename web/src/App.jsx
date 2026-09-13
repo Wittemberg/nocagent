@@ -1523,6 +1523,11 @@ export default function App() {
   ]);
   const [inputMsg, setInputMsg] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
+  const chatEndRef = useRef(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, loadingChat]);
 
   // Estados de Dados 100% Reais
   const [equipmentList, setEquipmentList] = useState([]);
@@ -3472,7 +3477,7 @@ export default function App() {
 
         {/* TAB 2: TERMINAL IA (CHAT) */}
         {activeTab === 'chat' && (
-          <div className="bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-col h-[450px] shadow-2xl">
+          <div className="bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-col min-h-[500px] h-[calc(100vh-220px)] shadow-2xl">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40 rounded-t-2xl">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-sky-600/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
@@ -3511,6 +3516,7 @@ export default function App() {
                   </div>
                 </div>
               )}
+              <div ref={chatEndRef} />
             </div>
 
             {/* FORMULÁRIO DE ENVIO */}
