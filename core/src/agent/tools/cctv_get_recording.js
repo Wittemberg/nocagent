@@ -77,7 +77,15 @@ module.exports = {
         
         if (httpCode && httpCode !== "200") {
           if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-          return { success: false, error: `DVR retornou código HTTP ${httpCode}. A porta HTTP está correta, mas a requisição falhou (401=Senha Incorreta, 404=URL Inválida, 400=Erro de Parâmetro).` };
+          
+          let errorMsg = `DVR retornou código HTTP ${httpCode}. A porta HTTP está correta, mas a requisição falhou.`;
+          if (httpCode === "400") {
+            errorMsg = `DVR retornou código HTTP 400 (Bad Request). Para equipamentos Intelbras/Dahua, isso geralmente significa que NÃO EXISTE GRAVAÇÃO no HD para o período ou canal solicitado. Verifique se o DVR realmente possui gravação no horário exato de ${startTime} a ${endTime}.`;
+          } else if (httpCode === "401") {
+            errorMsg = `DVR retornou código HTTP 401 (Unauthorized). Senha incorreta.`;
+          }
+          
+          return { success: false, error: errorMsg };
         }
       } catch (curlError) {
         console.error('Falha real ao baixar gravação:', curlError.message);
