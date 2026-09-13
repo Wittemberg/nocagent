@@ -1444,7 +1444,7 @@ app.post('/api/equipments', authenticateToken, async (req, res) => {
       });
     }
 
-    const validTypes = ['PFSENSE', 'MIKROTIK', 'LINUX_SERVER', 'WINDOWS_SERVER', 'PROXMOX', 'ZABBIX', 'GENERIC_SNMP'];
+    const validTypes = ['PFSENSE', 'MIKROTIK', 'LINUX_SERVER', 'WINDOWS_SERVER', 'PROXMOX', 'ZABBIX', 'GENERIC_SNMP', 'DVR', 'NVR', 'IP_CAMERA'];
     const upperType = String(type).toUpperCase();
     if (!validTypes.includes(upperType)) {
       return res.status(400).json({
@@ -1624,7 +1624,7 @@ app.put('/api/equipments/:id', authenticateToken, async (req, res) => {
     const updateData = {};
     if (name) updateData.name = String(name).trim();
     if (type) {
-      const validTypes = ['PFSENSE', 'MIKROTIK', 'LINUX_SERVER', 'WINDOWS_SERVER', 'PROXMOX', 'ZABBIX', 'GENERIC_SNMP'];
+      const validTypes = ['PFSENSE', 'MIKROTIK', 'LINUX_SERVER', 'WINDOWS_SERVER', 'PROXMOX', 'ZABBIX', 'GENERIC_SNMP', 'DVR', 'NVR', 'IP_CAMERA'];
       const upperType = String(type).toUpperCase();
       if (!validTypes.includes(upperType)) {
         return res.status(400).json({ error: `Tipo inválido. Aceitos: ${validTypes.join(', ')}` });
