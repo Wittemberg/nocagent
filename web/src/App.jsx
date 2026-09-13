@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ShieldCheck, 
   Activity, 
@@ -10,43 +10,45 @@ import {
   CheckCircle2, 
   XCircle, 
   Lock, 
-  Send,
-  Radio,
-  Clock,
-  RefreshCw,
-  Info,
-  Plus,
-  Trash2,
-  Key,
-  X,
-  AlertCircle,
-  Pencil,
-  Copy,
-  Check,
-  Terminal,
-  Cpu,
-  Layers,
-  Filter,
-  BellOff,
-  Building2,
-  Store,
-  Tag,
-  Users,
-  UserPlus,
-  ShieldAlert,
-  KeyRound,
-  LogOut,
-  QrCode,
-  Smartphone,
-  UserCheck,
-  Shield,
-  AlertOctagon,
-  Sliders,
-  Zap,
-  Gauge,
-  GripVertical,
-  Unlock,
+  Send, 
+  Radio, 
+  Clock, 
+  RefreshCw, 
+  Info, 
+  Plus, 
+  Trash2, 
+  Key, 
+  X, 
+  AlertCircle, 
+  Pencil, 
+  Copy, 
+  Check, 
+  Terminal, 
+  Cpu, 
+  Layers, 
+  Filter, 
+  BellOff, 
+  Building2, 
+  Store, 
+  Tag, 
+  Users, 
+  UserPlus, 
+  ShieldAlert, 
+  KeyRound, 
+  LogOut, 
+  QrCode, 
+  Smartphone, 
+  UserCheck, 
+  Shield, 
+  AlertOctagon, 
+  Sliders, 
+  Zap, 
+  Gauge, 
+  GripVertical, 
+  Unlock, 
   RotateCcw,
+  Upload,
+  FileText,
 } from 'lucide-react';
 import axios from 'axios';
 import QRCodeLib from 'qrcode';
@@ -160,6 +162,40 @@ function EquipmentCredentialInputs({ form, setForm, storages = [], isEdit = fals
   const [isNewSubgroup, setIsNewSubgroup] = useState(() => {
     return form.subgroup && !currentGroupSubgroups.includes(form.subgroup);
   });
+
+  // Estados e manipuladores para Upload / Drag & Drop de Chave SSH
+  const [isDraggingKey, setIsDraggingKey] = useState(false);
+  const [keyFileName, setKeyFileName] = useState('');
+  const fileInputRef = useRef(null);
+
+  const handleKeyFileSelected = (file) => {
+    if (!file) return;
+    setKeyFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target.result || '';
+      setForm((prev) => ({ ...prev, privateKey: content }));
+    };
+    reader.readAsText(file);
+  };
+
+  const handleKeyDrop = (e) => {
+    e.preventDefault();
+    setIsDraggingKey(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleKeyFileSelected(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleKeyDragOver = (e) => {
+    e.preventDefault();
+    setIsDraggingKey(true);
+  };
+
+  const handleKeyDragLeave = (e) => {
+    e.preventDefault();
+    setIsDraggingKey(false);
+  };
 
   return (
     <>
@@ -516,16 +552,91 @@ function EquipmentCredentialInputs({ form, setForm, storages = [], isEdit = fals
           </div>
 
           {form.authMethod === 'KEY' ? (
-            <div>
-              <label className="block text-slate-300 font-medium mb-1">Chave Privada SSH (.pem / id_rsa) *</label>
-              <textarea
-                rows={4}
-                required={!isEdit}
-                placeholder={isEdit ? 'Deixe em branco para manter a chave atual' : '-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----'}
-                value={form.privateKey}
-                onChange={e => setForm({ ...form, privateKey: e.target.value })}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-sky-500"
-              />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-slate-300 font-medium">Chave Privada SSH (.pem / id_rsa) *</label>
+                {keyFileName && (
+                  <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    {keyFileName}
+                  </span>
+                )}
+              </div>
+
+              {/* ZONA DE ARRASTAR OU CLICAR PARA SELECIONAR ARQUIVO */}
+              <div
+                onDrop={handleKeyDrop}
+                onDragOver={handleKeyDragOver}
+                onDragLeave={handleKeyDragLeave}
+                onClick={() => fileInputRef.current?.click()}
+                className={`p-3 rounded-xl border-2 border-dashed transition cursor-pointer flex flex-col items-center justify-center gap-1.5 text-center ${
+                  isDraggingKey
+                    ? 'border-sky-400 bg-sky-950/60 shadow-lg shadow-sky-950/50'
+                    : form.privateKey
+                    ? 'border-emerald-700/60 bg-emerald-950/20 hover:border-emerald-600'
+                    : 'border-slate-700/70 bg-slate-950/40 hover:border-sky-600 hover:bg-slate-900/60'
+                }`}
+              >
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleKeyFileSelected(e.target.files[0]);
+                    }
+                  }}
+                  accept=".pem,.key,.rsa,.txt,id_rsa,id_ecdsa,id_ed25519"
+                  className="hidden"
+                />
+
+                <div className="flex items-center gap-2">
+                  <div className={`p-1.5 rounded-lg ${form.privateKey ? 'bg-emerald-900/50 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+                    <Upload className="w-4 h-4" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[11px] font-semibold text-slate-200">
+                      {keyFileName ? `Arquivo carregado: ${keyFileName}` : 'Arraste o arquivo da chave aqui ou clique para selecionar'}
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      Suporta .pem, .key, id_rsa, id_ed25519 ou arquivo de texto
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ÁREA PARA COLAR OU EDITAR O CÓDIGO DA CHAVE */}
+              <div className="relative">
+                <div className="flex items-center justify-between text-[10.5px] text-slate-400 mb-1">
+                  <span className="flex items-center gap-1">
+                    <FileText className="w-3 h-3 text-sky-400" />
+                    Conteúdo da Chave (ou cole diretamente abaixo):
+                  </span>
+                  {form.privateKey && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm(prev => ({ ...prev, privateKey: '' }));
+                        setKeyFileName('');
+                      }}
+                      className="text-[10px] text-rose-400 hover:text-rose-300 transition"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+
+                <textarea
+                  rows={4}
+                  required={!isEdit}
+                  placeholder={isEdit ? 'Deixe em branco para manter a chave atual' : '-----BEGIN RSA/OPENSSH PRIVATE KEY-----\n...\n-----END RSA/OPENSSH PRIVATE KEY-----'}
+                  value={form.privateKey}
+                  onChange={e => {
+                    setForm(prev => ({ ...prev, privateKey: e.target.value }));
+                    if (!e.target.value) setKeyFileName('');
+                  }}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-sky-500 transition"
+                />
+              </div>
             </div>
           ) : (
             <div>
