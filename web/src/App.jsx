@@ -1897,6 +1897,24 @@ export default function App() {
     }
   }, [activeTab]);
 
+  // Fechar qualquer modal ativo ao pressionar a tecla ESC
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' || e.key === 'Esc' || e.keyCode === 27) {
+        setIsModalOpen(false);
+        setIsEditModalOpen(false);
+        setIsAgentModalOpen(false);
+        setIsStorageModalOpen(false);
+        setIsTenantModalOpen(false);
+        setIsUserModalOpen(false);
+        setIsKillSwitchModalOpen(false);
+        setIs2faModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!inputMsg.trim()) return;
@@ -3379,9 +3397,12 @@ export default function App() {
 
         {/* MODAL DE CADASTRO NO COFRE */}
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div 
+            onClick={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          >
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] my-auto overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-800 p-4 sm:p-5 flex-shrink-0 bg-slate-900">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-sky-950 text-sky-400 rounded-xl border border-sky-800">
                     <Lock className="w-5 h-5" />
@@ -3394,30 +3415,33 @@ export default function App() {
                 <button 
                   onClick={() => setIsModalOpen(false)}
                   className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                  title="Fechar (Esc)"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {saveError && (
-                <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl text-xs text-red-200 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                  <span>{saveError}</span>
+              <form onSubmit={handleCreateEquipment} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="p-4 sm:p-5 space-y-3.5 text-xs overflow-y-auto flex-1 min-h-0">
+                  {saveError && (
+                    <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                      <span>{saveError}</span>
+                    </div>
+                  )}
+
+                  <EquipmentCredentialInputs
+                    form={newEquipment}
+                    setForm={setNewEquipment}
+                    storages={storages}
+                    isEdit={false}
+                    existingGroups={distinctGroups}
+                    existingSubgroups={distinctSubgroups}
+                    allEquipments={equipmentList.length > 0 ? equipmentList : equipments}
+                  />
                 </div>
-              )}
 
-              <form onSubmit={handleCreateEquipment} className="space-y-3.5 text-xs">
-                <EquipmentCredentialInputs
-                  form={newEquipment}
-                  setForm={setNewEquipment}
-                  storages={storages}
-                  isEdit={false}
-                  existingGroups={distinctGroups}
-                  existingSubgroups={distinctSubgroups}
-                  allEquipments={equipmentList.length > 0 ? equipmentList : equipments}
-                />
-
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                <div className="flex items-center justify-end gap-2 p-3 sm:p-4 border-t border-slate-800 bg-slate-950/90 flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
@@ -3455,9 +3479,12 @@ export default function App() {
 
         {/* MODAL DE EDIÇÃO NO COFRE */}
         {isEditModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div 
+            onClick={(e) => { if (e.target === e.currentTarget) setIsEditModalOpen(false); }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          >
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] my-auto overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-800 p-4 sm:p-5 flex-shrink-0 bg-slate-900">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-sky-950 text-sky-400 rounded-xl border border-sky-800">
                     <Pencil className="w-5 h-5" />
@@ -3470,30 +3497,33 @@ export default function App() {
                 <button 
                   onClick={() => setIsEditModalOpen(false)}
                   className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                  title="Fechar (Esc)"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {editError && (
-                <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl text-xs text-red-200 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                  <span>{editError}</span>
+              <form onSubmit={handleUpdateEquipment} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="p-4 sm:p-5 space-y-3.5 text-xs overflow-y-auto flex-1 min-h-0">
+                  {editError && (
+                    <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                      <span>{editError}</span>
+                    </div>
+                  )}
+
+                  <EquipmentCredentialInputs
+                    form={editEquipment}
+                    setForm={setEditEquipment}
+                    storages={storages}
+                    isEdit={true}
+                    existingGroups={distinctGroups}
+                    existingSubgroups={distinctSubgroups}
+                    allEquipments={equipmentList.length > 0 ? equipmentList : equipments}
+                  />
                 </div>
-              )}
 
-              <form onSubmit={handleUpdateEquipment} className="space-y-3.5 text-xs">
-                <EquipmentCredentialInputs
-                  form={editEquipment}
-                  setForm={setEditEquipment}
-                  storages={storages}
-                  isEdit={true}
-                  existingGroups={distinctGroups}
-                  existingSubgroups={distinctSubgroups}
-                  allEquipments={equipmentList.length > 0 ? equipmentList : equipments}
-                />
-
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                <div className="flex items-center justify-end gap-2 p-3 sm:p-4 border-t border-slate-800 bg-slate-950/90 flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsEditModalOpen(false)}
@@ -3526,9 +3556,12 @@ export default function App() {
 
         {/* MODAL DE CADASTRO DE STORAGE */}
         {isStorageModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div 
+            onClick={(e) => { if (e.target === e.currentTarget) setIsStorageModalOpen(false); }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          >
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] my-auto overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-800 p-4 sm:p-5 flex-shrink-0 bg-slate-900">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-sky-950 text-sky-400 rounded-xl border border-sky-800">
                     <Database className="w-5 h-5" />
@@ -3541,143 +3574,146 @@ export default function App() {
                 <button 
                   onClick={() => setIsStorageModalOpen(false)}
                   className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                  title="Fechar (Esc)"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {storageError && (
-                <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl text-xs text-red-200 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                  <span>{storageError}</span>
-                </div>
-              )}
+              <form onSubmit={handleSaveStorage} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="p-4 sm:p-5 space-y-3.5 text-xs overflow-y-auto flex-1 min-h-0">
+                  {storageError && (
+                    <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                      <span>{storageError}</span>
+                    </div>
+                  )}
 
-              <form onSubmit={handleSaveStorage} className="space-y-3.5 text-xs">
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Nome do Storage *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: MinIO Central, Wasabi S3 Primário, SFTP Backup"
-                    value={storageForm.name}
-                    onChange={e => setStorageForm({ ...storageForm, name: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Tipo de Storage *</label>
-                    <select
-                      value={storageForm.type}
-                      onChange={e => setStorageForm({ ...storageForm, type: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
-                    >
-                      <option value="S3_COMPATIBLE">S3 Compatível (MinIO / Wasabi)</option>
-                      <option value="AWS_S3">AWS S3 Oficial</option>
-                      <option value="SFTP">Servidor SFTP / SSH</option>
-                      <option value="NFS">NFS Network Share</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-slate-300 font-medium mb-1">Região (S3)</label>
+                    <label className="block text-slate-300 font-medium mb-1">Nome do Storage *</label>
                     <input
                       type="text"
-                      placeholder="Ex: us-east-1 ou sa-east-1"
-                      value={storageForm.region}
-                      onChange={e => setStorageForm({ ...storageForm, region: e.target.value })}
+                      required
+                      placeholder="Ex: MinIO Central, Wasabi S3 Primário, SFTP Backup"
+                      value={storageForm.name}
+                      onChange={e => setStorageForm({ ...storageForm, name: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
                     />
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Endpoint (URL ou Host) *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: https://s3.wasabisys.com ou https://minio.empresa.com:9000 ou 192.168.1.10"
-                    value={storageForm.endpoint}
-                    onChange={e => setStorageForm({ ...storageForm, endpoint: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 font-mono text-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Bucket ou Pasta de Destino *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: nocagent-backups ou /srv/backups"
-                    value={storageForm.bucketOrPath}
-                    onChange={e => setStorageForm({ ...storageForm, bucketOrPath: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 font-mono text-xs"
-                  />
-                </div>
-
-                {storageForm.type === 'SFTP' || storageForm.type === 'NFS' ? (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-slate-300 font-medium mb-1">Usuário</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: backupuser"
-                        value={storageForm.username}
-                        onChange={e => setStorageForm({ ...storageForm, username: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500 font-mono text-xs"
-                      />
+                      <label className="block text-slate-300 font-medium mb-1">Tipo de Storage *</label>
+                      <select
+                        value={storageForm.type}
+                        onChange={e => setStorageForm({ ...storageForm, type: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
+                      >
+                        <option value="S3_COMPATIBLE">S3 Compatível (MinIO / Wasabi)</option>
+                        <option value="AWS_S3">AWS S3 Oficial</option>
+                        <option value="SFTP">Servidor SFTP / SSH</option>
+                        <option value="NFS">NFS Network Share</option>
+                      </select>
                     </div>
                     <div>
-                      <label className="block text-slate-300 font-medium mb-1">Senha</label>
+                      <label className="block text-slate-300 font-medium mb-1">Região (S3)</label>
                       <input
-                        type="password"
-                        placeholder="Senha do usuário"
-                        value={storageForm.password}
-                        onChange={e => setStorageForm({ ...storageForm, password: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500 font-mono text-xs"
+                        type="text"
+                        placeholder="Ex: us-east-1 ou sa-east-1"
+                        value={storageForm.region}
+                        onChange={e => setStorageForm({ ...storageForm, region: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
                       />
                     </div>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-slate-300 font-medium mb-1">Access Key *</label>
-                      <input
-                        type="text"
-                        placeholder="Chave de acesso S3 / MinIO"
-                        value={storageForm.accessKey}
-                        onChange={e => setStorageForm({ ...storageForm, accessKey: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500 font-mono text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-slate-300 font-medium mb-1">Secret Key *</label>
-                      <input
-                        type="password"
-                        placeholder="Chave secreta"
-                        value={storageForm.secretKey}
-                        onChange={e => setStorageForm({ ...storageForm, secretKey: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500 font-mono text-xs"
-                      />
-                    </div>
-                  </div>
-                )}
 
-                <div className="flex items-center gap-2 pt-2">
-                  <input
-                    type="checkbox"
-                    id="storageDefault"
-                    checked={storageForm.isDefault}
-                    onChange={e => setStorageForm({ ...storageForm, isDefault: e.target.checked })}
-                    className="rounded border-slate-700 text-sky-500 focus:ring-0"
-                  />
-                  <label htmlFor="storageDefault" className="text-slate-300 text-xs">
-                    Definir este storage como repositório padrão para novos equipamentos
-                  </label>
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Endpoint (URL ou Host) *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: https://s3.wasabisys.com ou https://minio.empresa.com:9000 ou 192.168.1.10"
+                      value={storageForm.endpoint}
+                      onChange={e => setStorageForm({ ...storageForm, endpoint: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 font-mono text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Bucket ou Pasta de Destino *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: nocagent-backups ou /srv/backups"
+                      value={storageForm.bucketOrPath}
+                      onChange={e => setStorageForm({ ...storageForm, bucketOrPath: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 font-mono text-xs"
+                    />
+                  </div>
+
+                  {storageForm.type === 'SFTP' || storageForm.type === 'NFS' ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-300 font-medium mb-1">Usuário</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: backupuser"
+                          value={storageForm.username}
+                          onChange={e => setStorageForm({ ...storageForm, username: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500 font-mono text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-300 font-medium mb-1">Senha</label>
+                        <input
+                          type="password"
+                          placeholder="Senha do usuário"
+                          value={storageForm.password}
+                          onChange={e => setStorageForm({ ...storageForm, password: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500 font-mono text-xs"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-300 font-medium mb-1">Access Key *</label>
+                        <input
+                          type="text"
+                          placeholder="Chave de acesso S3 / MinIO"
+                          value={storageForm.accessKey}
+                          onChange={e => setStorageForm({ ...storageForm, accessKey: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500 font-mono text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-300 font-medium mb-1">Secret Key *</label>
+                        <input
+                          type="password"
+                          placeholder="Chave secreta"
+                          value={storageForm.secretKey}
+                          onChange={e => setStorageForm({ ...storageForm, secretKey: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500 font-mono text-xs"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <input
+                      type="checkbox"
+                      id="storageDefault"
+                      checked={storageForm.isDefault}
+                      onChange={e => setStorageForm({ ...storageForm, isDefault: e.target.checked })}
+                      className="rounded border-slate-700 text-sky-500 focus:ring-0 cursor-pointer"
+                    />
+                    <label htmlFor="storageDefault" className="text-slate-300 text-xs cursor-pointer">
+                      Definir este storage como repositório padrão para novos equipamentos
+                    </label>
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                <div className="flex items-center justify-end gap-2 p-3 sm:p-4 border-t border-slate-800 bg-slate-950/90 flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsStorageModalOpen(false)}
@@ -3710,9 +3746,12 @@ export default function App() {
 
         {/* MODAL DO INSTALADOR 1-CLIQUE DO AGENTE DE HOST (LINUX / WINDOWS) */}
         {isAgentModalOpen && selectedAgentEq && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-xl shadow-2xl space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div 
+            onClick={(e) => { if (e.target === e.currentTarget) setIsAgentModalOpen(false); }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          >
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-xl shadow-2xl flex flex-col max-h-[90vh] my-auto overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-800 p-4 sm:p-5 flex-shrink-0 bg-slate-900">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-emerald-950 text-emerald-400 rounded-xl border border-emerald-800">
                     <Terminal className="w-5 h-5" />
@@ -3727,12 +3766,13 @@ export default function App() {
                 <button 
                   onClick={() => setIsAgentModalOpen(false)}
                   className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                  title="Fechar (Esc)"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="space-y-3 text-xs">
+              <div className="p-4 sm:p-5 space-y-3.5 text-xs overflow-y-auto flex-1 min-h-0">
                 <p className="text-slate-300">
                   Execute o comando abaixo como Administrador/Root no servidor de destino. O agente se registrará automaticamente via conexão de saída segura (Outbound) e enviará telemetria a cada 60 segundos.
                 </p>
@@ -3787,7 +3827,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end pt-2 border-t border-slate-800">
+              <div className="flex items-center justify-end p-3 sm:p-4 border-t border-slate-800 bg-slate-950/90 flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsAgentModalOpen(false)}
@@ -4691,8 +4731,11 @@ export default function App() {
 
         {/* MODAL DE CONFIRMAÇÃO DO EMERGENCY KILL-SWITCH */}
         {isKillSwitchModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-red-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+          <div 
+            onClick={(e) => { if (e.target === e.currentTarget) setIsKillSwitchModalOpen(false); }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          >
+            <div className="bg-slate-900 border border-red-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-red-950 text-red-400 rounded-xl border border-red-800 animate-pulse">
@@ -4706,6 +4749,7 @@ export default function App() {
                 <button
                   onClick={() => setIsKillSwitchModalOpen(false)}
                   className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                  title="Fechar (Esc)"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -4751,8 +4795,11 @@ export default function App() {
 
         {/* MODAL DE CADASTRO / EDIÇÃO DE TENANT */}
         {isTenantModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-xl shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+          <div 
+            onClick={(e) => { if (e.target === e.currentTarget) setIsTenantModalOpen(false); }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          >
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-xl shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-sky-950 text-sky-400 rounded-xl border border-sky-800">
@@ -4768,6 +4815,7 @@ export default function App() {
                 <button 
                   onClick={() => setIsTenantModalOpen(false)}
                   className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                  title="Fechar (Esc)"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -4989,9 +5037,12 @@ export default function App() {
 
         {/* MODAL DE CADASTRO / EDIÇÃO DE USUÁRIO */}
         {isUserModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div 
+            onClick={(e) => { if (e.target === e.currentTarget) setIsUserModalOpen(false); }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          >
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] my-auto overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-800 p-4 sm:p-5 flex-shrink-0 bg-slate-900">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-emerald-950 text-emerald-400 rounded-xl border border-emerald-800">
                     <UserCheck className="w-5 h-5" />
@@ -5006,127 +5057,130 @@ export default function App() {
                 <button 
                   onClick={() => setIsUserModalOpen(false)}
                   className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                  title="Fechar (Esc)"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {userError && (
-                <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl text-xs text-red-200 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                  <span>{userError}</span>
-                </div>
-              )}
+              <form onSubmit={handleSaveUser} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="p-4 sm:p-5 space-y-3.5 text-xs overflow-y-auto flex-1 min-h-0">
+                  {userError && (
+                    <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl text-xs text-red-200 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                      <span>{userError}</span>
+                    </div>
+                  )}
 
-              <form onSubmit={handleSaveUser} className="space-y-3.5 text-xs">
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Nome Completo *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Carlos Silva, Ana Engenharia"
-                    value={userForm.name}
-                    onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">E-mail de Acesso *</label>
-                    <input
-                      type="email"
-                      required
-                      disabled={!!editingUser}
-                      placeholder="operador@empresa.com"
-                      value={userForm.email}
-                      onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 disabled:opacity-50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-300 font-medium mb-1">Telefone / WhatsApp</label>
+                    <label className="block text-slate-300 font-medium mb-1">Nome Completo *</label>
                     <input
                       type="text"
-                      placeholder="(11) 99999-9999"
-                      value={userForm.phone}
-                      onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })}
+                      required
+                      placeholder="Ex: Carlos Silva, Ana Engenharia"
+                      value={userForm.name}
+                      onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
                     />
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">
-                    {editingUser ? 'Alterar Senha (deixe em branco para manter)' : 'Senha Inicial *'}
-                  </label>
-                  <input
-                    type="password"
-                    required={!editingUser}
-                    placeholder={editingUser ? '••••••••••••' : 'Mínimo 6 caracteres'}
-                    value={userForm.password}
-                    onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-slate-300 font-medium mb-1">Função / Papel *</label>
-                    <select
-                      value={userForm.role}
-                      onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-sky-500"
-                    >
-                      {currentUser?.role === 'SUPERADMIN' && (
-                        <option value="SUPERADMIN">Superadmin (Global)</option>
-                      )}
-                      <option value="TENANT_MASTER">Tenant Master (Gestor do Tenant)</option>
-                      <option value="OPERATOR">Operador (Técnico NOC)</option>
-                      <option value="VIEWER">Visualizador (Somente Leitura)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-medium mb-1">Tenant (Organização)</label>
-                    {currentUser?.role === 'SUPERADMIN' ? (
-                      <select
-                        value={userForm.tenantId}
-                        onChange={(e) => setUserForm({ ...userForm, tenantId: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-sky-500"
-                      >
-                        <option value="">Selecione o Tenant...</option>
-                        {tenants.map((t) => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                      </select>
-                    ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-300 font-medium mb-1">E-mail de Acesso *</label>
+                      <input
+                        type="email"
+                        required
+                        disabled={!!editingUser}
+                        placeholder="operador@empresa.com"
+                        value={userForm.email}
+                        onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 disabled:opacity-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-300 font-medium mb-1">Telefone / WhatsApp</label>
                       <input
                         type="text"
-                        disabled
-                        value={currentUser?.tenant?.name || 'Seu Tenant'}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-400 opacity-60"
+                        placeholder="(11) 99999-9999"
+                        value={userForm.phone}
+                        onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
                       />
-                    )}
+                    </div>
                   </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">
+                      {editingUser ? 'Alterar Senha (deixe em branco para manter)' : 'Senha Inicial *'}
+                    </label>
+                    <input
+                      type="password"
+                      required={!editingUser}
+                      placeholder={editingUser ? '••••••••••••' : 'Mínimo 6 caracteres'}
+                      value={userForm.password}
+                      onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-300 font-medium mb-1">Função / Papel *</label>
+                      <select
+                        value={userForm.role}
+                        onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                      >
+                        {currentUser?.role === 'SUPERADMIN' && (
+                          <option value="SUPERADMIN">Superadmin (Global)</option>
+                        )}
+                        <option value="TENANT_MASTER">Tenant Master (Gestor do Tenant)</option>
+                        <option value="OPERATOR">Operador (Técnico NOC)</option>
+                        <option value="VIEWER">Visualizador (Somente Leitura)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-300 font-medium mb-1">Tenant (Organização)</label>
+                      {currentUser?.role === 'SUPERADMIN' ? (
+                        <select
+                          value={userForm.tenantId}
+                          onChange={(e) => setUserForm({ ...userForm, tenantId: e.target.value })}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                        >
+                          <option value="">Selecione o Tenant...</option>
+                          {tenants.map((t) => (
+                            <option key={t.id} value={t.id}>{t.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          disabled
+                          value={currentUser?.tenant?.name || 'Seu Tenant'}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-400 opacity-60"
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {editingUser && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="checkbox"
+                        id="userActiveCheck"
+                        checked={userForm.active}
+                        onChange={(e) => setUserForm({ ...userForm, active: e.target.checked })}
+                        className="rounded bg-slate-950 border-slate-700 text-sky-500 focus:ring-0 cursor-pointer"
+                      />
+                      <label htmlFor="userActiveCheck" className="text-slate-300 font-medium cursor-pointer">
+                        Usuário Ativo (acesso permitido ao sistema)
+                      </label>
+                    </div>
+                  )}
                 </div>
 
-                {editingUser && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="checkbox"
-                      id="userActiveCheck"
-                      checked={userForm.active}
-                      onChange={(e) => setUserForm({ ...userForm, active: e.target.checked })}
-                      className="rounded bg-slate-950 border-slate-700 text-sky-500 focus:ring-0"
-                    />
-                    <label htmlFor="userActiveCheck" className="text-slate-300 font-medium cursor-pointer">
-                      Usuário Ativo (acesso permitido ao sistema)
-                    </label>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                <div className="flex items-center justify-end gap-2 p-3 sm:p-4 border-t border-slate-800 bg-slate-950/90 flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsUserModalOpen(false)}
@@ -5156,8 +5210,11 @@ export default function App() {
 
         {/* MODAL DE CONFIGURAÇÃO DE 2FA TOTP */}
         {is2faModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+          <div 
+            onClick={(e) => { if (e.target === e.currentTarget) setIs2faModalOpen(false); }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+          >
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-sky-950 text-sky-400 rounded-xl border border-sky-800">
@@ -5171,6 +5228,7 @@ export default function App() {
                 <button 
                   onClick={() => setIs2faModalOpen(false)}
                   className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                  title="Fechar (Esc)"
                 >
                   <X className="w-5 h-5" />
                 </button>
