@@ -1565,20 +1565,47 @@ export default function App() {
     }
   });
 
-  // Sincroniza ordenação personalizada sempre que o usuário ativo mudar
+  // Sincroniza ordenação personalizada e trava de layout sempre que o usuário ativo mudar
   useEffect(() => {
     try {
       const uid = currentUser?.id || currentUser?.email || 'default';
       const saved = localStorage.getItem(`noc_card_order_${uid}`);
       setCustomCardOrder(saved ? JSON.parse(saved) : []);
+
+      const savedLock = localStorage.getItem(`noc_layout_locked_${uid}`);
+      setIsLayoutLocked(savedLock !== null ? savedLock === 'true' : true);
     } catch {
       setCustomCardOrder([]);
+      setIsLayoutLocked(true);
     }
   }, [currentUser?.id, currentUser?.email]);
 
   const [draggedCardId, setDraggedCardId] = useState(null);
   const [dragOverCardId, setDragOverCardId] = useState(null);
-  const [isLayoutLocked, setIsLayoutLocked] = useState(false);
+
+  // Estado de trava de layout de cards (padrão: travado/true para segurança operacional)
+  const [isLayoutLocked, setIsLayoutLocked] = useState(() => {
+    try {
+      const uid = currentUser?.id || currentUser?.email || 'default';
+      const saved = localStorage.getItem(`noc_layout_locked_${uid}`);
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleLayoutLock = () => {
+    setIsLayoutLocked(prev => {
+      const next = !prev;
+      try {
+        const uid = currentUser?.id || currentUser?.email || 'default';
+        localStorage.setItem(`noc_layout_locked_${uid}`, String(next));
+      } catch (e) {
+        console.error('Erro ao salvar estado de travamento do layout:', e);
+      }
+      return next;
+    });
+  };
 
   // Aplica ordenação personalizada por usuário aos equipamentos filtrados
   const orderedEquipments = useMemo(() => {
@@ -3127,7 +3154,7 @@ export default function App() {
 
                 {/* CONTROLES DE ARRASTE (DRAG & DROP) */}
                 <button
-                  onClick={() => setIsLayoutLocked(!isLayoutLocked)}
+                  onClick={handleToggleLayoutLock}
                   title={isLayoutLocked ? "Destravar para reorganizar os cards por arraste" : "Travar layout contra arrastes acidentais"}
                   className={`text-xs flex items-center gap-1.5 transition px-2.5 py-1 border rounded-xl shadow-sm ${
                     isLayoutLocked
