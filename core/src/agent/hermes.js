@@ -114,6 +114,12 @@ async function resolveTargetEquipment(text, tenantId = null) {
       const zbx = pool.find((e) => e.type === 'ZABBIX') || equipments.find((e) => e.type === 'ZABBIX');
       if (zbx) return { matched: zbx, group: matchedGroup || zbx.group, subgroup: matchedSubgroup || zbx.subgroup, groupEquipments, all: equipments };
     }
+    if (lower.includes('dvr') || lower.includes('nvr') || lower.includes('camera') || lower.includes('câmera') || lower.includes('cftv')) {
+      const pool = groupEquipments.length > 0 ? groupEquipments : equipments;
+      const cctv = pool.find((e) => ['DVR', 'NVR', 'IP_CAMERA'].includes(e.type)) || equipments.find((e) => ['DVR', 'NVR', 'IP_CAMERA'].includes(e.type));
+      if (cctv) return { matched: cctv, group: matchedGroup || cctv.group, subgroup: matchedSubgroup || cctv.subgroup, groupEquipments, all: equipments };
+    }
+
 
     return {
       matched: null,
@@ -193,7 +199,7 @@ function buildTelemetryContextText(matchedEquipment, telemetry, allEquipments, s
   let context = `[INVENTÁRIO ATIVO DE EQUIPAMENTOS NO COFRE]\n`;
   if (allEquipments && allEquipments.length > 0) {
     allEquipments.forEach((eq) => {
-      context += `- ${eq.name} (Tipo: ${eq.type}, Grupo: "${eq.group || 'Geral'}", Subgrupo: "${eq.subgroup || 'N/A'}", Status: ${eq.status})\n`;
+      context += `- ID: ${eq.id} | ${eq.name} (Tipo: ${eq.type}, Grupo: "${eq.group || 'Geral'}", Subgrupo: "${eq.subgroup || 'N/A'}", Status: ${eq.status})\n`;
     });
   } else {
     context += `Nenhum equipamento registrado.\n`;
@@ -206,7 +212,7 @@ function buildTelemetryContextText(matchedEquipment, telemetry, allEquipments, s
     }
     context += `• Total de Equipamentos no Grupo: ${scope.groupEquipments.length}\n`;
     scope.groupEquipments.forEach((eq) => {
-      context += `  - [${eq.subgroup || 'Geral'}] ${eq.name} (${eq.type}): Status=${eq.status}, Host=${eq.host}\n`;
+      context += `  - ID: ${eq.id} | [${eq.subgroup || 'Geral'}] ${eq.name} (${eq.type}): Status=${eq.status}, Host=${eq.host}\n`;
     });
   }
 
