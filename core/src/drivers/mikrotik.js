@@ -331,30 +331,58 @@ async function getMikrotikRestData(host, credentials, port) {
 
 /**
  * Coletor unificado para Mikrotik: Suporta RouterOS v6.x e v7.x (Native API + REST API)
+ *
+ * Estratégia de porta:
+ *  - O probe TCP usa a porta cadastrada (pode ser porta do WinBox ou qualquer porta acessível)
+ *    apenas para verificar se o dispositivo está online e medir latência.
+ *  - A conexão com a API RouterOS tenta candidatos na ordem:
+ *      1. Porta cadastrada (eq.port) — caso o usuário tenha cadastrado a porta da API diretamente
+ *      2. Porta 8728 padrão (RouterOS Native API)
+ *      3. Porta 8729 (RouterOS Native API SSL)
+ *    Isso garante que mesmo se o usuário cadastrou a porta do WinBox (ex: 58292),
+ *    o sistema ainda encontrará a API na porta padrão 8728.
  */
 async function getMikrotikMetrics(host, credentials, port = 8728) {
   const probe = await probeMikrotikPort(host, port, 4000);
 
   if (!probe.online) {
-    return {
-      status: 'offline',
-      lastLatency: null,
-      lastLossPercent: 100,
-      error: `Porta ${probe.port} fechada ou inacessível (${probe.error}).`,
-    };
+    // Se a porta cadastrada não responde, tenta porta padrão WinBox/API antes de declarar offline
+    const fallbackProbe = await probeMikrotikPort(host, 8728, 3000);
+    if (!fallbackProbe.online) {
+      return {
+        status: 'offline',
+        lastLatency: null,
+        lastLossPercent: 100,
+        error: `Dispositivo inacessível nas portas ${port} e 8728 (${probe.error}).`,
+      };
+    }
+    // Dispositivo online pela porta 8728
+    probe.online = true;
+    probe.rtt = fallbackProbe.rtt;
+    probe.port = fallbackProbe.port;
   }
 
   let data = null;
   if (credentials?.username && credentials?.password) {
-    // 1. Tenta via RouterOS Native API (Porta 8728 ou customizada - suporta RouterOS v6 e v7)
-    try {
-      data = await getMikrotikNativeApiData(host, credentials, probe.port);
-    } catch (apiErr) {
-      // 2. Se falhar API nativa (ex: porta é 443/80), tenta REST API v7
+    // Candidatos de porta para a API RouterOS (Native Binary Protocol)
+    // Ordem: porta cadastrada → 8728 padrão → 8729 SSL
+    const apiPortCandidates = [...new Set([probe.port, 8728, 8729])];
+
+    for (const apiPort of apiPortCandidates) {
+      try {
+        data = await getMikrotikNativeApiData(host, credentials, apiPort);
+        break; // Sucesso — para de tentar outras portas
+      } catch {
+        // Porta não suporta API nativa, tenta próxima
+      }
+    }
+
+    // Se API nativa falhou em todas as portas, tenta REST API v7 (HTTP/HTTPS)
+    if (!data) {
       try {
         data = await getMikrotikRestData(host, credentials, probe.port);
-      } catch (restErr) {
-        // Falha de autenticação ou serviço de API desabilitado
+      } catch {
+        // REST API também falhou — credenciais erradas ou API não habilitada
       }
     }
   }
@@ -365,7 +393,7 @@ async function getMikrotikMetrics(host, credentials, port = 8728) {
     lastLossPercent: 0,
     port: probe.port,
     ...(data || {
-      version: 'RouterOS (Porta API Ativa)',
+      version: 'RouterOS (API Indisponível)',
       hasRestApi: false,
       hasData: false,
     }),
