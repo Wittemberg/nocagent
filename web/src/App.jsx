@@ -49,6 +49,8 @@ import {
   RotateCcw,
   Upload,
   FileText,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import axios from 'axios';
 import QRCodeLib from 'qrcode';
@@ -1030,6 +1032,48 @@ export default function App() {
       return null;
     }
   });
+
+  // Gerenciamento de Tema (Dark / Light) por Usuário
+  const [theme, setTheme] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('noc_current_user');
+      const user = savedUser ? JSON.parse(savedUser) : null;
+      const uid = user?.id || user?.email || 'guest';
+      return localStorage.getItem(`noc_theme_${uid}`) || 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  // Atualizar tema quando o usuário logado mudar
+  useEffect(() => {
+    const uid = currentUser?.id || currentUser?.email || 'guest';
+    const savedTheme = localStorage.getItem(`noc_theme_${uid}`) || 'dark';
+    setTheme(savedTheme);
+  }, [currentUser?.id, currentUser?.email]);
+
+  // Sincronizar classes CSS no elemento raiz HTML e persistência no localStorage
+  useEffect(() => {
+    const root = document.documentElement;
+    const uid = currentUser?.id || currentUser?.email || 'guest';
+    try {
+      localStorage.setItem(`noc_theme_${uid}`, theme);
+    } catch (e) {
+      console.error('Erro ao salvar preferência de tema:', e);
+    }
+
+    if (theme === 'light') {
+      root.classList.add('theme-light');
+      root.setAttribute('data-theme', 'light');
+    } else {
+      root.classList.remove('theme-light');
+      root.setAttribute('data-theme', 'dark');
+    }
+  }, [theme, currentUser?.id, currentUser?.email]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+  };
 
   // Formulário de Login & 2FA
   const [loginEmail, setLoginEmail] = useState('');
@@ -2664,12 +2708,43 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Alternador de Tema Claro / Escuro (Configurado por Usuário) */}
+                <button
+                  onClick={toggleTheme}
+                  title={theme === 'light' ? 'Mudar para Tema Escuro (Cyber-NOC)' : 'Mudar para Tema Claro (Daylight)'}
+                  className="p-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-amber-400 transition flex items-center justify-center"
+                  aria-label="Alternar tema de interface"
+                >
+                  {theme === 'light' ? (
+                    <Moon className="w-4 h-4 text-sky-500 hover:text-sky-600 transition-transform active:scale-90" />
+                  ) : (
+                    <Sun className="w-4 h-4 text-amber-400 hover:text-amber-300 transition-transform active:scale-90" />
+                  )}
+                </button>
+
                 <button
                   onClick={handleLogout}
                   title="Encerrar Sessão"
                   className="p-1.5 rounded-lg bg-slate-900/80 hover:bg-red-950/60 border border-slate-800 hover:border-red-800 text-slate-400 hover:text-red-300 transition"
                 >
                   <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {!currentUser && (
+              <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
+                <button
+                  onClick={toggleTheme}
+                  title={theme === 'light' ? 'Mudar para Tema Escuro (Cyber-NOC)' : 'Mudar para Tema Claro (Daylight)'}
+                  className="p-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-amber-400 transition flex items-center justify-center"
+                  aria-label="Alternar tema de interface"
+                >
+                  {theme === 'light' ? (
+                    <Moon className="w-4 h-4 text-sky-500 hover:text-sky-600 transition-transform active:scale-90" />
+                  ) : (
+                    <Sun className="w-4 h-4 text-amber-400 hover:text-amber-300 transition-transform active:scale-90" />
+                  )}
                 </button>
               </div>
             )}

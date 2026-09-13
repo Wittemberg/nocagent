@@ -4,6 +4,10 @@
 
 :root {
   color-scheme: dark;
+  --noc-bg: #090d16;
+  --noc-text: #f1f5f9;
+  --noc-card-bg: #0f172a;
+  --noc-card-border: #334155;
 }
 
 body {
@@ -11,9 +15,10 @@ body {
   padding: 0;
   background-color: #090d16;
   color: #f1f5f9;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Scrollbar customizada moderna */
+/* Scrollbar Dark (Padrão) */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -28,3 +33,207 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* ==========================================================================
+   TEMA CLARO (LIGHT THEME) - Enterprise High-Contrast Design System
+   ========================================================================== */
+html.theme-light {
+  color-scheme: light;
+  --noc-bg: #f8fafc;
+  --noc-text: #0f172a;
+  --noc-card-bg: #ffffff;
+  --noc-card-border: #e2e8f0;
+}
+
+html.theme-light body {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* Scrollbar Light */
+html.theme-light ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+html.theme-light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+html.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Backgrounds & Canvas Light Overrides */
+html.theme-light .bg-\[\#090d16\],
+html.theme-light .bg-slate-950,
+html.theme-light .bg-slate-950\/95,
+html.theme-light .bg-slate-950\/90,
+html.theme-light .bg-slate-950\/80,
+html.theme-light .bg-slate-950\/50,
+html.theme-light .bg-slate-950\/40,
+html.theme-light .bg-slate-950\/30 {
+  background-color: #ffffff !important;
+}
+
+/* Containers secundários, sub-painéis e toolbars no tema claro */
+html.theme-light .bg-slate-950\/60,
+html.theme-light .bg-slate-950\/70,
+html.theme-light .bg-slate-900\/50,
+html.theme-light .bg-slate-900\/40,
+html.theme-light .bg-slate-900\/30 {
+  background-color: #f8fafc !important;
+}
+
+/* Cards & Modals no tema claro */
+html.theme-light .bg-slate-900,
+html.theme-light .bg-slate-900\/95,
+html.theme-light .bg-slate-900\/90,
+html.theme-light .bg-slate-900\/80,
+html.theme-light .bg-slate-900\/70 {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+}
+
+/* Inputs, Textareas e Selects no tema claro */
+html.theme-light input:not([type="checkbox"]):not([type="radio"]),
+html.theme-light textarea,
+html.theme-light select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+html.theme-light input::placeholder,
+html.theme-light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+html.theme-light input:focus,
+html.theme-light textarea:focus,
+html.theme-light select:focus {
+  border-color: #0284c7 !important;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15) !important;
+}
+
+/* Bordas no tema claro */
+html.theme-light .border-slate-800,
+html.theme-light .border-slate-800\/80,
+html.theme-light .border-slate-800\/60,
+html.theme-light .border-slate-800\/50,
+html.theme-light .border-slate-800\/40,
+html.theme-light .border-slate-700,
+html.theme-light .border-slate-700\/60 {
+  border-color: #e2e8f0 !important;
+}
+
+html.theme-light .divide-slate-800,
+html.theme-light .divide-slate-800\/60,
+html.theme-light .divide-slate-800\/40,
+html.theme-light .divide-slate-700 {
+  border-color: #e2e8f0 !important;
+}
+
+/* Tipografia de Alto Contraste para o Tema Claro */
+html.theme-light .text-white,
+html.theme-light .text-slate-100 {
+  color: #0f172a !important;
+}
+
+html.theme-light .text-slate-200 {
+  color: #1e293b !important;
+}
+
+html.theme-light .text-slate-300 {
+  color: #334155 !important;
+}
+
+html.theme-light .text-slate-400 {
+  color: #475569 !important;
+}
+
+html.theme-light .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* Hover em linhas de tabela, cards e botões neutros */
+html.theme-light .hover\:bg-slate-800:hover,
+html.theme-light .hover\:bg-slate-800\/60:hover,
+html.theme-light .hover\:bg-slate-800\/50:hover,
+html.theme-light .hover\:bg-slate-800\/40:hover,
+html.theme-light .hover\:bg-slate-800\/30:hover,
+html.theme-light .hover\:bg-slate-800\/20:hover,
+html.theme-light .hover\:bg-slate-900\/80:hover,
+html.theme-light .hover\:bg-slate-900:hover {
+  background-color: #f1f5f9 !important;
+}
+
+html.theme-light .hover\:border-slate-700:hover,
+html.theme-light .hover\:border-slate-600:hover {
+  border-color: #cbd5e1 !important;
+}
+
+/* Badges e Status contrastantes no tema claro */
+html.theme-light .bg-emerald-950\/50,
+html.theme-light .bg-emerald-950\/60,
+html.theme-light .bg-emerald-950\/40 {
+  background-color: #ecfdf5 !important;
+  color: #065f46 !important;
+  border-color: #a7f3d0 !important;
+}
+
+html.theme-light .bg-red-950\/50,
+html.theme-light .bg-red-950\/60,
+html.theme-light .bg-red-950\/40 {
+  background-color: #fef2f2 !important;
+  color: #991b1b !important;
+  border-color: #fecaca !important;
+}
+
+html.theme-light .bg-amber-950\/50,
+html.theme-light .bg-amber-950\/60,
+html.theme-light .bg-amber-950\/40 {
+  background-color: #fffbeb !important;
+  color: #92400e !important;
+  border-color: #fde68a !important;
+}
+
+html.theme-light .bg-sky-950\/50,
+html.theme-light .bg-sky-950\/60,
+html.theme-light .bg-sky-950\/40 {
+  background-color: #f0f9ff !important;
+  color: #075985 !important;
+  border-color: #bae6fd !important;
+}
+
+html.theme-light .bg-indigo-950\/50,
+html.theme-light .bg-indigo-950\/60,
+html.theme-light .bg-indigo-950\/40 {
+  background-color: #eef2ff !important;
+  color: #3730a3 !important;
+  border-color: #c7d2fe !important;
+}
+
+html.theme-light .bg-purple-950\/50,
+html.theme-light .bg-purple-950\/60,
+html.theme-light .bg-purple-950\/40 {
+  background-color: #faf5ff !important;
+  color: #6b21a8 !important;
+  border-color: #e9d5ff !important;
+}
+
+/* Ajuste de saturação dos textos de status para legibilidade no claro */
+html.theme-light .text-emerald-400 {
+  color: #059669 !important;
+}
+html.theme-light .text-red-400 {
+  color: #dc2626 !important;
+}
+html.theme-light .text-amber-400 {
+  color: #d97706 !important;
+}
+html.theme-light .text-sky-400 {
+  color: #0284c7 !important;
+}
+html.theme-light .text-indigo-400 {
+  color: #4f46e5 !important;
+}
+html.theme-light .text-purple-400 {
+  color: #7c3aed !important;
+}
+
