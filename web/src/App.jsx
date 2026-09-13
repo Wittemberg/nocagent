@@ -2217,7 +2217,7 @@ export default function App() {
     ? equipmentList.filter(eq => eq.status === 'auth_error')
     : [];
 
-  const renderEquipmentCard = (eq) => {
+  const renderEquipmentCard = (eq, isWideGrid = false) => {
     const isOnline = eq.status === 'online';
     const isDegraded = eq.status === 'degraded';
     const isAuthError = eq.status === 'auth_error';
@@ -2255,6 +2255,392 @@ export default function App() {
       ? 'AUTH 401' 
       : 'OFFLINE';
 
+    const hasSecondaryContent = 
+      (eq.type === 'MIKROTIK' && eq.subItems && eq.subItems.length > 0) ||
+      (eq.type === 'PROXMOX' && pveData?.storages && pveData.storages.length > 0) ||
+      (eq.type !== 'MIKROTIK' && eq.subItems && eq.subItems.length > 0) ||
+      (eq.osInfo && (eq.osInfo.cpu != null || eq.osInfo.memoryPercent != null));
+
+    // LAYOUT DIFERENCIADO PARA VISÃO POR GRADE (APROVEITA MELHOR O ESPAÇO HORIZONTAL)
+    if (isWideGrid) {
+      return (
+        <div 
+          key={eq.id} 
+          draggable={!isLayoutLocked}
+          onDragStart={(e) => handleDragStart(e, eq.id)}
+          onDragOver={(e) => handleDragOver(e, eq.id)}
+          onDrop={(e) => handleDrop(e, eq.id)}
+          onDragEnd={handleDragEnd}
+          className={`p-4 rounded-2xl border bg-slate-900/85 hover:bg-slate-900 transition-all duration-200 flex flex-col justify-between ${borderClass} ${
+            draggedCardId === eq.id ? 'opacity-30 scale-95 border-dashed border-sky-400' : ''
+          } ${
+            dragOverCardId === eq.id && draggedCardId !== eq.id
+              ? 'ring-2 ring-sky-400 ring-offset-2 ring-offset-slate-950 scale-[1.01] border-sky-500 shadow-xl shadow-sky-950/60'
+              : ''
+          } ${!isLayoutLocked ? 'cursor-grab active:cursor-grabbing' : ''}`}
+        >
+          <div>
+            {/* CABEÇALHO WIDE */}
+            <div className="flex items-start justify-between gap-3 mb-2.5">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {!isLayoutLocked && (
+                    <GripVertical className="w-4 h-4 text-slate-500 hover:text-sky-300 flex-shrink-0 cursor-grab active:cursor-grabbing" title="Arraste para reorganizar o card" />
+                  )}
+                  <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dotClass}`} />
+                  <h3 className="font-bold text-sm sm:text-base text-white truncate" title={eq.name}>
+                    {eq.name}
+                  </h3>
+                  {eq.connectionMode === 'AGENT' && (
+                    <span className="text-[10px] text-sky-400 font-mono flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-sky-950/70 border border-sky-800/60" title="Conexão via Agente Outbound">
+                      <Terminal className="w-2.5 h-2.5" />
+                      Agente
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono mt-0.5">
+                  <span className="text-sky-400 font-semibold">{eq.type}</span>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-slate-300 truncate max-w-[220px]" title={eq.host || 'Agente'}>
+                    {eq.host || (eq.connectionMode === 'AGENT' ? 'Agente Outbound' : '—')}
+                  </span>
+                  {eq.port && <span className="text-slate-500 font-mono">:{eq.port}</span>}
+                </div>
+
+                {/* BADGES HIERÁRQUICAS */}
+                <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                  <span className="px-2 py-0.5 rounded bg-sky-950/80 text-sky-400 border border-sky-800/70 text-[9.5px] font-semibold flex items-center gap-1" title="Grupo / Tenant">
+                    <Building2 className="w-2.5 h-2.5" />
+                    {eq.group || 'Geral'}
+                  </span>
+                  {eq.subgroup && (
+                    <span className="px-2 py-0.5 rounded bg-slate-800/90 text-slate-300 border border-slate-700/60 text-[9.5px] font-medium flex items-center gap-1" title="Subgrupo / Unidade">
+                      <Store className="w-2.5 h-2.5 text-amber-400" />
+                      {eq.subgroup}
+                    </span>
+                  )}
+                  {eq.tags && Array.isArray(eq.tags) && eq.tags.length > 0 && (
+                    eq.tags.slice(0, 3).map((tg, idx) => (
+                      <span key={idx} className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 text-[9px] font-mono">
+                        #{tg}
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  onClick={() => handleCloneEquipment(eq)}
+                  title="Clonar Equipamento (Cadastro Rápido)"
+                  className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-sky-300 border border-slate-700/60 transition"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleOpenEditModal(eq)}
+                  title="Editar Credenciais no Cofre"
+                  className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700/60 transition"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold border ${statusBadgeClass}`}>
+                  {statusText}
+                </span>
+              </div>
+            </div>
+
+            {/* ALERTA DE ERRO */}
+            {eq.error && (
+              <div className="mb-2.5 p-2 rounded-xl bg-amber-950/40 border border-amber-800/60 text-amber-300 text-[11px] flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                  <span className="truncate">{eq.error}</span>
+                </div>
+                {isAuthError && (
+                  <button
+                    onClick={() => handleOpenEditModal(eq)}
+                    className="px-2 py-0.5 bg-amber-900/80 hover:bg-amber-800 border border-amber-700 rounded text-[10px] font-semibold text-amber-200 transition whitespace-nowrap flex items-center gap-1"
+                  >
+                    <Key className="w-2.5 h-2.5" />
+                    Ajustar
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* CORPO DO CARD WIDE EM 2 COLUNAS INTERNAS */}
+            <div className={`pt-2.5 border-t border-slate-800/60 ${
+              hasSecondaryContent ? 'grid grid-cols-1 md:grid-cols-2 gap-3' : 'space-y-2'
+            }`}>
+              {/* COLUNA 1: TELEMETRIA E KPIS DE REDE */}
+              <div className="space-y-2">
+                {eq.type === 'PROXMOX' ? (
+                  pveData ? (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/70">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                            <span className="flex items-center gap-1 font-semibold text-slate-300">
+                              <Cpu className="w-3 h-3 text-sky-400" />
+                              CPU
+                            </span>
+                            <span className="font-mono text-sky-400 font-bold">{pveData.cpu?.percent ?? 0}%</span>
+                          </div>
+                          <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                            <div 
+                              className="bg-sky-500 h-full rounded-full transition-all duration-300" 
+                              style={{ width: `${Math.min(pveData.cpu?.percent ?? 0, 100)}%` }} 
+                            />
+                          </div>
+                          <span className="text-[9px] text-slate-500 block mt-1 truncate">
+                            {pveData.cpu?.cores ? `${pveData.cpu.cores} vCPUs` : `Nó: ${pveData.node || 'pve'}`}
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/70">
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                            <span className="flex items-center gap-1 font-semibold text-slate-300">
+                              <Layers className="w-3 h-3 text-amber-400" />
+                              RAM
+                            </span>
+                            <span className="font-mono text-amber-400 font-bold">{pveData.memory?.percent ?? 0}%</span>
+                          </div>
+                          <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                            <div 
+                              className="bg-amber-500 h-full rounded-full transition-all duration-300" 
+                              style={{ width: `${Math.min(pveData.memory?.percent ?? 0, 100)}%` }} 
+                            />
+                          </div>
+                          <span className="text-[9px] text-slate-500 block mt-1 truncate">
+                            {pveData.memory?.usedGB != null ? `${pveData.memory.usedGB}/${pveData.memory.totalGB}GB` : 'RAM'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {pveData.workloads && (
+                          <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] font-mono text-slate-300">
+                            🖥️ <strong className="text-emerald-400">{pveData.workloads.runningVMs ?? 0}</strong>/{pveData.workloads.totalVMs ?? 0} VMs
+                          </span>
+                        )}
+                        {pveData.workloads?.runningLXCs > 0 && (
+                          <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] font-mono text-slate-300">
+                            📦 <strong className="text-sky-400">{pveData.workloads.runningLXCs}</strong> CTs
+                          </span>
+                        )}
+                        {pveData.node && (
+                          <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] font-mono text-slate-400">
+                            🏷️ Nó: <strong className="text-slate-200">{pveData.node}</strong>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-slate-500 text-[11px] italic">Cluster Proxmox VE ativo (Sem métricas detalhadas).</p>
+                  )
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/70 flex flex-col justify-between">
+                        <span className="text-slate-400 text-[10.5px] flex items-center gap-1 font-medium">
+                          <Activity className="w-3 h-3 text-sky-400" />
+                          Latência (RTT)
+                        </span>
+                        <span className="font-mono text-emerald-400 font-bold text-sm mt-1">
+                          {eq.lastLatency != null ? `${eq.lastLatency} ms` : '—'}
+                        </span>
+                      </div>
+                      <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/70 flex flex-col justify-between">
+                        <span className="text-slate-400 text-[10.5px] flex items-center gap-1 font-medium">
+                          <Radio className="w-3 h-3 text-slate-400" />
+                          Perda de Pacotes
+                        </span>
+                        <span className={`font-mono font-bold text-sm mt-1 ${eq.lastLossPercent > 0 ? 'text-amber-400' : 'text-slate-300'}`}>
+                          {eq.lastLossPercent != null ? `${eq.lastLossPercent}%` : '0%'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {eq.osInfo && eq.type !== 'PROXMOX' && eq.type !== 'MIKROTIK' && (
+                      <div className="grid grid-cols-3 gap-1.5 text-center text-[9px] font-mono">
+                        {eq.osInfo.cpu != null && (
+                          <div className="bg-slate-950/50 p-1.5 rounded-lg border border-slate-800/50">
+                            <span className="text-slate-500 block text-[9px]">CPU</span>
+                            <span className="text-sky-400 font-bold">
+                              {typeof eq.osInfo.cpu === 'object' ? `${eq.osInfo.cpu.percent ?? 0}%` : String(eq.osInfo.cpu)}
+                            </span>
+                          </div>
+                        )}
+                        {eq.osInfo.memoryPercent != null && (
+                          <div className="bg-slate-950/50 p-1.5 rounded-lg border border-slate-800/50">
+                            <span className="text-slate-500 block text-[9px]">RAM</span>
+                            <span className="text-amber-400 font-bold">
+                              {typeof eq.osInfo.memoryPercent === 'object' ? `${eq.osInfo.memoryPercent.percent ?? 0}%` : String(eq.osInfo.memoryPercent)}
+                            </span>
+                          </div>
+                        )}
+                        {(eq.osInfo.diskFreeGb != null || eq.osInfo.diskFreePct != null) && (
+                          <div className="bg-slate-950/50 p-1.5 rounded-lg border border-slate-800/50">
+                            <span className="text-slate-500 block text-[9px]">Disco</span>
+                            <span className="text-emerald-400 font-bold">
+                              {typeof eq.osInfo.diskFreeGb === 'object' ? '' : String(eq.osInfo.diskFreeGb || eq.osInfo.diskFreePct)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* COLUNA 2: LINKS WAN / STORAGES / GATEWAYS */}
+              {hasSecondaryContent && (
+                <div className="space-y-1.5">
+                  {eq.type === 'PROXMOX' && pveData?.storages && pveData.storages.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold px-0.5">
+                        <span className="flex items-center gap-1 text-slate-300">
+                          <HardDrive className="w-3 h-3 text-purple-400" />
+                          Armazenamento ({pveData.storages.length} Pools)
+                        </span>
+                      </div>
+                      <div className="space-y-1 max-h-[140px] overflow-y-auto pr-0.5">
+                        {pveData.storages.map((st, idx) => {
+                          const isHigh = st.usedPercent >= 85;
+                          const isMed = st.usedPercent >= 70 && st.usedPercent < 85;
+                          const barColor = isHigh ? 'bg-rose-500' : isMed ? 'bg-amber-500' : 'bg-purple-500';
+                          const textColor = isHigh ? 'text-rose-400' : isMed ? 'text-amber-400' : 'text-purple-300';
+                          const hasBytes = st.totalBytes > 0;
+                          return (
+                            <div key={idx} className="px-2 py-1 rounded-md bg-slate-950/50 border border-slate-800/60 flex items-center justify-between gap-2 text-[10px]">
+                              <div className="flex items-center gap-1 min-w-0 flex-1">
+                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isHigh ? 'bg-rose-400' : 'bg-purple-400'}`} />
+                                <span className="font-mono font-medium text-slate-200 truncate" title={st.name}>{st.name}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {hasBytes && (
+                                  <span className="text-[9px] font-mono text-slate-400">
+                                    {formatBytes(st.usedBytes)}/{formatBytes(st.totalBytes)}
+                                  </span>
+                                )}
+                                <span className={`font-mono text-[10px] font-bold ${textColor}`}>{st.usedPercent ?? 0}%</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {eq.type === 'MIKROTIK' && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold px-0.5 mb-1">
+                        <span className="flex items-center gap-1 text-sky-400 font-medium">
+                          <Radio className="w-3 h-3 text-sky-400" />
+                          Links WAN / Failover
+                        </span>
+                        {eq.mikrotikData?.activeWanName && (
+                          <span className="text-[9px] font-mono text-emerald-300 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-600/50 truncate max-w-[140px]" title={`Link Ativo: ${eq.mikrotikData.activeWanName}`}>
+                            ● Ativo: {eq.mikrotikData.activeWanName}
+                          </span>
+                        )}
+                      </div>
+                      {eq.subItems && eq.subItems.length > 0 ? (
+                        <div className="space-y-1 max-h-[140px] overflow-y-auto pr-0.5">
+                          {eq.subItems.map((wan, idx) => {
+                            const isActive = wan.isActive || wan.isDefaultRoute || wan.status === 'ACTIVE';
+                            const isStandby = wan.running && !isActive;
+                            return (
+                              <div 
+                                key={idx} 
+                                className={`px-2 py-1 rounded-md border text-[10px] flex items-center justify-between gap-1.5 transition-colors ${
+                                  isActive 
+                                    ? 'bg-emerald-950/35 border-emerald-600/50 border-l-2 border-l-emerald-400 text-slate-100'
+                                    : isStandby
+                                    ? 'bg-slate-950/40 border-slate-800/60 text-slate-300 hover:border-slate-700/80'
+                                    : 'bg-rose-950/15 border-rose-900/30 text-slate-400 opacity-70'
+                                }`}
+                              >
+                                <div className="flex items-center gap-1 min-w-0 flex-1">
+                                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                    isActive ? 'bg-emerald-400 animate-pulse' : isStandby ? 'bg-amber-400' : 'bg-rose-500'
+                                  }`} />
+                                  <span className={`font-mono text-[10px] font-semibold truncate ${isActive ? 'text-emerald-300' : 'text-slate-200'}`}>
+                                    {wan.name}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-shrink-0 font-mono text-[8.5px]">
+                                  {(wan.formattedRx || wan.formattedTx || wan.rxBytes != null) && (
+                                    <span className="text-slate-400 tracking-tight flex items-center gap-0.5">
+                                      <span className="text-sky-400 font-bold">↓</span>{(wan.formattedRx || formatBytes(wan.rxBytes)).replace(' ', '')}
+                                      <span className="text-emerald-400 font-bold ml-0.5">↑</span>{(wan.formattedTx || formatBytes(wan.txBytes)).replace(' ', '')}
+                                    </span>
+                                  )}
+                                  <span className={`px-1 py-0.2 rounded text-[8px] font-bold uppercase border flex-shrink-0 ${
+                                    isActive
+                                      ? 'bg-emerald-900/60 text-emerald-300 border-emerald-500/60'
+                                      : isStandby
+                                      ? 'bg-amber-950/30 text-amber-300/80 border-amber-700/40'
+                                      : 'bg-rose-950/30 text-rose-300/70 border-rose-800/30'
+                                  }`}>
+                                    {isActive ? 'ATIVA' : isStandby ? 'BKP' : 'DOWN'}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 italic">Nenhum link WAN detectado.</p>
+                      )}
+                    </div>
+                  )}
+
+                  {eq.type !== 'MIKROTIK' && eq.subItems && eq.subItems.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-[10px] text-slate-400 font-semibold px-0.5 mb-1">Gateways Monitorados</div>
+                      {eq.subItems.slice(0, 3).map((sub, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-[10px] bg-slate-950/40 px-2 py-1 rounded border border-slate-800/50">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sub.status === 'online' ? 'bg-emerald-400' : 'bg-red-500'}`} />
+                            <span className="font-medium text-white truncate">{sub.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2 font-mono text-[9px] flex-shrink-0">
+                            <span className={sub.status === 'online' ? 'text-emerald-400' : 'text-red-400'}>{(sub.status || 'OFF').toUpperCase()}</span>
+                            <span className="text-slate-400">{sub.delay ?? 0}ms</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* BOTÃO DO AGENTE OUTBOUND */}
+          {eq.connectionMode === 'AGENT' && (
+            <div className="mt-2.5 pt-2 flex items-center justify-between border-t border-slate-800/80 text-[10px]">
+              <span className="text-slate-400 flex items-center gap-1">
+                <Terminal className="w-3 h-3 text-sky-400" />
+                Agente Host
+              </span>
+              <button
+                onClick={() => handleOpenAgentModal(eq)}
+                className="px-2 py-0.5 bg-sky-950 hover:bg-sky-900 border border-sky-800 rounded text-sky-300 font-semibold flex items-center gap-1 transition"
+              >
+                <Terminal className="w-2.5 h-2.5" />
+                Script 1-Clique
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // LAYOUT COMPACTO (PADRÃO PARA VISÃO POR UNIDADE)
     return (
       <div 
         key={eq.id} 
@@ -2271,8 +2657,8 @@ export default function App() {
             : ''
         } ${!isLayoutLocked ? 'cursor-grab active:cursor-grabbing' : ''}`}
       >
-        {/* CABEÇALHO COMPACTO: Nome, Tipo, Host e Status */}
         <div>
+          {/* CABEÇALHO COMPACTO */}
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
@@ -2296,7 +2682,6 @@ export default function App() {
                   {eq.host || (eq.connectionMode === 'AGENT' ? 'Agente Outbound' : '—')}
                 </span>
               </div>
-              {/* BADGES HIERÁRQUICAS: GRUPO & SUBGRUPO */}
               <div className="flex items-center gap-1 flex-wrap mt-1.5">
                 <span className="px-1.5 py-0.5 rounded bg-sky-950/80 text-sky-400 border border-sky-800/70 text-[9px] font-semibold flex items-center gap-1" title="Grupo / Tenant">
                   <Building2 className="w-2.5 h-2.5" />
@@ -2358,12 +2743,11 @@ export default function App() {
             </div>
           )}
 
-          {/* CORPO DO CARD CONFORME TIPO */}
+          {/* CORPO DO CARD COMPACTO */}
           {eq.type === 'PROXMOX' ? (
             <div className="space-y-2 text-xs">
               {pveData ? (
                 <>
-                  {/* CPU e RAM em barras compactas */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/70">
                       <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
@@ -2404,7 +2788,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Resumo de VMs e Informações do Nó */}
                   <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                     {pveData.workloads && (
                       <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] font-mono text-slate-300">
@@ -2423,16 +2806,14 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Storages / Discos do Proxmox */}
                   {pveData.storages && pveData.storages.length > 0 && (
                     <div className="pt-2 border-t border-slate-800/60 space-y-1.5">
                       <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold px-0.5">
                         <span className="flex items-center gap-1 text-slate-300">
                           <HardDrive className="w-3 h-3 text-purple-400" />
-                          Armazenamento ({pveData.storages.length} {pveData.storages.length === 1 ? 'Pool' : 'Pools'})
+                          Armazenamento ({pveData.storages.length} Pools)
                         </span>
                       </div>
-
                       <div className="space-y-1 max-h-[160px] overflow-y-auto pr-0.5">
                         {pveData.storages.map((st, idx) => {
                           const isHigh = st.usedPercent >= 85;
@@ -2440,39 +2821,19 @@ export default function App() {
                           const barColor = isHigh ? 'bg-rose-500' : isMed ? 'bg-amber-500' : 'bg-purple-500';
                           const textColor = isHigh ? 'text-rose-400' : isMed ? 'text-amber-400' : 'text-purple-300';
                           const hasBytes = st.totalBytes > 0;
-
                           return (
-                            <div 
-                              key={idx} 
-                              className="px-2 py-1 rounded-md bg-slate-950/50 border border-slate-800/60 flex items-center justify-between gap-2 text-[10.5px]"
-                            >
+                            <div key={idx} className="px-2 py-1 rounded-md bg-slate-950/50 border border-slate-800/60 flex items-center justify-between gap-2 text-[10.5px]">
                               <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isHigh ? 'bg-rose-400' : 'bg-purple-400'}`} />
-                                <span className="font-mono font-medium text-slate-200 truncate" title={st.name}>
-                                  {st.name}
-                                </span>
-                                {st.type && (
-                                  <span className="text-[9px] text-slate-500 uppercase font-mono hidden xs:inline">
-                                    {st.type}
-                                  </span>
-                                )}
+                                <span className="font-mono font-medium text-slate-200 truncate" title={st.name}>{st.name}</span>
                               </div>
-
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 {hasBytes && (
                                   <span className="text-[9.5px] font-mono text-slate-400">
                                     {formatBytes(st.usedBytes)} / {formatBytes(st.totalBytes)}
                                   </span>
                                 )}
-                                <div className="w-12 bg-slate-800 h-1 rounded-full overflow-hidden hidden sm:block">
-                                  <div 
-                                    className={`h-full rounded-full transition-all ${barColor}`} 
-                                    style={{ width: `${Math.min(st.usedPercent ?? 0, 100)}%` }} 
-                                  />
-                                </div>
-                                <span className={`font-mono text-[10px] font-bold ${textColor}`}>
-                                  {st.usedPercent ?? 0}%
-                                </span>
+                                <span className={`font-mono text-[10px] font-bold ${textColor}`}>{st.usedPercent ?? 0}%</span>
                               </div>
                             </div>
                           );
@@ -2486,15 +2847,15 @@ export default function App() {
               )}
             </div>
           ) : (
-            <div className="space-y-1.5 text-xs">
-              <div className="flex justify-between items-center bg-slate-950/60 px-2.5 py-1.5 rounded-lg border border-slate-800/70">
-                <span className="text-slate-400 text-[11px]">Latência (RTT):</span>
+            <div className="grid grid-cols-2 gap-1.5 text-xs">
+              <div className="flex justify-between items-center bg-slate-950/60 px-2 py-1.5 rounded-lg border border-slate-800/70">
+                <span className="text-slate-400 text-[10.5px]">Latência (RTT):</span>
                 <span className="font-mono text-emerald-400 font-semibold text-[11px]">
                   {eq.lastLatency != null ? `${eq.lastLatency} ms` : '—'}
                 </span>
               </div>
-              <div className="flex justify-between items-center bg-slate-950/60 px-2.5 py-1.5 rounded-lg border border-slate-800/70">
-                <span className="text-slate-400 text-[11px]">Perda de Pacotes:</span>
+              <div className="flex justify-between items-center bg-slate-950/60 px-2 py-1.5 rounded-lg border border-slate-800/70">
+                <span className="text-slate-400 text-[10.5px]">Perda:</span>
                 <span className={`font-mono font-semibold text-[11px] ${eq.lastLossPercent > 0 ? 'text-amber-400' : 'text-slate-300'}`}>
                   {eq.lastLossPercent != null ? `${eq.lastLossPercent}%` : '0%'}
                 </span>
@@ -2563,27 +2924,20 @@ export default function App() {
                           : 'bg-rose-950/15 border-rose-900/30 text-slate-400 opacity-70'
                       }`}
                     >
-                      {/* Lado Esquerdo: Ponto de status + Interface + Comentário sutil */}
                       <div className="flex items-center gap-1.5 min-w-0 flex-1">
                         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                           isActive ? 'bg-emerald-400 animate-pulse shadow-[0_0_6px_#34d399]' : isStandby ? 'bg-amber-400' : 'bg-rose-500'
                         }`} />
-                        
                         <span className={`font-mono text-[10.5px] font-semibold flex-shrink-0 ${isActive ? 'text-emerald-300' : 'text-slate-200'}`}>
                           {wan.name}
                         </span>
-
                         {wan.comment && (
-                          <span 
-                            className="text-[9.5px] text-slate-400 truncate max-w-[120px] font-normal"
-                            title={wan.comment}
-                          >
+                          <span className="text-[9.5px] text-slate-400 truncate max-w-[120px] font-normal" title={wan.comment}>
                             • {wan.comment}
                           </span>
                         )}
                       </div>
 
-                      {/* Lado Direito: Tráfego compacto (RX/TX) + Badge simplificado */}
                       <div className="flex items-center gap-1.5 flex-shrink-0 font-mono text-[9px]">
                         {(wan.formattedRx || wan.formattedTx || wan.rxBytes != null) && (
                           <span 
@@ -3089,132 +3443,154 @@ export default function App() {
         {/* TAB 1: VISÃO GERAL */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-800/60">
-              <div>
-                <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                  <Radio className="w-4 h-4 text-sky-400" />
-                  Status dos Equipamentos
-                </h2>
-                <p className="text-xs text-slate-400">Visão operacional em tempo real dos ativos de rede gerenciados no Cofre.</p>
-              </div>
+            {/* CABEÇALHO & TOOLBAR OPERACIONAL DO DASHBOARD */}
+            <div className="flex flex-col gap-3 pb-1">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80 shadow-sm flex flex-col gap-3.5">
+                {/* LINHA 1: TÍTULO OPERACIONAL COM CONTADOR E AÇÕES GLOBAIS */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/60 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center flex-shrink-0">
+                      <Radio className="w-4 h-4 animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">Status dos Equipamentos</h2>
+                        <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-800/90 text-slate-300 border border-slate-700/70 font-semibold">
+                          {filteredEquipments.length} {filteredEquipments.length === 1 ? 'ativo' : 'ativos'}
+                        </span>
+                        <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-800/60 font-mono flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Tempo Real
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Visão operacional e telemetria dos ativos de rede gerenciados no Cofre.</p>
+                    </div>
+                  </div>
 
-              {/* FILTROS MULTI-TENANT (GRUPO / SUBGRUPO / TIPO) E ATUALIZAÇÃO */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* FILTRO DE CLIENTE / GRUPO */}
-                <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-xl px-2.5 py-1 text-xs shadow-sm">
-                  <Building2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
-                  <select
-                    value={overviewGroupFilter}
-                    onChange={(e) => {
-                      setOverviewGroupFilter(e.target.value);
-                      setOverviewSubgroupFilter('ALL');
-                    }}
-                    className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer pr-1 font-medium"
-                  >
-                    <option value="ALL" className="bg-slate-900 text-slate-200">Todos os Clientes / Grupos</option>
-                    {distinctGroups.map((g) => (
-                      <option key={g} value={g} className="bg-slate-900 text-slate-200">{g}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0">
+                    {customCardOrder.length > 0 && (
+                      <button
+                        onClick={handleResetCardOrder}
+                        disabled={isLayoutLocked}
+                        title={isLayoutLocked ? "Destrave o layout (Arraste Livre) para poder resetar a ordenação" : "Restaurar ordenação padrão do sistema"}
+                        className={`text-xs flex items-center gap-1.5 transition px-3 py-1.5 border rounded-xl shadow-sm font-medium ${
+                          isLayoutLocked
+                            ? 'opacity-40 cursor-not-allowed bg-slate-900/40 border-slate-800 text-slate-500'
+                            : 'border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-amber-300'
+                        }`}
+                      >
+                        <RotateCcw className={`w-3.5 h-3.5 ${isLayoutLocked ? 'text-slate-500' : 'text-amber-400'}`} />
+                        <span>Resetar Ordem</span>
+                      </button>
+                    )}
+
+                    <button 
+                      onClick={fetchEquipmentsStatus}
+                      disabled={refreshing}
+                      className="text-xs text-slate-200 hover:text-sky-300 flex items-center gap-1.5 transition px-3.5 py-1.5 border border-slate-800 rounded-xl bg-slate-900 hover:bg-slate-800 shadow-sm font-medium"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-sky-400' : 'text-slate-400'}`} />
+                      <span>Atualizar</span>
+                    </button>
+                  </div>
                 </div>
 
-                {/* FILTRO DE SUBGRUPO / UNIDADE (SE HOUVER SUBGRUPOS) */}
-                {distinctSubgroups.length > 0 && (
-                  <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-xl px-2.5 py-1 text-xs shadow-sm">
-                    <Store className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                {/* LINHA 2: BARRA DE BOTÕES E FILTROS CENTRALIZADOS COM ESPAÇAMENTO DINÂMICO */}
+                <div className="flex items-center justify-center gap-2.5 sm:gap-3 flex-wrap">
+                  {/* FILTRO DE CLIENTE / GRUPO */}
+                  <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs shadow-sm hover:border-slate-700 transition">
+                    <Building2 className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
                     <select
-                      value={overviewSubgroupFilter}
-                      onChange={(e) => setOverviewSubgroupFilter(e.target.value)}
+                      value={overviewGroupFilter}
+                      onChange={(e) => {
+                        setOverviewGroupFilter(e.target.value);
+                        setOverviewSubgroupFilter('ALL');
+                      }}
                       className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer pr-1 font-medium"
                     >
-                      <option value="ALL" className="bg-slate-900 text-slate-200">Todas as Unidades / Lojas</option>
-                      {distinctSubgroups.map((sg) => (
-                        <option key={sg} value={sg} className="bg-slate-900 text-slate-200">{sg}</option>
+                      <option value="ALL" className="bg-slate-900 text-slate-200">Todos os Clientes / Grupos</option>
+                      {distinctGroups.map((g) => (
+                        <option key={g} value={g} className="bg-slate-900 text-slate-200">{g}</option>
                       ))}
                     </select>
                   </div>
-                )}
 
-                {/* FILTRO DE TIPO DE ATIVO */}
-                <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-xl px-2.5 py-1 text-xs shadow-sm">
-                  <Filter className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
-                  <select
-                    value={overviewTypeFilter}
-                    onChange={(e) => setOverviewTypeFilter(e.target.value)}
-                    className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer pr-1 font-medium"
-                  >
-                    <option value="ALL" className="bg-slate-900 text-slate-200">Todos os Tipos ({equipmentList.length})</option>
-                    <option value="PFSENSE" className="bg-slate-900 text-slate-200">pfSense Firewall (REST API)</option>
-                    <option value="MIKROTIK" className="bg-slate-900 text-slate-200">Mikrotik RouterOS (API)</option>
-                    <option value="PROXMOX" className="bg-slate-900 text-slate-200">Proxmox VE Cluster</option>
-                    <option value="LINUX_SERVER" className="bg-slate-900 text-slate-200">Servidor Linux (SSH / Agente)</option>
-                    <option value="WINDOWS_SERVER" className="bg-slate-900 text-slate-200">Servidor Windows (WinRM / Agente)</option>
-                    <option value="ZABBIX" className="bg-slate-900 text-slate-200">Zabbix Server</option>
-                    <option value="GENERIC_SNMP" className="bg-slate-900 text-slate-200">SNMP Genérico</option>
-                  </select>
-                </div>
-
-                {/* TOGGLE AGRUPAR POR UNIDADE */}
-                <button
-                  onClick={() => setGroupByUnit(!groupByUnit)}
-                  title={groupByUnit ? "Alternar para grade contínua" : "Agrupar cards por Unidade / Loja"}
-                  className={`text-xs flex items-center gap-1.5 transition px-2.5 py-1 border rounded-xl shadow-sm ${
-                    groupByUnit
-                      ? 'bg-sky-950/90 border-sky-500 text-sky-300 font-semibold'
-                      : 'bg-slate-900/90 border-slate-800 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  {groupByUnit ? 'Por Unidade' : 'Grade'}
-                </button>
-
-                {/* CONTROLES DE ARRASTE (DRAG & DROP) */}
-                <button
-                  onClick={handleToggleLayoutLock}
-                  title={isLayoutLocked ? "Destravar para reorganizar os cards por arraste" : "Travar layout contra arrastes acidentais"}
-                  className={`text-xs flex items-center gap-1.5 transition px-2.5 py-1 border rounded-xl shadow-sm ${
-                    isLayoutLocked
-                      ? 'bg-slate-900/90 border-slate-800 text-slate-400 hover:text-slate-200'
-                      : 'bg-emerald-950/80 border-emerald-600/70 text-emerald-300 font-semibold shadow-emerald-950/30'
-                  }`}
-                >
-                  {isLayoutLocked ? (
-                    <>
-                      <Lock className="w-3.5 h-3.5 text-slate-400" />
-                      Travado
-                    </>
-                  ) : (
-                    <>
-                      <Unlock className="w-3.5 h-3.5 text-emerald-400" />
-                      Arraste Livre
-                    </>
+                  {/* FILTRO DE SUBGRUPO / UNIDADE */}
+                  {distinctSubgroups.length > 0 && (
+                    <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs shadow-sm hover:border-slate-700 transition">
+                      <Store className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                      <select
+                        value={overviewSubgroupFilter}
+                        onChange={(e) => setOverviewSubgroupFilter(e.target.value)}
+                        className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer pr-1 font-medium"
+                      >
+                        <option value="ALL" className="bg-slate-900 text-slate-200">Todas as Unidades / Lojas</option>
+                        {distinctSubgroups.map((sg) => (
+                          <option key={sg} value={sg} className="bg-slate-900 text-slate-200">{sg}</option>
+                        ))}
+                      </select>
+                    </div>
                   )}
-                </button>
 
-                {customCardOrder.length > 0 && (
+                  {/* FILTRO DE TIPO DE ATIVO */}
+                  <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs shadow-sm hover:border-slate-700 transition">
+                    <Filter className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
+                    <select
+                      value={overviewTypeFilter}
+                      onChange={(e) => setOverviewTypeFilter(e.target.value)}
+                      className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer pr-1 font-medium"
+                    >
+                      <option value="ALL" className="bg-slate-900 text-slate-200">Todos os Tipos ({equipmentList.length})</option>
+                      <option value="PFSENSE" className="bg-slate-900 text-slate-200">pfSense Firewall (REST API)</option>
+                      <option value="MIKROTIK" className="bg-slate-900 text-slate-200">Mikrotik RouterOS (API)</option>
+                      <option value="PROXMOX" className="bg-slate-900 text-slate-200">Proxmox VE Cluster</option>
+                      <option value="LINUX_SERVER" className="bg-slate-900 text-slate-200">Servidor Linux (SSH / Agente)</option>
+                      <option value="WINDOWS_SERVER" className="bg-slate-900 text-slate-200">Servidor Windows (WinRM / Agente)</option>
+                      <option value="ZABBIX" className="bg-slate-900 text-slate-200">Zabbix Server</option>
+                      <option value="GENERIC_SNMP" className="bg-slate-900 text-slate-200">SNMP Genérico</option>
+                    </select>
+                  </div>
+
+                  {/* SEPARADOR SUTIL */}
+                  <div className="hidden md:block h-6 w-[1px] bg-slate-800" />
+
+                  {/* TOGGLE AGRUPAR POR UNIDADE / VISÃO POR GRADE */}
                   <button
-                    onClick={handleResetCardOrder}
-                    disabled={isLayoutLocked}
-                    title={isLayoutLocked ? "Destrave o layout (Arraste Livre) para poder resetar a ordenação" : "Restaurar ordenação padrão do sistema"}
-                    className={`text-xs flex items-center gap-1 transition px-2.5 py-1 border rounded-xl shadow-sm ${
-                      isLayoutLocked
-                        ? 'opacity-40 cursor-not-allowed bg-slate-900/40 border-slate-800 text-slate-500'
-                        : 'border-slate-800 bg-slate-900/90 hover:bg-slate-800 text-slate-400 hover:text-amber-300'
+                    onClick={() => setGroupByUnit(!groupByUnit)}
+                    title={groupByUnit ? "Alternar para visão contínua por grade" : "Agrupar cards por Unidade / Loja"}
+                    className={`text-xs flex items-center gap-1.5 transition px-3 py-1.5 border rounded-xl shadow-sm font-medium ${
+                      groupByUnit
+                        ? 'bg-sky-950/90 border-sky-500 text-sky-300 font-semibold shadow-sky-950/40'
+                        : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
                     }`}
                   >
-                    <RotateCcw className={`w-3 h-3 ${isLayoutLocked ? 'text-slate-500' : 'text-amber-400'}`} />
-                    Resetar Ordem
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>{groupByUnit ? 'Por Unidade' : 'Visão por Grade'}</span>
                   </button>
-                )}
 
-                <button 
-                  onClick={fetchEquipmentsStatus}
-                  disabled={refreshing}
-                  className="text-xs text-slate-300 hover:text-sky-400 flex items-center gap-1.5 transition px-3 py-1.5 border border-slate-800 rounded-xl bg-slate-900/90 hover:bg-slate-800 shadow-sm"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-sky-400' : 'text-slate-400'}`} />
-                  Atualizar
-                </button>
+                  {/* CONTROLE DE ARRASTE (TRAVADO / ARRASTE LIVRE) */}
+                  <button
+                    onClick={handleToggleLayoutLock}
+                    title={isLayoutLocked ? "Destravar para reorganizar os cards por arraste" : "Travar layout contra arrastes acidentais"}
+                    className={`text-xs flex items-center gap-1.5 transition px-3 py-1.5 border rounded-xl shadow-sm font-medium ${
+                      isLayoutLocked
+                        ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                        : 'bg-emerald-950/90 border-emerald-600/80 text-emerald-300 font-semibold shadow-emerald-950/40'
+                    }`}
+                  >
+                    {isLayoutLocked ? (
+                      <>
+                        <Lock className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Travado</span>
+                      </>
+                    ) : (
+                      <>
+                        <Unlock className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Arraste Livre</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -3299,16 +3675,16 @@ export default function App() {
                         {items.length} {items.length === 1 ? 'ativo' : 'ativos'}
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5">
-                      {items.map(eq => renderEquipmentCard(eq))}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+                      {items.map(eq => renderEquipmentCard(eq, false))}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              /* MODO GRID PADRÃO */
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5">
-                {orderedEquipments.map(eq => renderEquipmentCard(eq))}
+              /* MODO GRID PADRÃO (VISÃO POR GRADE APROVEITANDO O ESPAÇO HORIZONTAL) */
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
+                {orderedEquipments.map(eq => renderEquipmentCard(eq, true))}
               </div>
             )}
 

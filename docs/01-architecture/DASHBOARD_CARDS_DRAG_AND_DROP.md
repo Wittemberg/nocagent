@@ -67,7 +67,33 @@ Para prevenir perdas involuntárias de layouts personalizados por cliques aciden
 
 ---
 
-## 5. Arquitetura Técnica & Chaves do Armazenamento Local
+## 5. Layouts do Painel e Arquitetura dos Cards
+
+### 5.1 Barra de Ferramentas Centralizada e Alinhamento Dinâmico
+Para garantir harmonia visual e usabilidade ergonômica em telas de qualquer resolução (laptops, monitores ultrawide, videowalls NOC):
+1. **Cabeçalho Superior Operacional:**
+   - Lado Esquerdo: Identificador com ícone de pulso `Radio`, título *"Status dos Equipamentos"*, badge com contagem em tempo real de ativos filtrados e selo *"Tempo Real"*.
+   - Lado Direito: Ações globais com botão `Atualizar` e o botão de segurança `Resetar Ordem` (quando há personalização ativa).
+2. **Barra de Controles Centralizada com Espaçamento Dinâmico:**
+   - Centraliza dinamicamente os 3 seletores de filtro (`Clientes / Grupos`, `Unidades / Lojas`, `Tipos de Ativo`).
+   - Mantém os alternadores de modo (`Por Unidade / Visão por Grade`) e de trava (`Travado / Arraste Livre`) integrados no mesmo eixo com espaçamento elástico (`justify-center gap-2.5 sm:gap-3 flex-wrap`), eliminando quebras desajeitadas ou desalinhamentos em qualquer largura de tela.
+
+### 5.2 Aproveitamento de Espaço: Visão por Grade vs. Modo por Unidade
+- **Modo "Visão por Grade" (Layout Wide de 2 Colunas Internas):**
+  - **Objetivo:** Aproveitamento máximo da largura horizontal da tela, transformando cada card em um widget executivo estilo dashboard NOC.
+  - **Distribuição:** A grade acomoda 2 a 3 cards largos por linha (`grid-cols-1 md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-4`).
+  - **Estrutura Interna (2 Colunas):**
+    - **Coluna Esquerda (Conectividade & KPIs):** Métricas de Latência (RTT) e Perda de Pacotes em blocos destacados lado a lado, telemetria básica do Host (CPU, RAM, Disco) e botão do script do Agente em 1-clique.
+    - **Coluna Direita (Sub-ativos e Recursos):** 
+      - Para **Mikrotik RouterOS:** Lista de Links WAN / Failover com indicação do link ativo principal, tráfego RX/TX formatado e badges de status (`ATIVA`, `BKP`, `DOWN`).
+      - Para **Proxmox VE:** Medidores de CPU/RAM, contadores de VMs e CTs, e lista de Pools de Armazenamento com percentuais de ocupação e bytes livres.
+      - Para **pfSense:** Lista de Gateways monitorados com latência e status online/offline.
+- **Modo "Por Unidade" (Layout Compacto Hierárquico):**
+  - Mantém o agrupamento por Loja/Filial, utilizando cards verticais compactos com métricas de Latência e Perda lado a lado (`grid-cols-2 gap-1.5`) para reduzir o consumo de espaço vertical.
+
+---
+
+## 6. Arquitetura Técnica & Chaves do Armazenamento Local
 
 - **Trava de Layout:**
   - Chave: `noc_layout_locked_${uid}`
@@ -77,3 +103,4 @@ Para prevenir perdas involuntárias de layouts personalizados por cliques aciden
   - Chave: `noc_card_order_${uid}`
   - Formato: Array JSON contendo a sequência dos IDs dos equipamentos: `["eq-01", "eq-04", "eq-02", ...]`
   - Ao carregar, o frontend reordena os equipamentos aplicando prioridade ao índice gravado em `orderMap`.
+
