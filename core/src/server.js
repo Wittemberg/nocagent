@@ -4,6 +4,8 @@ const cors = require('cors');
 const axios = require('axios');
 const QRCode = require('qrcode');
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const { PrismaClient } = require('@prisma/client');
 const { handleChatwootWebhook } = require('./chatwoot/bridge');
 const { processMessage } = require('./agent/hermes');
@@ -2573,6 +2575,26 @@ app.get('/api/observability/traces', authenticateToken, async (req, res) => {
     return res.status(500).json({ error: 'Falha ao obter traces de execução.' });
   }
 });
+// --- Limpeza Periódica de Mídia (Garbage Collector) ---
+// Remove arquivos (fotos/vídeos) mais antigos que 2 horas da pasta public/media para economizar disco
+const mediaDir = path.resolve(__dirname, '../../public/media');
+setInterval(() => {
+  if (fs.existsSync(mediaDir)) {
+    fs.readdir(mediaDir, (err, files) => {
+      if (err) return;
+      const now = Date.now();
+      files.forEach(file => {
+        const filePath = path.join(mediaDir, file);
+        fs.stat(filePath, (err, stats) => {
+          if (err) return;
+          if (now - stats.mtimeMs > 7200000) { // 2 horas
+            fs.unlink(filePath, () => console.log(`[Garbage Collector] Mídia antiga removida: ${file}`));
+          }
+        });
+      });
+    });
+  }
+}, 3600000); // Roda a cada 1 hora
 
 // Inicialização do Servidor HTTP
 app.listen(PORT, '0.0.0.0', async () => {
