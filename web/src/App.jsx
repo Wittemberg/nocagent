@@ -60,6 +60,51 @@ import axios from 'axios';
 import QRCodeLib from 'qrcode';
 import { validateSshKeyFile } from './utils/fileSecurity';
 
+// Função auxiliar simples para renderizar Markdown básico (Imagens e Negrito) no chat
+const renderMarkdown = (text) => {
+  if (!text) return null;
+  
+  // Dividir o texto primeiro pelas imagens ![alt](url)
+  const imgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = imgRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    parts.push({ type: 'img', alt: match[1], url: match[2], key: match.index });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  
+  // Agora processar texto normal e negrito
+  return parts.map((part, i) => {
+    if (typeof part === 'string') {
+      const boldParts = part.split(/(\*\*.*?\*\*)/g);
+      return (
+        <span key={i}>
+          {boldParts.map((bp, j) => {
+            if (bp.startsWith('**') && bp.endsWith('**')) {
+              return <strong key={j} className="font-bold">{bp.slice(2, -2)}</strong>;
+            }
+            return <span key={j}>{bp}</span>;
+          })}
+        </span>
+      );
+    } else if (part.type === 'img') {
+      return (
+        <div key={part.key} className="mt-2 mb-1">
+          <img src={part.url} alt={part.alt} className="max-w-full rounded-lg shadow-md border border-slate-700/50 max-h-64 object-contain" />
+        </div>
+      );
+    }
+    return null;
+  });
+};
 // Interceptor global do Axios para autenticação Bearer Token
 axios.interceptors.request.use((config) => {
   try {
@@ -3582,7 +3627,7 @@ export default function App() {
                       ? 'bg-sky-600 text-white rounded-tr-none shadow-md shadow-sky-600/20'
                       : 'bg-slate-800/90 text-slate-200 border border-slate-700/80 rounded-tl-none whitespace-pre-wrap'
                   }`}>
-                    {msg.text}
+                    {renderMarkdown(msg.text)}
                     <span className="block text-[10px] text-slate-300/70 mt-1.5 text-right font-mono">
                       {msg.time}
                     </span>
