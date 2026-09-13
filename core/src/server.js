@@ -1236,6 +1236,25 @@ app.get('/api/equipments/status', authenticateToken, async (req, res) => {
           }).catch(() => {});
         }
 
+        // Se for CFTV (DVR, NVR, IP_CAMERA)
+        if (['DVR', 'NVR', 'IP_CAMERA'].includes(eq.type)) {
+          const port = eq.port || 80;
+          const probe = await probeTcpPort(eq.host, port, 4000);
+          if (probe.online) {
+            item.status = 'online';
+            item.lastLatency = probe.rtt;
+            item.lastLossPercent = 0;
+            item.lastCheck = new Date();
+          } else {
+            item.status = 'offline';
+            item.error = `CFTV inacessível na porta HTTP (${port}). Erro: ${probe.error}`;
+          }
+          prisma.equipment.update({
+            where: { id: eq.id },
+            data: { status: item.status, lastLatency: item.lastLatency, lastLossPercent: item.lastLossPercent, lastCheck: item.lastCheck },
+          }).catch(() => {});
+        }
+
         return item;
       })
     );
@@ -1556,7 +1575,7 @@ app.post('/api/equipments', authenticateToken, async (req, res) => {
         encryptedCredentials,
         iv,
         authTag,
-        status: mode === 'AGENT' ? 'unknown' : 'online',
+        status: 'unknown',
         active: true,
       },
       select: {
