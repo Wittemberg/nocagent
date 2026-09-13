@@ -1870,7 +1870,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Resumo de VMs e Storages em Chips Compactos */}
+                  {/* Resumo de VMs e Informações do Nó */}
                   <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                     {pveData.workloads && (
                       <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] font-mono text-slate-300">
@@ -1882,12 +1882,70 @@ export default function App() {
                         📦 <strong className="text-sky-400">{pveData.workloads.runningLXCs}</strong> CTs
                       </span>
                     )}
-                    {pveData.storages && pveData.storages.length > 0 && (
-                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] font-mono text-slate-300" title={pveData.storages.map(s => `${s.name}: ${s.usedPercent}%`).join(', ')}>
-                        💾 <strong className="text-purple-400">{pveData.storages.length}</strong> Pools
+                    {pveData.node && (
+                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] font-mono text-slate-400">
+                        🏷️ Nó: <strong className="text-slate-200">{pveData.node}</strong>
                       </span>
                     )}
                   </div>
+
+                  {/* Storages / Discos do Proxmox */}
+                  {pveData.storages && pveData.storages.length > 0 && (
+                    <div className="pt-2 border-t border-slate-800/60 space-y-1.5">
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold px-0.5">
+                        <span className="flex items-center gap-1 text-slate-300">
+                          <HardDrive className="w-3 h-3 text-purple-400" />
+                          Armazenamento ({pveData.storages.length} {pveData.storages.length === 1 ? 'Pool' : 'Pools'})
+                        </span>
+                      </div>
+
+                      <div className="space-y-1 max-h-[160px] overflow-y-auto pr-0.5">
+                        {pveData.storages.map((st, idx) => {
+                          const isHigh = st.usedPercent >= 85;
+                          const isMed = st.usedPercent >= 70 && st.usedPercent < 85;
+                          const barColor = isHigh ? 'bg-rose-500' : isMed ? 'bg-amber-500' : 'bg-purple-500';
+                          const textColor = isHigh ? 'text-rose-400' : isMed ? 'text-amber-400' : 'text-purple-300';
+                          const hasBytes = st.totalBytes > 0;
+
+                          return (
+                            <div 
+                              key={idx} 
+                              className="px-2 py-1 rounded-md bg-slate-950/50 border border-slate-800/60 flex items-center justify-between gap-2 text-[10.5px]"
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isHigh ? 'bg-rose-400' : 'bg-purple-400'}`} />
+                                <span className="font-mono font-medium text-slate-200 truncate" title={st.name}>
+                                  {st.name}
+                                </span>
+                                {st.type && (
+                                  <span className="text-[9px] text-slate-500 uppercase font-mono hidden xs:inline">
+                                    {st.type}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {hasBytes && (
+                                  <span className="text-[9.5px] font-mono text-slate-400">
+                                    {formatBytes(st.usedBytes)} / {formatBytes(st.totalBytes)}
+                                  </span>
+                                )}
+                                <div className="w-12 bg-slate-800 h-1 rounded-full overflow-hidden hidden sm:block">
+                                  <div 
+                                    className={`h-full rounded-full transition-all ${barColor}`} 
+                                    style={{ width: `${Math.min(st.usedPercent ?? 0, 100)}%` }} 
+                                  />
+                                </div>
+                                <span className={`font-mono text-[10px] font-bold ${textColor}`}>
+                                  {st.usedPercent ?? 0}%
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <p className="text-slate-500 text-[11px] italic">Cluster Proxmox VE ativo (Sem métricas detalhadas).</p>
