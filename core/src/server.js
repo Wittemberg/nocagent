@@ -96,6 +96,7 @@ function probeTcpPort(host, port, timeoutMs = 3500) {
 }
 
 // Middlewares
+app.enable('trust proxy');
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -2195,8 +2196,11 @@ app.get('/api/agent/install-script/:equipmentId', async (req, res) => {
       });
     }
 
-    const hostHeader = req.get('host') || 'nocagent.awecloudsolution.com';
-    const serverBaseUrl = `${req.protocol}://${hostHeader}`;
+    const hostHeader = req.get('x-forwarded-host') || req.get('host') || 'nocagent.awecloudsolution.com';
+    const proto = req.get('x-forwarded-proto') || (req.secure ? 'https' : req.protocol) || 'https';
+    const isLocal = hostHeader.includes('localhost') || hostHeader.includes('127.0.0.1');
+    const finalProto = isLocal ? proto : 'https';
+    const serverBaseUrl = `${finalProto}://${hostHeader}`;
 
     if (eq.type === 'WINDOWS_SERVER') {
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');

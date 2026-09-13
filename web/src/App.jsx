@@ -557,13 +557,13 @@ winrm enumerate winrm/config/listener
             </div>
           </div>
           <div className="p-2 bg-slate-950/80 rounded border border-emerald-900/50 font-mono text-[10.5px] text-emerald-300/90 flex items-center justify-between gap-2">
-            <span className="truncate">
+            <span className="truncate select-all" title={form.type === 'WINDOWS_SERVER' ? `irm ${(typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null') ? window.location.origin : 'https://nocagent.awecloudsolution.com'}/api/agent/install-script/${form.id || ':id'} | iex` : `curl -fsSL ${(typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null') ? window.location.origin : 'https://nocagent.awecloudsolution.com'}/api/agent/install-script/${form.id || ':id'} | sudo bash`}>
               {form.type === 'WINDOWS_SERVER' 
-                ? 'irm <servidor>/api/agent/install-script/:id | iex' 
-                : 'curl -fsSL <servidor>/api/agent/install-script/:id | sudo bash'}
+                ? `irm ${(typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null') ? window.location.origin : 'https://nocagent.awecloudsolution.com'}/api/agent/install-script/${form.id || ':id'} | iex` 
+                : `curl -fsSL ${(typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null') ? window.location.origin : 'https://nocagent.awecloudsolution.com'}/api/agent/install-script/${form.id || ':id'} | sudo bash`}
             </span>
             <span className="text-[9px] px-1.5 py-0.5 bg-emerald-900/80 text-emerald-300 rounded font-sans font-semibold flex-shrink-0">
-              Cópia automática ao salvar
+              {form.id ? 'Pronto' : 'Cópia automática ao salvar'}
             </span>
           </div>
         </div>
@@ -2072,15 +2072,27 @@ export default function App() {
 
       // Se for modo AGENT, copia automaticamente o comando de instalação para o clipboard e abre o modal
       if (newEquipment.connectionMode === 'AGENT' && createdEq) {
+        const originUrl = (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null')
+          ? window.location.origin
+          : 'https://nocagent.awecloudsolution.com';
         const cmd = createdEq.type === 'WINDOWS_SERVER'
-          ? `irm ${window.location.origin}/api/agent/install-script/${createdEq.id} | iex`
-          : `curl -fsSL ${window.location.origin}/api/agent/install-script/${createdEq.id} | sudo bash`;
+          ? `irm ${originUrl}/api/agent/install-script/${createdEq.id} | iex`
+          : `curl -fsSL ${originUrl}/api/agent/install-script/${createdEq.id} | sudo bash`;
         try {
           if (navigator.clipboard && navigator.clipboard.writeText) {
             await navigator.clipboard.writeText(cmd);
-            setCopySuccess(true);
+          } else {
+            const textArea = document.createElement('textarea');
+            textArea.value = cmd;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
           }
-        } catch {}
+          setCopySuccess(true);
+        } catch (copyErr) {
+          console.warn('Não foi possível copiar automaticamente para o clipboard:', copyErr);
+        }
         handleOpenAgentModal(createdEq);
       }
     } catch (err) {
@@ -4061,13 +4073,29 @@ export default function App() {
                     </span>
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
+                        const originUrl = (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null')
+                          ? window.location.origin
+                          : 'https://nocagent.awecloudsolution.com';
                         const cmd = selectedAgentEq.type === 'WINDOWS_SERVER'
-                          ? `irm ${window.location.origin}/api/agent/install-script/${selectedAgentEq.id} | iex`
-                          : `curl -fsSL ${window.location.origin}/api/agent/install-script/${selectedAgentEq.id} | sudo bash`;
-                        navigator.clipboard.writeText(cmd);
-                        setCopySuccess(true);
-                        setTimeout(() => setCopySuccess(false), 3000);
+                          ? `irm ${originUrl}/api/agent/install-script/${selectedAgentEq.id} | iex`
+                          : `curl -fsSL ${originUrl}/api/agent/install-script/${selectedAgentEq.id} | sudo bash`;
+                        try {
+                          if (navigator.clipboard && navigator.clipboard.writeText) {
+                            await navigator.clipboard.writeText(cmd);
+                          } else {
+                            const textArea = document.createElement('textarea');
+                            textArea.value = cmd;
+                            document.body.appendChild(textArea);
+                            textArea.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(textArea);
+                          }
+                          setCopySuccess(true);
+                          setTimeout(() => setCopySuccess(false), 3000);
+                        } catch (err) {
+                          console.error('Falha ao copiar comando:', err);
+                        }
                       }}
                       className="px-2.5 py-1 bg-sky-950 hover:bg-sky-900 border border-sky-800 text-sky-300 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition"
                     >
@@ -4087,8 +4115,8 @@ export default function App() {
 
                   <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800 font-mono text-emerald-400 text-xs break-all select-all">
                     {selectedAgentEq.type === 'WINDOWS_SERVER'
-                      ? `irm ${window.location.origin}/api/agent/install-script/${selectedAgentEq.id} | iex`
-                      : `curl -fsSL ${window.location.origin}/api/agent/install-script/${selectedAgentEq.id} | sudo bash`}
+                      ? `irm ${(typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null') ? window.location.origin : 'https://nocagent.awecloudsolution.com'}/api/agent/install-script/${selectedAgentEq.id} | iex`
+                      : `curl -fsSL ${(typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null') ? window.location.origin : 'https://nocagent.awecloudsolution.com'}/api/agent/install-script/${selectedAgentEq.id} | sudo bash`}
                   </div>
                 </div>
 

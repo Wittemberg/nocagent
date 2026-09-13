@@ -1,5 +1,6 @@
-# Integração: linux
+# Integração: Linux
 
-Documentação específica desta integração será criada na etapa correspondente do roadmap.
+Documentação oficial da integração com servidores Linux (SSH e Agente Outbound 1-Clique):
 
-Consulte também ../README.md e ../../02-implementation/ para a especificação inicial.
+- [LINUX_AGENT_INSTALLATION.md](file:///var/www/nocagent/docs/03-integrations/linux/LINUX_AGENT_INSTALLATION.md): Instalação do Agente Outbound em Servidores Linux (1-Clique) com resolução automática de domínio e guia operacional para o Manual do Usuário.
+
