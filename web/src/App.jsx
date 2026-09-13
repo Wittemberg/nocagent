@@ -179,6 +179,88 @@ function EquipmentCredentialInputs({ form, setForm, storages = [], isEdit = fals
     reader.readAsText(file);
   };
 
+  // Estados e gerador do script PowerShell de preparação WinRM
+  const [winrmScriptCopied, setWinrmScriptCopied] = useState(false);
+  const [showWinrmPreview, setShowWinrmPreview] = useState(false);
+
+  const getWinrmSetupScript = () => {
+    const currentDomain = window.location.hostname || 'nocagent.awecloudsolution.com';
+    const winrmPort = form.port ? String(form.port).trim() : '5985';
+
+    return `# =========================================================================
+# NOC-Agent: Script de Preparação WinRM e Firewall Restrito
+# Domínio Autorizado: \${currentDomain} | Porta TCP: \${winrmPort}
+# Executar no PowerShell como Administrador no Servidor Windows
+# =========================================================================
+
+$ErrorActionPreference = "Stop"
+Write-Host ">>> [NOC-Agent] Configurando WinRM e Firewall Seguro..." -ForegroundColor Cyan
+
+# 1. Habilitar serviço WinRM e inicialização automática
+Write-Host "1/4 Habilitando o serviço WinRM..." -ForegroundColor Yellow
+Enable-PSRemoting -Force -SkipNetworkProfileCheck
+Set-Service WinRM -StartupType Automatic
+Start-Service WinRM
+
+# 2. Configurar autenticação e cotas de recursos do WS-Management
+Write-Host "2/4 Configurando autenticação e cotas de recursos..." -ForegroundColor Yellow
+Set-Item -Path WSMan:\\localhost\\Service\\Auth\\Negotiate -Value $true
+Set-Item -Path WSMan:\\localhost\\Service\\Auth\\Basic -Value $true
+Set-Item -Path WSMan:\\localhost\\Service\\AllowUnencrypted -Value $true
+Set-Item -Path WSMan:\\localhost\\Shell\\MaxMemoryPerShellMB -Value 1024
+Set-Item -Path WSMan:\\localhost\\Shell\\MaxProcessesPerShell -Value 25
+
+# 3. Obter os endereços IP autorizados do domínio do NOC-Agent
+$nocDomain = "\${currentDomain}"
+Write-Host "3/4 Resolvendo endereços IP do domínio NOC-Agent: $nocDomain..." -ForegroundColor Yellow
+
+$remoteIps = @()
+try {
+    $dnsEntries = [System.Net.Dns]::GetHostAddresses($nocDomain) | Where-Object { $_.AddressFamily -eq 'InterNetwork' }
+    foreach ($entry in $dnsEntries) {
+        $remoteIps += $entry.IPAddressToString
+    }
+} catch {
+    Write-Warning "Não foi possível resolver DNS automaticamente para $nocDomain."
+}
+
+if ($remoteIps.Count -eq 0) {
+    if ($nocDomain -match '^\\d{1,3}(\\.\\d{1,3}){3}$') {
+        $remoteIps = @($nocDomain)
+    } else {
+        Write-Warning "Regra de firewall liberada sem restrição de IP de origem (ajuste manual recomendado)."
+        $remoteIps = @("Any")
+    }
+}
+
+Write-Host "    IPs de Origem Permitidos: $($remoteIps -join ', ')" -ForegroundColor Green
+
+# 4. Criar regra de Firewall no Windows Defender exclusiva para o NOC-Agent
+Write-Host "4/4 Configurando regra de Firewall (TCP \${winrmPort})..." -ForegroundColor Yellow
+Remove-NetFirewallRule -Name "NOCAgent-WinRM-In" -ErrorAction SilentlyContinue
+
+$firewallParams = @{
+    Name = "NOCAgent-WinRM-In"
+    DisplayName = "NOC-Agent WinRM (TCP \${winrmPort}) - Exclusivo"
+    Description = "Permite telemetria WinRM exclusivamente para a instancia NOC-Agent ($nocDomain)"
+    Direction = "Inbound"
+    LocalPort = \${winrmPort}
+    Protocol = "TCP"
+    Action = "Allow"
+    Profile = @("Domain", "Private", "Public")
+}
+
+if ($remoteIps -notcontains "Any") {
+    $firewallParams["RemoteAddress"] = $remoteIps
+}
+
+New-NetFirewallRule @firewallParams | Out-Null
+Write-Host ">>> Sucesso! WinRM ativo e protegido no Windows Firewall." -ForegroundColor Green
+Write-Host ">>> Portas e listeners ativos:" -ForegroundColor Cyan
+winrm enumerate winrm/config/listener
+`;
+  };
+
   const handleKeyDrop = (e) => {
     e.preventDefault();
     setIsDraggingKey(false);
@@ -654,9 +736,12 @@ function EquipmentCredentialInputs({ form, setForm, storages = [], isEdit = fals
         </div>
       ) : form.type === 'WINDOWS_SERVER' ? (
         <div className="space-y-3 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-          <div className="flex items-center gap-1.5 text-xs text-sky-400 font-medium">
-            <Server className="w-3.5 h-3.5" />
-            Autenticação WinRM Windows
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs text-sky-400 font-medium">
+              <Server className="w-3.5 h-3.5" />
+              Autenticação WinRM Windows
+            </div>
+            <span className="text-[10px] text-slate-500 font-mono">TCP {form.port || '5985'}</span>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -681,6 +766,62 @@ function EquipmentCredentialInputs({ form, setForm, storages = [], isEdit = fals
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500 font-mono text-xs"
               />
             </div>
+          </div>
+
+          {/* Card Interativo: Copiar Comandos PowerShell Prontos para o Clipboard */}
+          <div className="p-3 bg-sky-950/30 border border-sky-800/60 rounded-xl space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-sky-300 font-semibold">
+                <Terminal className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" />
+                <span>Script de Preparação WinRM & Firewall</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const script = getWinrmSetupScript();
+                  navigator.clipboard.writeText(script);
+                  setWinrmScriptCopied(true);
+                  setTimeout(() => setWinrmScriptCopied(false), 3500);
+                }}
+                className="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-[11px] font-semibold flex items-center gap-1.5 transition shadow shadow-sky-950/40 flex-shrink-0"
+              >
+                {winrmScriptCopied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Script Copiado!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copiar Comandos PowerShell</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Copia o script completo para o clipboard: habilita o serviço WinRM, ativa a autenticação Negotiate/Basic e abre a porta {form.port || '5985'} no Windows Firewall <strong>restringindo exclusivamente aos IPs do domínio deste NOC-Agent ({window.location.hostname || 'nocagent.awecloudsolution.com'})</strong>.
+            </p>
+
+            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1.5 border-t border-slate-800/60">
+              <span className="flex items-center gap-1 text-emerald-400 text-[10.5px]">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Firewall restrito ao domínio NOC-Agent
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowWinrmPreview(!showWinrmPreview)}
+                className="text-sky-400 hover:text-sky-300 transition text-[10.5px] underline cursor-pointer"
+              >
+                {showWinrmPreview ? 'Ocultar comandos' : 'Ver comandos PowerShell'}
+              </button>
+            </div>
+
+            {showWinrmPreview && (
+              <pre className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 text-[10px] font-mono text-emerald-300/90 overflow-x-auto max-h-44 custom-scrollbar select-all">
+                {getWinrmSetupScript()}
+              </pre>
+            )}
           </div>
         </div>
       ) : form.type === 'PROXMOX' ? (
