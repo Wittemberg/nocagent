@@ -78,7 +78,7 @@ Para garantir harmonia visual e usabilidade ergonômica em telas de qualquer res
    - Centraliza dinamicamente os 3 seletores de filtro (`Clientes / Grupos`, `Unidades / Lojas`, `Tipos de Ativo`).
    - Mantém os alternadores de modo (`Por Unidade / Visão por Grade`) e de trava (`Travado / Arraste Livre`) integrados no mesmo eixo com espaçamento elástico (`justify-center gap-2.5 sm:gap-3 flex-wrap`), eliminando quebras desajeitadas ou desalinhamentos em qualquer largura de tela.
 
-### 5.2 Aproveitamento de Espaço: Visão por Grade vs. Modo por Unidade
+### 5.2 Aproveitamento de Espaço: Visão por Grade vs. Visão por Unidade (Modo Planilha Excel)
 - **Modo "Visão por Grade" (Layout Wide de 2 Colunas Internas):**
   - **Objetivo:** Aproveitamento máximo da largura horizontal da tela, transformando cada card em um widget executivo estilo dashboard NOC.
   - **Distribuição:** A grade acomoda 2 a 3 cards largos por linha (`grid-cols-1 md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-4`).
@@ -88,8 +88,23 @@ Para garantir harmonia visual e usabilidade ergonômica em telas de qualquer res
       - Para **Mikrotik RouterOS:** Lista de Links WAN / Failover com indicação do link ativo principal, tráfego RX/TX formatado e badges de status (`ATIVA`, `BKP`, `DOWN`).
       - Para **Proxmox VE:** Medidores de CPU/RAM, contadores de VMs e CTs, e lista de Pools de Armazenamento com percentuais de ocupação e bytes livres.
       - Para **pfSense:** Lista de Gateways monitorados com latência e status online/offline.
-- **Modo "Por Unidade" (Layout Compacto Hierárquico):**
-  - Mantém o agrupamento por Loja/Filial, utilizando cards verticais compactos com métricas de Latência e Perda lado a lado (`grid-cols-2 gap-1.5`) para reduzir o consumo de espaço vertical.
+- **Modo "Por Unidade" (Visão Compacta Estilo Planilha de Excel):**
+  - **Objetivo:** Visão de altíssima densidade operacional para NOCs com dezenas de lojas e filiais, eliminando o desperdício de espaço vertical de cards soltos.
+  - **Estrutura de Linhas e Colunas (Excel Table):**
+    - `#` / Alça de Arraste (`GripVertical` quando destravado)
+    - `Status`: Badge compacto (ONLINE, DEGRADADO, AUTH 401, OFFLINE) com indicador luminoso pulsante.
+    - `Equipamento`: Nome do ativo, badge de conexão via Agente Outbound e tags hierárquicas.
+    - `Tipo`: Tag do fabricante/SO (MIKROTIK, PROXMOX, LINUX, WINDOWS, PFSENSE).
+    - `Host / IP`: Endereço de conexão ou host/porta.
+    - `Latência (RTT)`: Valor numérico em ms com destaque cromático.
+    - `Perda`: Percentual de perda de pacotes.
+    - `Telemetria / Links WAN`: Pílulas inline com links WAN ativos/backup e tráfego RX/TX instantâneo, ou consumo de CPU/RAM e VMs ativas.
+    - `Ações`: Botões rápidos de clonar equipamento, editar credenciais e script de 1-clique.
+  - **Drag-and-Drop em Tabela:** As linhas da planilha de cada unidade podem ser arrastadas e reordenadas individualmente quando o layout estiver destravado (`isLayoutLocked === false`).
+
+### 5.3 Suporte Bitemático (Dark & Light Theme)
+- **Tema Escuro (Dark Mode):** Cartões com fundo `bg-slate-900/85`, caixas métricas em `bg-slate-950/60`, bordas suaves em `border-slate-800` e tipografia de alto brilho.
+- **Tema Claro (Light Mode):** Cartões com fundo `bg-white`, caixas métricas em `bg-slate-50`, bordas definidas em `border-slate-200`, badges em `bg-slate-100 text-slate-700` e crachás de status com contraste WCAG AA, garantindo legibilidade perfeita e acabamento corporativo premium.
 
 ---
 
@@ -97,7 +112,7 @@ Para garantir harmonia visual e usabilidade ergonômica em telas de qualquer res
 
 - **Modo de Visualização (Grade vs. Por Unidade):**
   - Chave: `noc_view_group_by_unit_${uid}`
-  - Valores: `"true"` (agrupado por unidade) ou `"false"` (visão contínua por grade)
+  - Valores: `"true"` (agrupado por unidade em tabela Excel) ou `"false"` (visão contínua por grade de cards)
   - Valor inicial caso inexistente: `false` (Visão por Grade)
   - Comportamento: Persiste a preferência individual de cada usuário entre sessões e recarregamentos.
 - **Trava de Layout:**

@@ -111,6 +111,7 @@ html.theme-light .border-t.border-slate-800\/60 {
 html.theme-light .bg-slate-900,
 html.theme-light .bg-slate-900\/95,
 html.theme-light .bg-slate-900\/90,
+html.theme-light .bg-slate-900\/85,
 html.theme-light .bg-slate-900\/80,
 html.theme-light .bg-slate-900\/70,
 html.theme-light .bg-slate-900\/60,
@@ -253,7 +254,18 @@ html.theme-light table tbody td {
 /* ==========================================================================
    5. CARDS DE EQUIPAMENTOS (DASHBOARD) E LINKS WAN
    ========================================================================== */
-/* Caixa interna de Latência e Métricas */
+/* Caixa interna de Latência e Métricas (Wide e Compacto) */
+html.theme-light .p-4,
+html.theme-light .p-3\.5 {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.05) !important;
+}
+
+html.theme-light .p-4 .bg-slate-950\/60,
+html.theme-light .p-4 .bg-slate-950\/50,
+html.theme-light .p-4 .bg-slate-950\/40,
+html.theme-light .p-4 .bg-slate-950,
 html.theme-light .p-3\.5 .bg-slate-950\/60,
 html.theme-light .p-3\.5 .bg-slate-950\/40,
 html.theme-light .p-3\.5 .bg-slate-950 {
@@ -261,13 +273,16 @@ html.theme-light .p-3\.5 .bg-slate-950 {
   border-color: #e2e8f0 !important;
 }
 
-/* Barra de progresso / trilho de latência */
-html.theme-light .bg-slate-800,
+/* Badge de contagem e trilho de latência */
+html.theme-light .bg-slate-800\/90,
 html.theme-light .bg-slate-800\/80,
+html.theme-light .bg-slate-800\/70,
 html.theme-light .bg-slate-800\/60,
 html.theme-light .bg-slate-800\/50,
-html.theme-light .bg-slate-800\/40 {
-  background-color: #e2e8f0 !important;
+html.theme-light .bg-slate-800\/40,
+html.theme-light .bg-slate-800 {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
   border-color: #cbd5e1 !important;
 }
 
