@@ -70,17 +70,10 @@ module.exports = {
       try {
         await execPromise(cmd, { timeout: 10000 }); // 10s timeout
       } catch (curlError) {
-        // Para fins de demonstração, se o IP for inacessível (ex: lab),
-        // geramos um arquivo dummy e retornamos como "sucesso em lab"
-        // TODO: Em produção, descomentar o throw
-        console.error('Falha real ao buscar snapshot, criando dummy file para lab:', curlError.message);
-        fs.writeFileSync(filePath, 'DUMMY_IMAGE_DATA_FOR_LAB');
-        
+        console.error('Falha real ao buscar snapshot:', curlError.message);
         return { 
-          success: true, 
-          message: 'Falha de comunicação real, gerada imagem de teste (ambiente de laboratório).',
-          imageUrl: `/api/media/${fileName}`, // URL Relativa para funcionar via Nginx
-          markdown: `![Foto Câmera ${channel}](/api/media/${fileName})\n\n[🔗 Abrir imagem em nova aba](/api/media/${fileName})`
+          success: false, 
+          error: `Falha de comunicação com o DVR via HTTP. Verifique se a porta configurada no cofre é a porta HTTP (padrão 80) e não a porta de serviço (37777). Erro: ${curlError.message}`
         };
       }
       
