@@ -2962,9 +2962,9 @@ export default function App() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="font-bold text-lg text-white tracking-tight">NOC-Agent</h1>
-                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium flex items-center gap-1.5 ${isSystemOnline ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80' : 'bg-red-950/80 text-red-400 border-red-800/80'}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${isSystemOnline ? 'bg-emerald-400 animate-ping' : 'bg-red-400'}`}></span>
-                  {isSystemOnline ? 'SISTEMA ONLINE' : 'API OFFLINE'}
+                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium flex items-center gap-1.5 ${(isSystemOnline && !statusError) ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80' : 'bg-red-950/80 text-red-400 border-red-800/80'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${(isSystemOnline && !statusError) ? 'bg-emerald-400 animate-ping' : 'bg-red-400'}`}></span>
+                  {(isSystemOnline && !statusError) ? 'SISTEMA ONLINE' : 'API OFFLINE'}
                 </span>
               </div>
               <p className="text-xs text-slate-400">nocagent.awecloudsolution.com • IA Operacional 24/7 (v1.3.0)</p>
