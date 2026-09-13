@@ -44,6 +44,9 @@ import {
   Sliders,
   Zap,
   Gauge,
+  GripVertical,
+  Unlock,
+  RotateCcw,
 } from 'lucide-react';
 import axios from 'axios';
 import QRCodeLib from 'qrcode';
@@ -415,13 +418,25 @@ function EquipmentCredentialInputs({ form, setForm, storages = [], isEdit = fals
 
       {/* CREDENCIAIS DINÂMICAS BASEADAS NO TIPO */}
       {form.connectionMode === 'AGENT' ? (
-        <div className="p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-xl text-emerald-200 text-xs flex items-start gap-2.5">
-          <Terminal className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-          <div>
-            <span className="font-semibold block">Instalação 1-Clique com Agente Outbound</span>
-            <p className="text-[11px] text-emerald-300/80 mt-0.5">
-              Nenhuma senha precisa trafegar ou ser armazenada. Ao salvar, um comando de auto-registro ({form.type === 'WINDOWS_SERVER' ? 'PowerShell' : 'Bash / curl'}) com token criptográfico de uso único será gerado.
-            </p>
+        <div className="p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-xl text-emerald-200 text-xs space-y-2">
+          <div className="flex items-start gap-2.5">
+            <Terminal className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <span className="font-semibold block">Instalação 1-Clique com Agente Outbound</span>
+              <p className="text-[11px] text-emerald-300/80 mt-0.5">
+                Nenhuma senha precisa trafegar ou ser armazenada. Ao clicar em <strong>Salvar & Copiar Comando</strong>, o token único é gerado e o comando pronto é copiado automaticamente para sua área de transferência para colar no servidor.
+              </p>
+            </div>
+          </div>
+          <div className="p-2 bg-slate-950/80 rounded border border-emerald-900/50 font-mono text-[10.5px] text-emerald-300/90 flex items-center justify-between gap-2">
+            <span className="truncate">
+              {form.type === 'WINDOWS_SERVER' 
+                ? 'irm <servidor>/api/agent/install-script/:id | iex' 
+                : 'curl -fsSL <servidor>/api/agent/install-script/:id | sudo bash'}
+            </span>
+            <span className="text-[9px] px-1.5 py-0.5 bg-emerald-900/80 text-emerald-300 rounded font-sans font-semibold flex-shrink-0">
+              Cópia automática ao salvar
+            </span>
           </div>
         </div>
       ) : form.type === 'MIKROTIK' ? (
@@ -1210,6 +1225,112 @@ export default function App() {
     return matchType && matchGroup && matchSubgroup;
   });
 
+  // Ordenação personalizada de cards por Drag & Drop vinculada ao usuário logado
+  const [customCardOrder, setCustomCardOrder] = useState(() => {
+    try {
+      const uid = currentUser?.id || currentUser?.email || 'default';
+      const saved = localStorage.getItem(`noc_card_order_${uid}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Sincroniza ordenação personalizada sempre que o usuário ativo mudar
+  useEffect(() => {
+    try {
+      const uid = currentUser?.id || currentUser?.email || 'default';
+      const saved = localStorage.getItem(`noc_card_order_${uid}`);
+      setCustomCardOrder(saved ? JSON.parse(saved) : []);
+    } catch {
+      setCustomCardOrder([]);
+    }
+  }, [currentUser?.id, currentUser?.email]);
+
+  const [draggedCardId, setDraggedCardId] = useState(null);
+  const [dragOverCardId, setDragOverCardId] = useState(null);
+  const [isLayoutLocked, setIsLayoutLocked] = useState(false);
+
+  // Aplica ordenação personalizada por usuário aos equipamentos filtrados
+  const orderedEquipments = useMemo(() => {
+    if (!customCardOrder || customCardOrder.length === 0) {
+      return filteredEquipments;
+    }
+    const orderMap = new Map();
+    customCardOrder.forEach((id, index) => {
+      orderMap.set(String(id), index);
+    });
+    return [...filteredEquipments].sort((a, b) => {
+      const indexA = orderMap.has(String(a.id)) ? orderMap.get(String(a.id)) : 999999;
+      const indexB = orderMap.has(String(b.id)) ? orderMap.get(String(b.id)) : 999999;
+      if (indexA !== indexB) return indexA - indexB;
+      return 0;
+    });
+  }, [filteredEquipments, customCardOrder]);
+
+  const handleDragStart = (e, id) => {
+    if (isLayoutLocked) return;
+    setDraggedCardId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    try {
+      e.dataTransfer.setData('text/plain', String(id));
+    } catch {}
+  };
+
+  const handleDragOver = (e, id) => {
+    if (isLayoutLocked) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverCardId !== id) {
+      setDragOverCardId(id);
+    }
+  };
+
+  const handleDrop = (e, targetId) => {
+    e.preventDefault();
+    if (isLayoutLocked) return;
+    if (!draggedCardId || String(draggedCardId) === String(targetId)) {
+      setDraggedCardId(null);
+      setDragOverCardId(null);
+      return;
+    }
+
+    const currentIds = orderedEquipments.map((eq) => String(eq.id));
+    const fromIndex = currentIds.indexOf(String(draggedCardId));
+    const toIndex = currentIds.indexOf(String(targetId));
+
+    if (fromIndex !== -1 && toIndex !== -1) {
+      const newIds = [...currentIds];
+      const [moved] = newIds.splice(fromIndex, 1);
+      newIds.splice(toIndex, 0, moved);
+
+      // Preserva outros IDs existentes que não estavam no filtro ativo
+      const allKnownIds = [...new Set([...newIds, ...customCardOrder.map(String)])];
+      setCustomCardOrder(allKnownIds);
+
+      try {
+        const uid = currentUser?.id || currentUser?.email || 'default';
+        localStorage.setItem(`noc_card_order_${uid}`, JSON.stringify(allKnownIds));
+      } catch {}
+    }
+
+    setDraggedCardId(null);
+    setDragOverCardId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedCardId(null);
+    setDragOverCardId(null);
+  };
+
+  const handleResetCardOrder = () => {
+    setCustomCardOrder([]);
+    try {
+      const uid = currentUser?.id || currentUser?.email || 'default';
+      localStorage.removeItem(`noc_card_order_${uid}`);
+    } catch {}
+  };
+
   // Silenciamento de alertas com persistência em localStorage
   const [snoozeAlertUntil, setSnoozeAlertUntil] = useState(() => {
     try {
@@ -1593,8 +1714,17 @@ export default function App() {
       await fetchEquipments();
       await fetchEquipmentsStatus();
 
-      // Se for modo AGENT, abre imediatamente o modal com o comando de instalação 1-clique
+      // Se for modo AGENT, copia automaticamente o comando de instalação para o clipboard e abre o modal
       if (newEquipment.connectionMode === 'AGENT' && createdEq) {
+        const cmd = createdEq.type === 'WINDOWS_SERVER'
+          ? `irm ${window.location.origin}/api/agent/install-script/${createdEq.id} | iex`
+          : `curl -fsSL ${window.location.origin}/api/agent/install-script/${createdEq.id} | sudo bash`;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(cmd);
+            setCopySuccess(true);
+          }
+        } catch {}
         handleOpenAgentModal(createdEq);
       }
     } catch (err) {
@@ -1738,13 +1868,27 @@ export default function App() {
     return (
       <div 
         key={eq.id} 
-        className={`p-3.5 rounded-xl border bg-slate-900/80 hover:bg-slate-900 transition-all duration-200 flex flex-col justify-between ${borderClass}`}
+        draggable={!isLayoutLocked}
+        onDragStart={(e) => handleDragStart(e, eq.id)}
+        onDragOver={(e) => handleDragOver(e, eq.id)}
+        onDrop={(e) => handleDrop(e, eq.id)}
+        onDragEnd={handleDragEnd}
+        className={`p-3.5 rounded-xl border bg-slate-900/80 hover:bg-slate-900 transition-all duration-200 flex flex-col justify-between ${borderClass} ${
+          draggedCardId === eq.id ? 'opacity-30 scale-95 border-dashed border-sky-400' : ''
+        } ${
+          dragOverCardId === eq.id && draggedCardId !== eq.id
+            ? 'ring-2 ring-sky-400 ring-offset-2 ring-offset-slate-950 scale-[1.02] border-sky-500 shadow-xl shadow-sky-950/60'
+            : ''
+        } ${!isLayoutLocked ? 'cursor-grab active:cursor-grabbing' : ''}`}
       >
         {/* CABEÇALHO COMPACTO: Nome, Tipo, Host e Status */}
         <div>
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
+                {!isLayoutLocked && (
+                  <GripVertical className="w-3.5 h-3.5 text-slate-500 hover:text-sky-300 flex-shrink-0 cursor-grab active:cursor-grabbing" title="Arraste para reorganizar o card" />
+                )}
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotClass}`} />
                 <h3 className="font-bold text-sm text-white truncate" title={eq.name}>
                   {eq.name}
@@ -2603,6 +2747,40 @@ export default function App() {
                   {groupByUnit ? 'Por Unidade' : 'Grade'}
                 </button>
 
+                {/* CONTROLES DE ARRASTE (DRAG & DROP) */}
+                <button
+                  onClick={() => setIsLayoutLocked(!isLayoutLocked)}
+                  title={isLayoutLocked ? "Destravar para reorganizar os cards por arraste" : "Travar layout contra arrastes acidentais"}
+                  className={`text-xs flex items-center gap-1.5 transition px-2.5 py-1 border rounded-xl shadow-sm ${
+                    isLayoutLocked
+                      ? 'bg-slate-900/90 border-slate-800 text-slate-400 hover:text-slate-200'
+                      : 'bg-emerald-950/80 border-emerald-600/70 text-emerald-300 font-semibold shadow-emerald-950/30'
+                  }`}
+                >
+                  {isLayoutLocked ? (
+                    <>
+                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                      Travado
+                    </>
+                  ) : (
+                    <>
+                      <Unlock className="w-3.5 h-3.5 text-emerald-400" />
+                      Arraste Livre
+                    </>
+                  )}
+                </button>
+
+                {customCardOrder.length > 0 && (
+                  <button
+                    onClick={handleResetCardOrder}
+                    title="Restaurar ordenação padrão do sistema"
+                    className="text-xs flex items-center gap-1 transition px-2.5 py-1 border border-slate-800 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-400 hover:text-amber-300 shadow-sm"
+                  >
+                    <RotateCcw className="w-3 h-3 text-amber-400" />
+                    Resetar Ordem
+                  </button>
+                )}
+
                 <button 
                   onClick={fetchEquipmentsStatus}
                   disabled={refreshing}
@@ -2676,7 +2854,7 @@ export default function App() {
               /* MODO AGRUPADO POR UNIDADE / CLIENTE */
               <div className="space-y-6">
                 {Object.entries(
-                  filteredEquipments.reduce((acc, eq) => {
+                  orderedEquipments.reduce((acc, eq) => {
                     const groupKey = eq.subgroup 
                       ? `${eq.group || 'Geral'} • ${eq.subgroup}` 
                       : (eq.group || 'Geral');
@@ -2704,7 +2882,7 @@ export default function App() {
             ) : (
               /* MODO GRID PADRÃO */
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5">
-                {filteredEquipments.map(eq => renderEquipmentCard(eq))}
+                {orderedEquipments.map(eq => renderEquipmentCard(eq))}
               </div>
             )}
 
@@ -3146,10 +3324,15 @@ export default function App() {
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                         Criptografando...
                       </>
+                    ) : newEquipment.connectionMode === 'AGENT' ? (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-emerald-300" />
+                        <span>Salvar & Copiar Comando</span>
+                      </>
                     ) : (
                       <>
                         <Lock className="w-3.5 h-3.5" />
-                        Salvar no Cofre
+                        <span>Salvar no Cofre</span>
                       </>
                     )}
                   </button>
