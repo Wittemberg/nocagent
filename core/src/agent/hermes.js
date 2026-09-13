@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const { SYSTEM_PROMPT } = require('./prompts');
 const { createApprovalRequest, verifyApproval } = require('./approvals');
 const { decryptCredentials } = require('../security/vault');
@@ -6,6 +8,23 @@ const { isGlobalKillSwitchActive, getKillSwitchStatus, isFeatureEnabled } = requ
 const { recordMcpTrace } = require('../observability/apm');
 const { PrismaClient } = require('@prisma/client');
 const axios = require('axios');
+
+// Cache a lista de skills
+let cachedSkillsList = null;
+function getSkillsListText() {
+  if (cachedSkillsList !== null) return cachedSkillsList;
+  try {
+    const skillsDir = path.join(__dirname, 'skills');
+    if (!fs.existsSync(skillsDir)) return '';
+    const dirs = fs.readdirSync(skillsDir, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => dirent.name);
+    cachedSkillsList = dirs.join(', ');
+    return cachedSkillsList;
+  } catch (err) {
+    return '';
+  }
+}
 
 const prisma = new PrismaClient();
 
@@ -790,8 +809,12 @@ async function processMessage({ text, senderPhone, senderName, tenantId = null, 
   }
 
   // Tenta processar com as LLMs configuradas (Claude 3.5 Sonnet, GPT-4o, Gemini ou Ollama)
+  
+  const finalSystemPrompt = SYSTEM_PROMPT.replace('[AS_SKILLS_SERAO_INJETADAS_AQUI_PELO_BACKEND]', 'Skills disponíveis: ' + getSkillsListText());
+
+  // Tenta processar com as LLMs configuradas (Claude 3.5 Sonnet, GPT-4o, Gemini ou Ollama)
   const llmResponse = await callLlmReasoning({
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt: finalSystemPrompt,
     telemetryContext,
     userPrompt: text,
     senderName,
