@@ -59,7 +59,8 @@ module.exports = {
       let url = '';
       if (vendor.toLowerCase() === 'intelbras' || vendor.toLowerCase() === 'dahua') {
         // CGI Dahua/Intelbras: /cgi-bin/loadfile.cgi?action=startLoad...
-        url = `http://${ip}/cgi-bin/loadfile.cgi?action=startLoad&channel=${channel}&startTime=${stUrl}&endTime=${etUrl}`;
+        // Adicionando subtype=0 (Main Stream) que é exigido por alguns firmwares para não dar 400
+        url = `http://${ip}/cgi-bin/loadfile.cgi?action=startLoad&channel=${channel}&subtype=0&startTime=${stUrl}&endTime=${etUrl}`;
       } else {
         return { success: false, error: 'Download de gravação só suportado atualmente para Intelbras/Dahua.' };
       }
