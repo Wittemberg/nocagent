@@ -40,9 +40,11 @@ module.exports = {
         return { success: false, error: 'Credenciais (usuário e senha) não configuradas para este equipamento no Vault.' };
       }
       const timestamp = Date.now();
-      const fileName = `clip_${equipmentId}_cam${channel}_${timestamp}.dav`;
+      const fileNameDav = `clip_${equipmentId}_cam${channel}_${timestamp}.dav`;
+      const fileNameMp4 = `clip_${equipmentId}_cam${channel}_${timestamp}.mp4`;
       const mediaDir = path.resolve(__dirname, '../../../../public/media');
-      const filePath = path.join(mediaDir, fileName);
+      const filePathDav = path.join(mediaDir, fileNameDav);
+      const filePathMp4 = path.join(mediaDir, fileNameMp4);
       
       if (!fs.existsSync(mediaDir)) {
         fs.mkdirSync(mediaDir, { recursive: true });
@@ -61,17 +63,17 @@ module.exports = {
         return { success: false, error: 'Download de gravação só suportado atualmente para Intelbras/Dahua.' };
       }
       
-      const publicUrl = `/api/media/${fileName}`;
+      const publicUrl = `/api/media/${fileNameMp4}`;
       
-      // Executar CURL com Digest Auth que salva direto no arquivo
-      const cmd = `curl -s -g -w "%{http_code}" --anyauth -u "${creds.username}:${creds.password}" "${url}" -o "${filePath}"`;
+      // Executar CURL com Digest Auth que salva o .dav original direto no arquivo
+      const cmd = `curl -s -g -w "%{http_code}" --anyauth -u "${creds.username}:${creds.password}" "${url}" -o "${filePathDav}"`;
       
       try {
         const { stdout } = await execPromise(cmd, { timeout: 120000 }); 
         const httpCode = stdout.trim();
         
         if (httpCode && httpCode !== "200") {
-          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+          if (fs.existsSync(filePathDav)) fs.unlinkSync(filePathDav);
           
           let errorMsg = `DVR retornou código HTTP ${httpCode}. A porta HTTP está correta, mas a requisição falhou.`;
           if (httpCode === "400") {
@@ -84,11 +86,11 @@ module.exports = {
         }
         
         // Verifica se o arquivo baixado é suspeitosamente pequeno
-        if (fs.existsSync(filePath)) {
-          const stats = fs.statSync(filePath);
+        if (fs.existsSync(filePathDav)) {
+          const stats = fs.statSync(filePathDav);
           if (stats.size < 100 * 1024) { 
-            const snippet = fs.readFileSync(filePath, 'utf8').substring(0, 500);
-            fs.unlinkSync(filePath);
+            const snippet = fs.readFileSync(filePathDav, 'utf8').substring(0, 500);
+            fs.unlinkSync(filePathDav);
             return { success: false, error: `O DVR fingiu que enviou o vídeo (HTTP 200), mas enviou um arquivo de apenas ${(stats.size / 1024).toFixed(2)} KB. Conteúdo recebido do DVR: "${snippet.trim()}". Isso indica que a API CGI recusou o comando de download silenciosamente.` };
           }
         } else {
@@ -100,11 +102,33 @@ module.exports = {
         return { success: false, error: `Falha de rede com o DVR ao baixar vídeo: ${curlError.message}` };
       }
       
+      // ---------------------------------------------------------
+      // CONVERSÃO DE DAV PARA MP4 USANDO FFMPEG
+      // ---------------------------------------------------------
+      try {
+        // Usa -c:v libx264 -crf 24 para garantir o formato MP4 super compatível
+        const ffmpegCmd = `ffmpeg -y -i "${filePathDav}" -c:v libx264 -crf 24 -preset fast -c:a aac "${filePathMp4}"`;
+        await execPromise(ffmpegCmd, { timeout: 60000 }); // 60 seg de timeout na conversão
+        
+        // Apaga o .dav original para poupar disco
+        if (fs.existsSync(filePathDav)) fs.unlinkSync(filePathDav);
+        
+      } catch (ffmpegErr) {
+        console.error('Erro na conversão FFmpeg:', ffmpegErr.message);
+        // Mesmo se falhar a conversão, envia o arquivo .dav para o usuário baixar
+        return {
+          success: true,
+          message: 'Gravação obtida (.dav), mas falhou a conversão para mp4.',
+          videoUrl: `/api/media/${fileNameDav}`,
+          markdown: `✅ Gravação baixada (Formato: .dav), porém houve falha na conversão para MP4 interno do NOC-Agent.\n\n[📥 Clique para baixar o arquivo original (.dav)](/api/media/${fileNameDav})`
+        };
+      }
+      
       return {
         success: true,
-        message: 'Gravação obtida com sucesso.',
+        message: 'Gravação obtida e convertida para MP4 com sucesso.',
         videoUrl: publicUrl,
-        markdown: `✅ Gravação baixada com sucesso (Formato Original: .dav)!\n\nO DVR envia o arquivo no formato bruto e proprietário da Intelbras (.dav). Como o navegador não consegue tocar esse formato nativamente, você precisa baixar o arquivo e usar o VLC Media Player ou o Intelbras SmartPlayer para assistir.\n\n[📥 Clique aqui para baixar o arquivo de vídeo (.dav)](${publicUrl})`
+        markdown: `🎥 [Gravação Câmera ${channel}](${publicUrl})\n\n[🔗 Abrir vídeo em nova aba](${publicUrl})`
       };
       
     } catch (err) {
