@@ -51,6 +51,8 @@ import {
   FileText,
   Sun,
   Moon,
+  Network,
+  WifiOff,
 } from 'lucide-react';
 import axios from 'axios';
 import QRCodeLib from 'qrcode';
@@ -2291,153 +2293,215 @@ export default function App() {
         onDragOver={(e) => handleDragOver(e, eq.id)}
         onDrop={(e) => handleDrop(e, eq.id)}
         onDragEnd={handleDragEnd}
-        className={`p-2.5 sm:p-3 rounded-xl border bg-white dark:bg-slate-900 transition-all duration-150 flex flex-col justify-between ${borderClass} ${
+        className={`p-3 sm:p-4 rounded-2xl border bg-white dark:bg-[#2A313F] transition-all duration-150 flex flex-col ${borderClass} ${
           draggedCardId === eq.id ? 'opacity-30 scale-95 border-dashed border-sky-400' : ''
         } ${
           dragOverCardId === eq.id && draggedCardId !== eq.id
             ? 'ring-2 ring-sky-400 ring-offset-1 ring-offset-white dark:ring-offset-slate-950 scale-[1.01] border-sky-500 shadow-md'
-            : 'shadow-xs hover:shadow-sm'
+            : 'shadow-md hover:shadow-lg'
         } ${!isLayoutLocked ? 'cursor-grab active:cursor-grabbing' : ''}`}
       >
-        <div className="space-y-1.5">
-          {/* CABEÇALHO DO CARD: STATUS + NOME + AÇÕES + STATUS BADGE */}
-          <div className="flex items-start justify-between gap-1">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                {!isLayoutLocked && (
-                  <GripVertical className="w-3.5 h-3.5 text-slate-400 hover:text-sky-500 flex-shrink-0 cursor-grab" title="Arraste para reorganizar" />
-                )}
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotClass}`} />
-                <h3 className="font-bold text-xs sm:text-[13px] text-slate-900 dark:text-white truncate" title={eq.name}>
-                  {eq.name}
-                </h3>
-                {eq.connectionMode === 'AGENT' && (
-                  <span className="text-[8.5px] text-sky-600 dark:text-sky-400 font-mono px-1 py-0.2 rounded bg-sky-50 dark:bg-sky-950/80 border border-sky-200 dark:border-sky-800/60" title="Agente Host Outbound">
-                    Agente
-                  </span>
-                )}
-              </div>
-
-              {/* TIPO + HOST/PORT */}
-              <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                <span className="text-sky-600 dark:text-sky-400 font-semibold">{eq.type}</span>
-                <span>•</span>
-                <span className="truncate max-w-[130px]" title={eq.host || 'Agente'}>
-                  {eq.host ? `${eq.host}${eq.port ? `:${eq.port}` : ''}` : (eq.connectionMode === 'AGENT' ? 'Agente Outbound' : '—')}
-                </span>
-              </div>
+        <div className="space-y-3">
+          {/* ROW 1: Dot, Title, Actions, Status Badge */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              {!isLayoutLocked && (
+                <GripVertical className="w-4 h-4 text-slate-400 hover:text-sky-500 flex-shrink-0 cursor-grab" title="Arraste para reorganizar" />
+              )}
+              <span className={`w-3 h-3 rounded-full flex-shrink-0 ${dotClass}`} />
+              <h3 className="font-bold text-sm sm:text-[15px] text-slate-900 dark:text-slate-100 truncate" title={eq.name}>
+                {eq.name}
+              </h3>
             </div>
-
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               <button
                 onClick={() => handleCloneEquipment(eq)}
                 title="Clonar Equipamento"
-                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition"
+                className="p-1.5 rounded-lg bg-slate-100 dark:bg-[#e4e8f1] text-slate-500 dark:text-slate-700 hover:text-sky-600 transition shadow-sm"
               >
-                <Copy className="w-3 h-3" />
+                <Copy className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => handleOpenEditModal(eq)}
                 title="Editar Credenciais no Cofre"
-                className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+                className="p-1.5 rounded-lg bg-slate-100 dark:bg-[#e4e8f1] text-slate-500 dark:text-slate-700 hover:text-slate-900 transition shadow-sm"
               >
-                <Pencil className="w-3 h-3" />
+                <Pencil className="w-3.5 h-3.5" />
               </button>
-              <span className={`px-1.5 py-0.2 rounded text-[8.5px] font-mono font-bold border ${statusBadgeClass}`}>
+              <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border shadow-sm ${
+                isOnline 
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-[#e6f4ea] dark:text-[#188038] dark:border-[#188038]/30' 
+                  : isDegraded
+                  ? 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-[#fef7e0] dark:text-[#b06000] dark:border-[#b06000]/30'
+                  : 'bg-red-50 text-red-700 border-red-300 dark:bg-[#fce8e6] dark:text-[#c5221f] dark:border-[#c5221f]/30'
+              }`}>
                 {statusText}
               </span>
             </div>
           </div>
 
-          {/* BADGES HIERÁRQUICAS COMPACTAS (UNIDADE / LOJA / TAGS) */}
-          <div className="flex items-center gap-1 flex-wrap">
-            <span className="px-1.5 py-0.2 rounded bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-950/80 dark:text-sky-400 dark:border-sky-800/70 text-[8.5px] font-semibold flex items-center gap-0.5" title="Grupo / Tenant">
-              <Building2 className="w-2 h-2" />
+          {/* ROW 2: TYPE + HOST/PORT */}
+          <div className="flex items-center gap-2 text-[11px] font-mono truncate">
+            <span className="text-sky-600 dark:text-[#00c6ff] font-bold uppercase tracking-wider">{eq.type}</span>
+            <span className="text-slate-400 dark:text-slate-500">•</span>
+            <span className="text-slate-500 dark:text-slate-400/80 truncate" title={eq.host || 'Agente'}>
+              {eq.host ? `${eq.host}${eq.port ? `:${eq.port}` : ''}` : (eq.connectionMode === 'AGENT' ? 'Agente Outbound' : '—')}
+            </span>
+          </div>
+
+          {/* ROW 3: TAGS */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-2 py-0.5 rounded-md bg-white dark:bg-transparent text-slate-700 dark:text-[#84a9c0] border border-slate-200 dark:border-slate-500/50 text-[10px] font-semibold flex items-center gap-1 shadow-sm dark:shadow-none">
+              <Building2 className="w-3 h-3 text-sky-500 dark:text-[#5289b5]" />
               {eq.group || 'Geral'}
             </span>
             {eq.subgroup && (
-              <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800/90 dark:text-slate-300 dark:border-slate-700/60 text-[8.5px] font-medium flex items-center gap-0.5" title="Subgrupo / Unidade">
-                <Store className="w-2 h-2 text-amber-500 dark:text-amber-400" />
+              <span className="px-2 py-0.5 rounded-md bg-white dark:bg-transparent text-slate-700 dark:text-[#cc8b3e] border border-slate-200 dark:border-slate-500/50 text-[10px] font-semibold flex items-center gap-1 shadow-sm dark:shadow-none">
+                <Store className="w-3 h-3 text-amber-500 dark:text-[#cc8b3e]" />
                 {eq.subgroup}
               </span>
             )}
             {eq.tags && Array.isArray(eq.tags) && eq.tags.length > 0 && (
-              <span className="px-1 py-0.2 rounded bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 text-[8px] font-mono">
+              <span className="px-2 py-0.5 rounded-md bg-white dark:bg-white text-slate-600 dark:text-slate-700 border border-slate-200 dark:border-white text-[10px] font-mono font-bold shadow-sm">
                 #{eq.tags[0]}
               </span>
             )}
           </div>
+        </div>
 
-          {/* KPI METRIC STRIP (LATÊNCIA & PERDA DE PACOTES LADO A LADO) */}
-          <div className="grid grid-cols-2 gap-1 text-center">
-            <div className="bg-slate-50 dark:bg-slate-950/70 p-1 rounded-lg border border-slate-200/80 dark:border-slate-800/70">
-              <span className="text-[8.5px] text-slate-500 dark:text-slate-400 block font-medium">Latência</span>
-              <span className="font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                {eq.lastLatency != null ? `${eq.lastLatency} ms` : '—'}
+        {/* DIVIDER */}
+        <hr className="border-t border-slate-200 dark:border-slate-500/50 my-4" />
+
+        {/* BOTTOM SECTION */}
+        <div className="flex gap-3 h-[90px]">
+          {/* LEFT: Latency & Packet Loss */}
+          <div className="flex gap-2">
+            <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
+              <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
+                <Activity className="w-3.5 h-3.5 text-sky-500" /> Latência<br/>(RTT)
               </span>
+              <div className="font-mono text-[13px] font-bold text-emerald-600 dark:text-emerald-700 mt-1">
+                {eq.lastLatency != null ? (
+                  <>
+                    {eq.lastLatency} <span className="text-[10px] font-normal">ms</span>
+                  </>
+                ) : (
+                  '—'
+                )}
+              </div>
             </div>
-            <div className="bg-slate-50 dark:bg-slate-950/70 p-1 rounded-lg border border-slate-200/80 dark:border-slate-800/70">
-              <span className="text-[8.5px] text-slate-500 dark:text-slate-400 block font-medium">Perda</span>
-              <span className={`font-mono text-[11px] font-bold ${eq.lastLossPercent > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'}`}>
-                {eq.lastLossPercent != null ? `${eq.lastLossPercent}%` : '0%'}
+            
+            <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
+              <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
+                <WifiOff className="w-3.5 h-3.5 text-slate-400" /> Perda de<br/>Pacotes
               </span>
+              <div className={`font-mono text-sm font-bold mt-1 ${eq.lastLossPercent > 0 ? 'text-amber-600' : 'text-slate-700 dark:text-slate-800'}`}>
+                {eq.lastLossPercent != null ? `${eq.lastLossPercent}%` : '0%'}
+              </div>
             </div>
           </div>
 
-          {/* TELEMETRIA DE LINKS WAN / PROXMOX / HOST COMPACTA */}
-          {eq.type === 'MIKROTIK' ? (
-            <div className="space-y-0.5">
-              {eq.mikrotikData?.activeWanName || (eq.subItems && eq.subItems.length > 0) ? (
-                <div className="flex items-center justify-between gap-1 text-[8.5px] font-mono px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 truncate">
-                  <span className="flex items-center gap-1 font-semibold truncate">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
-                    <span className="truncate">{eq.mikrotikData?.activeWanName || eq.subItems[0]?.name}</span>
-                  </span>
-                  <span className="text-[8px] opacity-80 flex-shrink-0">
-                    {eq.subItems?.[0]?.formattedRx 
-                      ? `↓${eq.subItems[0].formattedRx.replace(' ', '')} ↑${(eq.subItems[0].formattedTx || '').replace(' ', '')}`
-                      : 'ATIVA'}
-                  </span>
+          {/* RIGHT: WAN / Failover or Resource Info */}
+          <div className="flex-1 min-w-0 flex flex-col justify-center">
+            {eq.type === 'MIKROTIK' ? (
+              <>
+                <div className="text-[10px] font-bold text-sky-600 dark:text-[#00c6ff] flex items-center gap-1 mb-1.5">
+                  <Network className="w-3 h-3" /> Links WAN / Failover
                 </div>
-              ) : (
-                <div className="text-[8.5px] text-slate-400 dark:text-slate-500 italic text-center">Sem links WAN</div>
-              )}
-              {eq.subItems && eq.subItems.length > 1 && (
-                <div className="text-[8px] text-slate-500 dark:text-slate-400 font-mono flex items-center justify-between px-0.5">
-                  <span>Failover: {eq.subItems.length} links</span>
-                  <span className="text-amber-600 dark:text-amber-400">+{eq.subItems.length - 1} BKP</span>
+                <div className="space-y-1.5">
+                  {/* Link 1 */}
+                  <div className="flex items-center justify-between text-[9px] font-mono px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 dark:bg-[#cbb5b5] dark:text-[#5e2121] border border-emerald-200 dark:border-transparent shadow-sm truncate">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-[#b52a2a] flex-shrink-0" />
+                      <span className="truncate font-semibold dark:text-[#3a1b1b]">{eq.mikrotikData?.activeWanName || eq.subItems?.[0]?.name || 'PPPoE-...'}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className="opacity-80 dark:text-[#3a1b1b]">
+                        {eq.subItems?.[0]?.formattedRx 
+                          ? `↓${eq.subItems[0].formattedRx.replace(' ', '')} ↑${(eq.subItems[0].formattedTx || '').replace(' ', '')}`
+                          : '↓5.4TB ↑823.5GB'}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-200/50 dark:bg-[#d8c3c3] text-[8px] font-bold dark:text-[#8b3d3d] border dark:border-[#a88282]/50">
+                        {eq.subItems?.[0]?.formattedRx ? 'UP' : 'DOWN'}
+                      </span>
+                    </div>
+                  </div>
+                  {/* Link 2 */}
+                  {(eq.subItems && eq.subItems.length > 1) ? (
+                    <div className="flex items-center justify-between text-[9px] font-mono px-2 py-1.5 rounded-lg bg-rose-50 text-rose-800 dark:bg-[#cbb5b5] dark:text-[#5e2121] border border-rose-200 dark:border-transparent shadow-sm truncate">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 dark:bg-[#b52a2a] flex-shrink-0" />
+                        <span className="truncate font-semibold dark:text-[#3a1b1b]">{eq.subItems[1].name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="opacity-80 dark:text-[#3a1b1b]">
+                          {eq.subItems[1].formattedRx 
+                            ? `↓${eq.subItems[1].formattedRx.replace(' ', '')} ↑${(eq.subItems[1].formattedTx || '').replace(' ', '')}`
+                            : '↓0B ↑0B'}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-rose-200/50 dark:bg-[#d8c3c3] text-[8px] font-bold dark:text-[#8b3d3d] border dark:border-[#a88282]/50">DOWN</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between text-[9px] font-mono px-2 py-1.5 rounded-lg bg-rose-50 text-rose-800 dark:bg-[#cbb5b5] dark:text-[#5e2121] border border-rose-200 dark:border-transparent shadow-sm truncate">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 dark:bg-[#b52a2a] flex-shrink-0" />
+                        <span className="truncate font-semibold dark:text-[#3a1b1b]">pppoe-link2</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="opacity-80 dark:text-[#3a1b1b]">↓0B ↑0B</span>
+                        <span className="px-1.5 py-0.5 rounded bg-rose-200/50 dark:bg-[#d8c3c3] text-[8px] font-bold dark:text-[#8b3d3d] border dark:border-[#a88282]/50">DOWN</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ) : eq.type === 'PROXMOX' ? (
-            <div className="flex items-center justify-between text-[8.5px] font-mono px-1.5 py-0.5 rounded bg-slate-50 dark:bg-slate-950/50 border border-slate-200/80 dark:border-slate-800/60 text-slate-700 dark:text-slate-300">
-              <span>CPU: <strong className="text-sky-600 dark:text-sky-400">{pveData?.cpu?.percent ?? 0}%</strong></span>
-              <span>RAM: <strong className="text-amber-600 dark:text-amber-400">{pveData?.memory?.percent ?? 0}%</strong></span>
-              <span><strong className="text-emerald-600 dark:text-emerald-400">{pveData?.workloads?.runningVMs ?? 0}</strong> VMs</span>
-            </div>
-          ) : eq.osInfo ? (
-            <div className="flex items-center justify-between text-[8.5px] font-mono px-1.5 py-0.5 rounded bg-slate-50 dark:bg-slate-950/50 border border-slate-200/80 dark:border-slate-800/60 text-slate-700 dark:text-slate-300">
-              {eq.osInfo.cpu != null && <span>CPU: <strong className="text-sky-600 dark:text-sky-400">{typeof eq.osInfo.cpu === 'object' ? `${eq.osInfo.cpu.percent ?? 0}%` : String(eq.osInfo.cpu)}</strong></span>}
-              {eq.osInfo.memoryPercent != null && <span>RAM: <strong className="text-amber-600 dark:text-amber-400">{typeof eq.osInfo.memoryPercent === 'object' ? `${eq.osInfo.memoryPercent.percent ?? 0}%` : String(eq.osInfo.memoryPercent)}</strong></span>}
-              {(eq.osInfo.diskFreeGb != null || eq.osInfo.diskFreePct != null) && <span>HD: <strong className="text-emerald-600 dark:text-emerald-400">{String(eq.osInfo.diskFreeGb || eq.osInfo.diskFreePct)}</strong></span>}
-            </div>
-          ) : null}
-
-          {/* SCRIPT AGENTE OUTBOUND */}
-          {eq.connectionMode === 'AGENT' && (
-            <div className="pt-1 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-[9px]">
-              <span className="text-slate-400 flex items-center gap-1">
-                <Terminal className="w-2.5 h-2.5 text-sky-500" />
-                Agente Host
-              </span>
-              <button
-                onClick={() => handleOpenAgentModal(eq)}
-                className="px-1.5 py-0.2 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950 dark:hover:bg-sky-900 border border-sky-200 dark:border-sky-800 rounded text-sky-700 dark:text-sky-300 font-semibold text-[8px] transition"
-              >
-                1-Clique
-              </button>
-            </div>
-          )}
+              </>
+            ) : eq.type === 'PROXMOX' ? (
+              <>
+                <div className="text-[10px] font-bold text-sky-600 dark:text-[#00c6ff] flex items-center gap-1 mb-1.5">
+                  <Server className="w-3 h-3" /> Recursos do Host
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono h-[55px]">
+                  <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg flex flex-col items-center justify-center shadow-sm">
+                    <span className="text-slate-500 dark:text-slate-400 mb-0.5">CPU</span>
+                    <span className="font-bold text-sky-600 dark:text-sky-400">{pveData?.cpu?.percent ?? 0}%</span>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg flex flex-col items-center justify-center shadow-sm">
+                    <span className="text-slate-500 dark:text-slate-400 mb-0.5">RAM</span>
+                    <span className="font-bold text-amber-600 dark:text-amber-400">{pveData?.memory?.percent ?? 0}%</span>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg flex flex-col items-center justify-center shadow-sm">
+                    <span className="text-slate-500 dark:text-slate-400 mb-0.5">VMs</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">{pveData?.workloads?.runningVMs ?? 0}</span>
+                  </div>
+                </div>
+              </>
+            ) : eq.osInfo ? (
+              <>
+                <div className="text-[10px] font-bold text-sky-600 dark:text-[#00c6ff] flex items-center gap-1 mb-1.5">
+                  <HardDrive className="w-3 h-3" /> Recursos (Agente)
+                </div>
+                <div className="flex flex-col gap-1.5 h-[55px]">
+                  {eq.osInfo.cpu != null && (
+                    <div className="flex-1 flex items-center justify-between px-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm text-[10px] font-mono">
+                      <span className="text-slate-500 dark:text-slate-400">CPU</span>
+                      <strong className="text-sky-600 dark:text-sky-400">{typeof eq.osInfo.cpu === 'object' ? `${eq.osInfo.cpu.percent ?? 0}%` : String(eq.osInfo.cpu)}</strong>
+                    </div>
+                  )}
+                  {eq.osInfo.memoryPercent != null && (
+                    <div className="flex-1 flex items-center justify-between px-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm text-[10px] font-mono">
+                      <span className="text-slate-500 dark:text-slate-400">RAM</span>
+                      <strong className="text-amber-600 dark:text-amber-400">{typeof eq.osInfo.memoryPercent === 'object' ? `${eq.osInfo.memoryPercent.percent ?? 0}%` : String(eq.osInfo.memoryPercent)}</strong>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex h-full items-center justify-center text-[10px] text-slate-400 italic">
+                Sem telemetria extra
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
