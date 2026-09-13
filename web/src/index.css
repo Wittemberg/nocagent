@@ -472,3 +472,14 @@ html.theme-light table td button[title*="Excluir"]:hover {
   color: #dc2626 !important;
 }
 
+/* Botões desabilitados no tema claro */
+html.theme-light button:disabled,
+html.theme-light button[disabled] {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #94a3b8 !important;
+}
+
+

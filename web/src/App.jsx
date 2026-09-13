@@ -1680,6 +1680,10 @@ export default function App() {
   };
 
   const handleResetCardOrder = () => {
+    if (isLayoutLocked) return;
+    if (!window.confirm("Deseja realmente restaurar a ordenação padrão dos cards? Sua organização personalizada será redefinida.")) {
+      return;
+    }
     setCustomCardOrder([]);
     try {
       const uid = currentUser?.id || currentUser?.email || 'default';
@@ -3190,10 +3194,15 @@ export default function App() {
                 {customCardOrder.length > 0 && (
                   <button
                     onClick={handleResetCardOrder}
-                    title="Restaurar ordenação padrão do sistema"
-                    className="text-xs flex items-center gap-1 transition px-2.5 py-1 border border-slate-800 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-400 hover:text-amber-300 shadow-sm"
+                    disabled={isLayoutLocked}
+                    title={isLayoutLocked ? "Destrave o layout (Arraste Livre) para poder resetar a ordenação" : "Restaurar ordenação padrão do sistema"}
+                    className={`text-xs flex items-center gap-1 transition px-2.5 py-1 border rounded-xl shadow-sm ${
+                      isLayoutLocked
+                        ? 'opacity-40 cursor-not-allowed bg-slate-900/40 border-slate-800 text-slate-500'
+                        : 'border-slate-800 bg-slate-900/90 hover:bg-slate-800 text-slate-400 hover:text-amber-300'
+                    }`}
                   >
-                    <RotateCcw className="w-3 h-3 text-amber-400" />
+                    <RotateCcw className={`w-3 h-3 ${isLayoutLocked ? 'text-slate-500' : 'text-amber-400'}`} />
                     Resetar Ordem
                   </button>
                 )}

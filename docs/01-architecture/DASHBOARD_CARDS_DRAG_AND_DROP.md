@@ -54,11 +54,16 @@ O sistema memoriza a escolha do operador:
 7. Solte o botão do mouse. A nova ordem é salva imediatamente no seu navegador.
 8. Ao terminar de organizar sua tela, clique no botão **`Arraste Livre`** para voltar ao estado **`Travado`** e proteger seu painel contra cliques acidentais.
 
-### 4.2 Restaurando a Ordem Original do Sistema
-Se você organizou os cards e desejar retornar à ordenação padrão do sistema (ordem de cadastro/prioridade do NOC):
-1. Observe que, assim que uma ordem personalizada é criada, surge o botão **`Resetar Ordem`** (ícone de seta circular âmbar 🔄).
-2. Clique em **`Resetar Ordem`**.
-3. Os cards retornarão instantaneamente à disposição nativa e o botão de reset será recolhido.
+### 4.2 Restaurando a Ordem Original do Sistema com Proteção Dupla
+Para prevenir perdas involuntárias de layouts personalizados por cliques acidentais:
+1. **Bloqueio Automático Quando Travado:** Enquanto o layout estiver no modo **`Travado`**, o botão **`Resetar Ordem`** permanece **estritamente desabilitado** (`disabled`, opacidade reduzida e cursor bloqueado).
+2. **Como Restaurar:**
+   - Primeiro, clique no botão **`Travado`** para alternar para **`Arraste Livre`**.
+   - O botão **`Resetar Ordem`** ficará ativo (ícone de seta circular âmbar 🔄).
+   - Clique em **`Resetar Ordem`**.
+   - O sistema solicitará uma confirmação de segurança na tela: *"Deseja realmente restaurar a ordenação padrão dos cards? Sua organização personalizada será redefinida."*.
+   - Ao confirmar, os cards retornarão imediatamente à disposição padrão do sistema e o botão de reset será recolhido.
+   - Clique em **`Arraste Livre`** para voltar ao modo **`Travado`**.
 
 ---
 
