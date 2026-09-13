@@ -2394,20 +2394,20 @@ export default function App() {
 
               {/* PROXMOX STORAGES RIGHT */}
               <div className="flex-1 min-w-0 flex flex-col">
-                <div className="text-[10px] font-bold text-emerald-600 dark:text-[#00c6ff] flex items-center gap-1 mb-1.5">
+                <div className="text-[10px] font-bold text-emerald-600 dark:text-[#00c6ff] flex items-center gap-1 mb-1">
                   <HardDrive className="w-3 h-3" /> Storages do Host
                 </div>
-                <div className="space-y-1.5 overflow-y-auto pr-1 scrollbar-thin">
+                <div className="grid grid-cols-2 gap-1 overflow-y-auto pr-0.5 scrollbar-thin">
                   {pveData?.storages && pveData.storages.length > 0 ? pveData.storages.map((st, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-[9px] font-mono px-2 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 shadow-sm truncate">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.usedPercent >= 85 ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-                        <span className="truncate font-semibold">{st.name}</span>
+                    <div key={idx} className="flex items-center justify-between text-[8.5px] font-mono px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 truncate">
+                      <div className="flex items-center gap-1 truncate pr-1">
+                        <span className={`w-1 h-1 rounded-full flex-shrink-0 ${st.usedPercent >= 85 ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                        <span className="truncate font-semibold" title={st.name}>{st.name}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className="opacity-80">{st.usedPercent ?? 0}% uso</span>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <span className="opacity-80">{st.usedPercent ?? 0}%</span>
                         {st.type && (
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-200/50 dark:bg-emerald-800/50 text-[8px] font-bold border border-emerald-300 dark:border-emerald-700/50 uppercase">
+                          <span className="px-1 rounded bg-emerald-200/50 dark:bg-emerald-800/50 text-[7px] font-bold border border-emerald-300 dark:border-emerald-700/50 uppercase">
                             {st.type}
                           </span>
                         )}
