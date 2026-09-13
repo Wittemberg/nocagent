@@ -87,6 +87,19 @@ module.exports = {
           
           return { success: false, error: errorMsg };
         }
+        
+        // Verifica se o arquivo baixado é suspeitosamente pequeno (Dahua as vezes retorna 200 OK com HTML de erro)
+        if (fs.existsSync(filePath)) {
+          const stats = fs.statSync(filePath);
+          if (stats.size < 100 * 1024) { // Menos de 100KB para 4 min de vídeo é falso
+            const snippet = fs.readFileSync(filePath, 'utf8').substring(0, 500);
+            fs.unlinkSync(filePath); // Apaga o lixo
+            return { success: false, error: `O DVR fingiu que enviou o vídeo (HTTP 200), mas enviou um arquivo de apenas ${(stats.size / 1024).toFixed(2)} KB. Conteúdo recebido do DVR: "${snippet.trim()}". Isso indica que a API CGI recusou o comando de download silenciosamente.` };
+          }
+        } else {
+           return { success: false, error: 'O comando de download terminou, mas o arquivo de vídeo não foi criado no disco.' };
+        }
+        
       } catch (curlError) {
         console.error('Falha real ao baixar gravação:', curlError.message);
         return { success: false, error: `Falha de rede com o DVR ao baixar vídeo: ${curlError.message}` };
