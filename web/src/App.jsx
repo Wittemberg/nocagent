@@ -2374,31 +2374,54 @@ export default function App() {
 
         {/* BOTTOM SECTION */}
         <div className="flex gap-3 h-[90px]">
-          {/* LEFT: Latency & Packet Loss */}
+          {/* LEFT: Latency & Packet Loss OR Storage & Uptime */}
           <div className="flex gap-2">
-            <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
-              <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
-                <Activity className="w-3.5 h-3.5 text-sky-500" /> Latência<br/>(RTT)
-              </span>
-              <div className="font-mono text-[13px] font-bold text-emerald-600 dark:text-emerald-700 mt-1">
-                {eq.lastLatency != null ? (
-                  <>
-                    {eq.lastLatency} <span className="text-[10px] font-normal">ms</span>
-                  </>
-                ) : (
-                  '—'
-                )}
-              </div>
-            </div>
-            
-            <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
-              <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
-                <WifiOff className="w-3.5 h-3.5 text-slate-400" /> Perda de<br/>Pacotes
-              </span>
-              <div className={`font-mono text-sm font-bold mt-1 ${eq.lastLossPercent > 0 ? 'text-amber-600' : 'text-slate-700 dark:text-slate-800'}`}>
-                {eq.lastLossPercent != null ? `${eq.lastLossPercent}%` : '0%'}
-              </div>
-            </div>
+            {(eq.type === 'PROXMOX' || eq.type === 'SERVER' || eq.osInfo) ? (
+              <>
+                <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
+                    <HardDrive className="w-3.5 h-3.5 text-emerald-500" /> Armazen.
+                  </span>
+                  <div className="font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-700 mt-1 truncate w-full">
+                    {eq.osInfo?.diskFreePct ? eq.osInfo.diskFreePct : (eq.osInfo?.diskFreeGb ? eq.osInfo.diskFreeGb : (pveData?.storage?.free ?? '—'))}
+                  </div>
+                </div>
+                <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
+                    <Clock className="w-3.5 h-3.5 text-sky-500" /> Uptime
+                  </span>
+                  <div className="font-mono text-[11px] font-bold text-sky-600 dark:text-sky-700 mt-1 truncate w-full">
+                    {eq.osInfo?.uptime || pveData?.uptime || 'Online'}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
+                    <Activity className="w-3.5 h-3.5 text-sky-500" /> Latência<br/>(RTT)
+                  </span>
+                  <div className="font-mono text-[13px] font-bold text-emerald-600 dark:text-emerald-700 mt-1">
+                    {eq.lastLatency != null ? (
+                      <>
+                        {eq.lastLatency} <span className="text-[10px] font-normal">ms</span>
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex flex-col justify-center items-center bg-slate-50 dark:bg-white text-center rounded-xl p-2 w-[85px] border border-slate-200 dark:border-transparent shadow-sm">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-600 font-medium mb-1 flex flex-col items-center gap-0.5 leading-tight">
+                    <WifiOff className="w-3.5 h-3.5 text-slate-400" /> Perda de<br/>Pacotes
+                  </span>
+                  <div className={`font-mono text-sm font-bold mt-1 ${eq.lastLossPercent > 0 ? 'text-amber-600' : 'text-slate-700 dark:text-slate-800'}`}>
+                    {eq.lastLossPercent != null ? `${eq.lastLossPercent}%` : '0%'}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* RIGHT: WAN / Failover or Resource Info */}
