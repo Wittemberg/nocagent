@@ -39,15 +39,15 @@ body {
    ========================================================================== */
 html.theme-light {
   color-scheme: light;
-  --noc-bg: #f8fafc;
-  --noc-text: #0f172a;
+  --noc-bg: #f8f9fa;
+  --noc-text: #334155;
   --noc-card-bg: #ffffff;
   --noc-card-border: #e2e8f0;
 }
 
 html.theme-light body {
-  background-color: #f8fafc !important;
-  color: #0f172a !important;
+  background-color: #f8f9fa !important;
+  color: #334155 !important;
 }
 
 /* Scrollbar Light */

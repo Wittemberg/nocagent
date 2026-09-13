@@ -3337,14 +3337,14 @@ export default function App() {
               <div className="flex flex-wrap gap-3">
                 <button 
                   onClick={() => { setActiveTab('chat'); setInputMsg('como estão os gateways do pfsense?'); }}
-                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md shadow-sky-600/20 transition flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-sky-500/10 dark:hover:bg-sky-500/20 dark:text-sky-400 border border-slate-200 dark:border-sky-500/20 text-xs font-semibold transition flex items-center gap-1.5"
                 >
                   <Radio className="w-3.5 h-3.5" />
                   <span>Testar Conectividade via Chat</span>
                 </button>
                 <button 
                   onClick={() => { setActiveTab('chat'); setInputMsg('auditar backups recentes dos equipamentos'); }}
-                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md shadow-sky-600/20 transition flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-sky-500/10 dark:hover:bg-sky-500/20 dark:text-sky-400 border border-slate-200 dark:border-sky-500/20 text-xs font-semibold transition flex items-center gap-1.5"
                 >
                   <HardDrive className="w-3.5 h-3.5" />
                   <span>Consultar Backups via Chat</span>
@@ -3356,7 +3356,7 @@ export default function App() {
 
         {/* TAB 2: TERMINAL IA (CHAT) */}
         {activeTab === 'chat' && (
-          <div className="bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-col h-[650px] shadow-2xl">
+          <div className="bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-col h-[450px] shadow-2xl">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40 rounded-t-2xl">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-sky-600/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
@@ -3364,12 +3364,9 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm text-white">Console Operacional do NOC-Agent</h3>
-                  <p className="text-xs text-slate-400">Interaja com os roteadores e backups em linguagem natural</p>
+                  <p className="text-xs text-slate-400">Interaja com seus equipamentos e backups em linguagem natural</p>
                 </div>
               </div>
-              <span className="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700">
-                Hermes Engine Ativo
-              </span>
             </div>
 
             {/* MENSAGENS */}
@@ -4529,7 +4526,7 @@ export default function App() {
                     setUserError(null);
                     setIsUserModalOpen(true);
                   }}
-                  className="px-3.5 py-2 bg-sky-600 hover:bg-sky-500 rounded-xl text-xs font-semibold text-white flex items-center gap-1.5 shadow-lg shadow-sky-600/20 transition"
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-sky-500/10 dark:hover:bg-sky-500/20 dark:text-sky-400 border border-slate-200 dark:border-sky-500/20 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
                 >
                   <UserPlus className="w-4 h-4" />
                   Novo Usuário
