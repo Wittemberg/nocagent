@@ -64,9 +64,9 @@ module.exports = {
       
       return {
         success: true,
-        message: `Gravação da câmera ${channel} das ${startTime} até ${endTime} extraída com sucesso.`,
+        message: 'Gravação obtida com sucesso.',
         videoUrl: publicUrl,
-        markdown: `[📹 Clique aqui para baixar/assistir a gravação solicitada](${publicUrl})`
+        markdown: `🎥 [Gravação Câmera ${channel}](${publicUrl})\n\n[🔗 Abrir vídeo em nova aba](${publicUrl})`
       };
       
     } catch (err) {

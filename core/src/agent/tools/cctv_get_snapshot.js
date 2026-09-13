@@ -80,7 +80,7 @@ module.exports = {
           success: true, 
           message: 'Falha de comunicação real, gerada imagem de teste (ambiente de laboratório).',
           imageUrl: `/media/${fileName}`, // URL Relativa para funcionar via Nginx
-          markdown: `![Foto Câmera ${channel}](/media/${fileName})`
+          markdown: `![Foto Câmera ${channel}](/media/${fileName})\n\n[🔗 Abrir imagem em nova aba](/media/${fileName})`
         };
       }
       
@@ -93,7 +93,7 @@ module.exports = {
         message: 'Snapshot capturado com sucesso.',
         channel,
         imageUrl: publicUrl,
-        markdown: `![Foto da Câmera ${channel}](${publicUrl})`
+        markdown: `![Foto da Câmera ${channel}](${publicUrl})\n\n[🔗 Abrir imagem em nova aba](${publicUrl})`
       };
       
     } catch (err) {
