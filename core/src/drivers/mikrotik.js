@@ -49,7 +49,7 @@ function formatBytes(bytes) {
 /**
  * Processador unificado para telemetria de Mikrotik (tanto Native API v6/v7 quanto REST API v7)
  */
-function processMikrotikRawData(resData = {}, rawInterfaces = [], rawRoutes = [], rawAddresses = []) {
+function processMikrotikRawData(resData = {}, rawInterfaces = [], rawRoutes = [], rawAddresses = [], rawPppoeClients = []) {
   // 1. Identifica a interface da Rota Padrão Ativa (Default Gateway: 0.0.0.0/0)
   let activeDefaultInterface = null;
   const defaultRoutes = (Array.isArray(rawRoutes) ? rawRoutes : []).filter(r => {
@@ -130,11 +130,65 @@ function processMikrotikRawData(resData = {}, rawInterfaces = [], rawRoutes = []
     }
   }
 
+  // Mapeamento de interfaces carrier/físicas de PPPoE (ex: ether1 -> pppoe-NWT)
+  const pppoeClients = Array.isArray(rawPppoeClients) ? rawPppoeClients : [];
+  const parentToPppoe = new Map(); // ether1 -> pppoe client
+  const pppoeToParent = new Map(); // pppoe-NWT -> ether1
+
+  for (const ppp of pppoeClients) {
+    const pppName = String(ppp.name || '').trim();
+    const parentIface = String(ppp.interface || '').trim();
+    if (pppName && parentIface) {
+      parentToPppoe.set(parentIface.toLowerCase(), ppp);
+      pppoeToParent.set(pppName.toLowerCase(), parentIface);
+    }
+  }
+
+  // Fallback heurístico caso /interface/pppoe-client não retorne (ex: permissões de grupo)
+  const pppoeInterfaces = rawInterfaces.filter(i => 
+    (i.type === 'pppoe-out' || String(i.name || '').toLowerCase().startsWith('pppoe'))
+  );
+
+  if (parentToPppoe.size === 0 && pppoeInterfaces.length > 0) {
+    const ifacesWithIp = new Set(
+      (Array.isArray(rawAddresses) ? rawAddresses : []).map(a => String(a.interface || a['actual-interface'] || '').toLowerCase())
+    );
+
+    for (const pppIface of pppoeInterfaces) {
+      const pppName = String(pppIface.name || '').toLowerCase();
+      const candidateParent = rawInterfaces.find(i => {
+        const name = String(i.name || '').toLowerCase();
+        if (!name.startsWith('ether') && !name.startsWith('sfp')) return false;
+        if (ifacesWithIp.has(name)) return false; // Se tem IP estático próprio, não é porta de transporte PPPoE
+        const comment = String(i.comment || '').toLowerCase();
+        const pppToken = pppName.replace(/^pppoe-?/i, '');
+        if (pppToken && (comment.includes(pppToken) || name.includes(pppToken))) return true;
+        if (pppoeInterfaces.length === 1 && /(link\s*1|wan\s*1|isp\s*1|principal)/i.test(comment)) return true;
+        return false;
+      });
+
+      if (candidateParent) {
+        parentToPppoe.set(String(candidateParent.name).toLowerCase(), pppIface);
+        pppoeToParent.set(pppName, String(candidateParent.name));
+      }
+    }
+  }
+
   // 2. Mapeia e sanitiza todas as interfaces
   const interfaces = rawInterfaces.map((iface) => {
     const name = iface.name || '';
     const type = iface.type || '';
-    const rawComment = iface.comment ? String(iface.comment).trim() : '';
+    let rawComment = iface.comment ? String(iface.comment).trim() : '';
+
+    // Se for interface PPPoE e não tem comentário próprio, herda da porta física subjacente (ex: ether1)
+    const parentName = pppoeToParent.get(name.toLowerCase());
+    if (parentName && !rawComment) {
+      const parentRaw = rawInterfaces.find(i => String(i.name || '').toLowerCase() === parentName.toLowerCase());
+      if (parentRaw?.comment) {
+        rawComment = String(parentRaw.comment).trim();
+      }
+    }
+
     // Limpa marcadores comuns de comentários (ex: "::: LINK ADSL" -> "LINK ADSL")
     const comment = rawComment.replace(/^[:\s\-]+/, '').trim();
     const running = iface.running === 'true' || iface.running === true;
@@ -148,6 +202,8 @@ function processMikrotikRawData(resData = {}, rawInterfaces = [], rawRoutes = []
       name.toLowerCase().includes(activeDefaultInterface.toLowerCase())
     ) : false;
 
+    const isPppoeParent = parentToPppoe.has(name.toLowerCase());
+
     return {
       name,
       type,
@@ -160,13 +216,20 @@ function processMikrotikRawData(resData = {}, rawInterfaces = [], rawRoutes = []
       formattedRx: formatBytes(rxBytes),
       formattedTx: formatBytes(txBytes),
       isDefaultRoute,
+      isPppoeParent,
     };
   });
 
   // 3. Filtra especificamente interfaces WAN / Links de Internet
+  // Portas físicas que servem apenas como carrier para PPPoE NÃO devem entrar como links WAN independentes
   const wanRegex = /(wan|link|isp|internet|fibra|adsl|vivo|claro|oi|tim|starlink|operadora|dedicado|backup|contingencia|principal|secundario|gvt|embratel|algar|nwt|elonline)/i;
   
   let wanLinks = interfaces.filter(iface => {
+    // Exclui a porta física de transporte de um PPPoE (ela não é um link de internet separado)
+    if (iface.isPppoeParent) {
+      return false;
+    }
+
     const textToMatch = `${iface.name} ${iface.rawComment} ${iface.comment}`;
     return wanRegex.test(textToMatch) || 
            iface.type === 'pppoe-out' || 
@@ -178,7 +241,10 @@ function processMikrotikRawData(resData = {}, rawInterfaces = [], rawRoutes = []
 
   // Se nenhuma tiver comentário WAN explícito, busca interfaces ativas com rota padrão ou tráfego relevante
   if (wanLinks.length === 0) {
-    wanLinks = interfaces.filter(iface => iface.isDefaultRoute || (iface.running && !iface.name.includes('bridge') && !iface.name.includes('loopback')));
+    wanLinks = interfaces.filter(iface => 
+      !iface.isPppoeParent && 
+      (iface.isDefaultRoute || (iface.running && !iface.name.includes('bridge') && !iface.name.includes('loopback')))
+    );
   }
 
   // 4. Determina qual link está ativo
@@ -271,15 +337,16 @@ async function getMikrotikNativeApiData(host, credentials, port = 8728) {
 
   await conn.connect();
   try {
-    const [resourceRows, interfaceRows, routeRows, addressRows] = await Promise.all([
+    const [resourceRows, interfaceRows, routeRows, addressRows, pppoeRows] = await Promise.all([
       conn.write('/system/resource/print').catch(() => []),
       conn.write('/interface/print').catch(() => []),
       conn.write('/ip/route/print').catch(() => []),
       conn.write('/ip/address/print').catch(() => []),
+      conn.write('/interface/pppoe-client/print').catch(() => []),
     ]);
 
     const resData = resourceRows[0] || {};
-    return processMikrotikRawData(resData, interfaceRows, routeRows, addressRows);
+    return processMikrotikRawData(resData, interfaceRows, routeRows, addressRows, pppoeRows);
   } finally {
     conn.close().catch(() => {});
   }
@@ -314,19 +381,21 @@ async function getMikrotikRestData(host, credentials, port) {
     timeout: 5000,
   });
 
-  const [resourceRes, interfacesRes, routesRes, addressRes] = await Promise.all([
+  const [resourceRes, interfacesRes, routesRes, addressRes, pppoeRes] = await Promise.all([
     client.get('/system/resource').catch(() => ({ data: {} })),
     client.get('/interface').catch(() => ({ data: [] })),
     client.get('/ip/route').catch(() => ({ data: [] })),
     client.get('/ip/address').catch(() => ({ data: [] })),
+    client.get('/interface/pppoe-client').catch(() => ({ data: [] })),
   ]);
 
   const resData = resourceRes.data || {};
   const rawInterfaces = Array.isArray(interfacesRes.data) ? interfacesRes.data : [];
   const rawRoutes = Array.isArray(routesRes.data) ? routesRes.data : [];
   const rawAddresses = Array.isArray(addressRes.data) ? addressRes.data : [];
+  const rawPppoeClients = Array.isArray(pppoeRes.data) ? pppoeRes.data : [];
 
-  return processMikrotikRawData(resData, rawInterfaces, rawRoutes, rawAddresses);
+  return processMikrotikRawData(resData, rawInterfaces, rawRoutes, rawAddresses, rawPppoeClients);
 }
 
 /**
