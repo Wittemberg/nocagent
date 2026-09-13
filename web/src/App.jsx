@@ -2380,6 +2380,17 @@ export default function App() {
       setLoadingChat(false);
     }
   };
+
+  const handleClearChat = () => {
+    setChatMessages([
+      { 
+        sender: 'bot', 
+        text: 'Contexto limpo. Olá! Sou o Hermes, a IA Operacional do NOC-Agent. Como posso ajudar a monitorar ou intervir nos seus equipamentos hoje?', 
+        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) 
+      }
+    ]);
+  };
+
   // Identifica se há equipamentos caídos, links degradados ou com erro de autenticação
   const downEquipments = Array.isArray(equipmentList)
     ? equipmentList.filter(eq => eq.status === 'offline')
@@ -3647,6 +3658,14 @@ export default function App() {
                   <p className="text-xs text-slate-400">Interaja com seus equipamentos e backups em linguagem natural</p>
                 </div>
               </div>
+              <button 
+                onClick={handleClearChat}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition text-xs font-medium border border-slate-700/80"
+                title="Limpar mensagens e resetar contexto"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Limpar Contexto</span>
+              </button>
             </div>
 
             {/* MENSAGENS */}
