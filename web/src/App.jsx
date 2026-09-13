@@ -962,6 +962,46 @@ winrm enumerate winrm/config/listener
             </div>
           )}
         </div>
+      ) : ['DVR', 'NVR', 'IP_CAMERA'].includes(form.type) ? (
+        <div className="space-y-3">
+          {/* DVR/NVR/IP_CAMERA: Autenticação via HTTP Digest (usuário + senha) */}
+          <div className="bg-sky-950/30 border border-sky-700/40 rounded-xl px-3 py-2 flex items-start gap-2">
+            <Camera className="w-3.5 h-3.5 text-sky-400 mt-0.5 shrink-0" />
+            <p className="text-[11px] text-sky-300/90 leading-relaxed">
+              DVRs e câmeras IP <strong>não usam API Key</strong> — autenticam via <strong>HTTP Digest</strong> (usuário + senha).<br />
+              Intelbras: usuário padrão <code className="bg-slate-900 px-1 rounded">admin</code>, senha definida na instalação.<br />
+              Hikvision: usuário padrão <code className="bg-slate-900 px-1 rounded">admin</code>, senha definida na ativação.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-300 font-medium mb-1">Usuário *</label>
+              <input
+                type="text"
+                required={!isEdit}
+                placeholder="admin"
+                value={form.username || ''}
+                onChange={e => setForm({ ...form, username: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-300 font-medium mb-1">Senha *</label>
+              <input
+                type="password"
+                required={!isEdit}
+                placeholder={isEdit ? 'Deixe em branco para manter' : 'Senha do DVR/câmera'}
+                value={form.password || ''}
+                onChange={e => setForm({ ...form, password: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-sky-500 font-mono"
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-amber-400/80 flex items-center gap-1">
+            <Lock className="w-3 h-3" />
+            Credenciais cifradas com AES-256-GCM antes de gravar no PostgreSQL.
+          </p>
+        </div>
       ) : (
         <div>
           <label className="block text-slate-300 font-medium mb-1">Chave de API / Token *</label>
@@ -1827,6 +1867,11 @@ export default function App() {
           return { tokenId: form.tokenId.trim(), tokenSecret: form.tokenSecret.trim() };
         }
         return { username: form.username.trim(), password: form.password, realm: form.realm || 'pam' };
+      case 'DVR':
+      case 'NVR':
+      case 'IP_CAMERA':
+        // HTTP Digest Auth — sem API Key, apenas usuário e senha
+        return { username: (form.username || 'admin').trim(), password: form.password || '' };
       case 'PFSENSE':
       case 'ZABBIX':
       default:
