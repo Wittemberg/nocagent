@@ -3594,19 +3594,19 @@ export default function App() {
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-950/70 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-800">
                     <tr>
-                      <th className="px-5 py-3.5">Equipamento</th>
-                      <th className="px-5 py-3.5">Driver / Tipo</th>
-                      <th className="px-5 py-3.5">Host / Endpoint</th>
-                      <th className="px-5 py-3.5">Cofre de Credenciais</th>
-                      <th className="px-5 py-3.5">Storage de Backup</th>
-                      <th className="px-5 py-3.5">Status</th>
-                      <th className="px-5 py-3.5 text-right">Ações</th>
+                      <th className="px-3 py-2">Equipamento</th>
+                      <th className="px-3 py-2">Driver / Tipo</th>
+                      <th className="px-3 py-2">Host / Endpoint</th>
+                      <th className="px-3 py-2">Cofre de Credenciais</th>
+                      <th className="px-3 py-2">Storage de Backup</th>
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2 text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/70 text-slate-200">
                     {equipments.map(eq => (
                       <tr key={eq.id} className="hover:bg-slate-800/30 transition">
-                        <td className="px-5 py-4 font-semibold text-white">
+                        <td className="px-3 py-2 font-semibold text-white">
                           <div>{eq.name}</div>
                           <div className="flex items-center gap-1 mt-1 flex-wrap">
                             <span className="px-1.5 py-0.5 rounded bg-sky-950/70 text-sky-400 border border-sky-800/60 text-[10px] font-medium flex items-center gap-1">
@@ -3627,17 +3627,17 @@ export default function App() {
                             </span>
                           )}
                         </td>
-                        <td className="px-5 py-4 text-xs font-mono text-sky-400">{eq.type}</td>
-                        <td className="px-5 py-4 text-xs font-mono text-slate-300">
+                        <td className="px-3 py-2 text-xs font-mono text-sky-400">{eq.type}</td>
+                        <td className="px-3 py-2 text-xs font-mono text-slate-300">
                           {eq.host || (eq.connectionMode === 'AGENT' ? 'Conexão via Agente' : '—')}
                         </td>
-                        <td className="px-5 py-4 text-xs">
+                        <td className="px-3 py-2 text-xs">
                           <span className="px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-300 border border-amber-800/80 font-mono text-[11px] inline-flex items-center gap-1">
                             <Lock className="w-2.5 h-2.5" />
                             AES-256-GCM
                           </span>
                         </td>
-                        <td className="px-5 py-4 text-xs">
+                        <td className="px-3 py-2 text-xs">
                           {eq.backupStorage ? (
                             <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
                               <Database className="w-3 h-3" />
@@ -3647,12 +3647,12 @@ export default function App() {
                             <span className="text-slate-500">—</span>
                           )}
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="px-3 py-2">
                           <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 font-medium">
                             {eq.status || 'Ativo'}
                           </span>
                         </td>
-                        <td className="px-5 py-4 text-right">
+                        <td className="px-3 py-2 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             {eq.connectionMode === 'AGENT' && (
                               <button
