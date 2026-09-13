@@ -30,8 +30,12 @@ O sistema utiliza a estratégia de classe raiz `darkMode: 'class'` do Tailwind C
 | Elemento / Componente | Tema Escuro (Dark NOC) | Tema Claro (Daylight) |
 | :--- | :--- | :--- |
 | **Canvas / Background Principal** | `#090d16` (Deep Midnight) | `#f8fafc` (Slate 50) |
+| **Header Superior (Navbar)** | `#0d1322` / `#090d16` com borda escura | `#ffffff` (Pure White) com borda `#e2e8f0` e texto `#0f172a` |
 | **Cards & Modais** | `#0f172a` (Slate 900) com borda `#1e293b` | `#ffffff` (Pure White) com sombra suave e borda `#e2e8f0` |
-| **Sub-painéis e Tabelas** | `#020617` / `bg-slate-950/60` | `#f1f5f9` (Slate 100) / `#f8fafc` |
+| **Tabelas (Cofre, Storages, etc.)** | Fundo escuro com `thead` ardósia | Fundo `#ffffff`, `thead` `#f8fafc` com texto `#475569` e linhas com texto `#0f172a` |
+| **Terminal IA (Chat Container)** | Fundo `#0f172a/60` | Fundo `#ffffff` com sombra suave e borda `#cbd5e1` |
+| **Balão de Mensagem da IA** | Fundo escuro `#1e293b/90` | Fundo `#ffffff` com borda `#cbd5e1`, sombra e texto preto de alto contraste (`#0f172a`) |
+| **Balão de Mensagem do Usuário** | `#0284c7` (Sky Blue) | `#0284c7` (Sky Blue) com texto branco `#ffffff` |
 | **Bordas e Divisores** | `#334155` / `#1e293b` | `#e2e8f0` (Slate 200) / `#cbd5e1` |
 | **Texto Primário (Títulos/Labels)** | `#ffffff` / `#f1f5f9` | `#0f172a` (Slate 900) |
 | **Texto Secundário (Metadados)** | `#94a3b8` (Slate 400) | `#475569` (Slate 600) |
@@ -45,6 +49,7 @@ No tema claro, os status operacionais mantêm o código semântico de cores com 
 - **Online / Operacional:** Fundo `#ecfdf5` com texto e borda `#065f46` (Verde Esmeralda).
 - **Crítico / Offline:** Fundo `#fef2f2` com texto e borda `#991b1b` (Vermelho Escarlate).
 - **Alerta / Warning:** Fundo `#fffbeb` com texto e borda `#92400e` (Âmbar Ouro).
+- **Links WAN (Ativo / Standby / Down):** Fundo pastel semântico (`#ecfdf5`, `#fffbeb`, `#fef2f2`) com texto profundo de alto contraste para interfaces e tráfego.
 - **Proxmox / Hypervisor:** Fundo `#fff7ed` com texto e borda `#c2410c` (Laranja Proxmox).
 - **Linux:** Fundo `#eff6ff` com texto e borda `#1d4ed8` (Azul Safira).
 - **Windows:** Fundo `#f0f9ff` com texto e borda `#0369a1` (Ciano Windows).

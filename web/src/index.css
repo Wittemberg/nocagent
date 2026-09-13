@@ -61,44 +61,263 @@ html.theme-light ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
 
-/* Backgrounds & Canvas Light Overrides */
-html.theme-light .bg-\[\#090d16\],
-html.theme-light .bg-slate-950,
-html.theme-light .bg-slate-950\/95,
-html.theme-light .bg-slate-950\/90,
-html.theme-light .bg-slate-950\/80,
-html.theme-light .bg-slate-950\/50,
-html.theme-light .bg-slate-950\/40,
-html.theme-light .bg-slate-950\/30 {
-  background-color: #ffffff !important;
-}
-
-/* Containers secundários, sub-painéis e toolbars no tema claro */
-html.theme-light .bg-slate-950\/60,
-html.theme-light .bg-slate-950\/70,
-html.theme-light .bg-slate-900\/50,
-html.theme-light .bg-slate-900\/40,
-html.theme-light .bg-slate-900\/30 {
+/* ==========================================================================
+   1. ESTRUTURA GERAL, CABEÇALHO E NAVEGAÇÃO
+   ========================================================================== */
+html.theme-light .bg-\[\#090d16\] {
   background-color: #f8fafc !important;
+  color: #0f172a !important;
 }
 
-/* Cards & Modals no tema claro */
+/* Header superior fixo */
+html.theme-light header,
+html.theme-light .bg-\[\#0d1322\]\/90,
+html.theme-light .bg-\[\#0d1322\] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05) !important;
+}
+
+/* Badges e pílulas informativas no cabeçalho */
+html.theme-light header .bg-slate-900,
+html.theme-light header .bg-slate-900\/80,
+html.theme-light header .bg-slate-950 {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+html.theme-light header .text-slate-300,
+html.theme-light header .text-slate-400 {
+  color: #475569 !important;
+}
+html.theme-light header .text-white {
+  color: #0f172a !important;
+}
+
+/* Barra de tabs de navegação */
+html.theme-light .bg-slate-950\/40 {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+html.theme-light .border-t.border-slate-800\/60 {
+  border-color: #e2e8f0 !important;
+}
+
+/* ==========================================================================
+   2. SUPERFÍCIES, CARDS, MODAIS E CONTAINERS
+   ========================================================================== */
+/* Todos os containers principais de cards e modais */
 html.theme-light .bg-slate-900,
 html.theme-light .bg-slate-900\/95,
 html.theme-light .bg-slate-900\/90,
 html.theme-light .bg-slate-900\/80,
-html.theme-light .bg-slate-900\/70 {
+html.theme-light .bg-slate-900\/70,
+html.theme-light .bg-slate-900\/60,
+html.theme-light .bg-slate-900\/50,
+html.theme-light .bg-slate-900\/40,
+html.theme-light .bg-slate-900\/30,
+html.theme-light .bg-slate-950,
+html.theme-light .bg-slate-950\/95,
+html.theme-light .bg-slate-950\/90,
+html.theme-light .bg-slate-950\/80,
+html.theme-light .bg-slate-950\/70,
+html.theme-light .bg-slate-950\/60,
+html.theme-light .bg-slate-950\/50,
+html.theme-light .bg-slate-950\/40,
+html.theme-light .bg-slate-950\/30 {
   background-color: #ffffff !important;
-  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.05) !important;
 }
 
-/* Inputs, Textareas e Selects no tema claro */
+/* Sub-painéis, barras de ferramentas e caixas internas (fundo sutil slate-50/100) */
+html.theme-light .bg-slate-950\/60,
+html.theme-light .bg-slate-950\/70,
+html.theme-light .bg-slate-950\/40,
+html.theme-light .bg-slate-950\/50 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Bordas universais */
+html.theme-light .border-slate-800,
+html.theme-light .border-slate-800\/80,
+html.theme-light .border-slate-800\/60,
+html.theme-light .border-slate-800\/50,
+html.theme-light .border-slate-800\/40,
+html.theme-light .border-slate-700,
+html.theme-light .border-slate-700\/80,
+html.theme-light .border-slate-700\/60 {
+  border-color: #e2e8f0 !important;
+}
+
+html.theme-light .divide-slate-800,
+html.theme-light .divide-slate-800\/70,
+html.theme-light .divide-slate-800\/60,
+html.theme-light .divide-slate-800\/40,
+html.theme-light .divide-slate-700 {
+  border-color: #e2e8f0 !important;
+}
+
+/* ==========================================================================
+   3. TERMINAL IA (CHAT & MENSAGENS) - ALTA LEGIBILIDADE
+   ========================================================================== */
+/* Container principal do chat */
+html.theme-light .h-\[650px\] {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Cabeçalho e rodapé do chat */
+html.theme-light .h-\[650px\] .rounded-t-2xl,
+html.theme-light .h-\[650px\] .rounded-b-2xl {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Área de rolagem das mensagens */
+html.theme-light .h-\[650px\] .overflow-y-auto {
+  background-color: #f8fafc !important;
+}
+
+/* Balão de mensagem do Assistente IA */
+html.theme-light .h-\[650px\] .bg-slate-800\/90,
+html.theme-light .h-\[650px\] .bg-slate-800 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06) !important;
+}
+html.theme-light .h-\[650px\] .bg-slate-800\/90 * {
+  color: #0f172a !important;
+}
+html.theme-light .h-\[650px\] .bg-slate-800\/90 span[class*="text-slate-"] {
+  color: #64748b !important;
+}
+
+/* Balão do usuário permanece azul vivo com texto branco */
+html.theme-light .h-\[650px\] .bg-sky-600 {
+  background-color: #0284c7 !important;
+  color: #ffffff !important;
+}
+html.theme-light .h-\[650px\] .bg-sky-600 * {
+  color: #ffffff !important;
+}
+
+/* Pílula Hermes Engine */
+html.theme-light .h-\[650px\] .bg-slate-800 {
+  background-color: #f1f5f9 !important;
+  color: #334155 !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* ==========================================================================
+   4. TABELAS (EQUIPAMENTOS, STORAGES, BACKUPS, USUÁRIOS, TENANTS)
+   ========================================================================== */
+html.theme-light table {
+  background-color: #ffffff !important;
+}
+
+html.theme-light table thead,
+html.theme-light thead.bg-slate-950\/70,
+html.theme-light thead.bg-slate-950\/60 {
+  background-color: #f8fafc !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+}
+
+html.theme-light table thead th {
+  color: #475569 !important;
+  font-weight: 700 !important;
+}
+
+html.theme-light table tbody {
+  background-color: #ffffff !important;
+}
+
+html.theme-light table tbody tr {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #f1f5f9 !important;
+}
+
+html.theme-light table tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+html.theme-light table tbody td {
+  color: #1e293b !important;
+}
+
+/* ==========================================================================
+   5. CARDS DE EQUIPAMENTOS (DASHBOARD) E LINKS WAN
+   ========================================================================== */
+/* Caixa interna de Latência e Métricas */
+html.theme-light .p-3\.5 .bg-slate-950\/60,
+html.theme-light .p-3\.5 .bg-slate-950\/40,
+html.theme-light .p-3\.5 .bg-slate-950 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Barra de progresso / trilho de latência */
+html.theme-light .bg-slate-800,
+html.theme-light .bg-slate-800\/80,
+html.theme-light .bg-slate-800\/60,
+html.theme-light .bg-slate-800\/50,
+html.theme-light .bg-slate-800\/40 {
+  background-color: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Badge de status global do WAN */
+html.theme-light .bg-emerald-900\/80,
+html.theme-light .bg-emerald-900\/60 {
+  background-color: #dcfce7 !important;
+  color: #166534 !important;
+  border-color: #86efac !important;
+  font-weight: 700 !important;
+}
+
+/* Linhas individuais de WAN (Ativa, Standby, Down) */
+html.theme-light [class*="bg-emerald-900"],
+html.theme-light [class*="bg-emerald-950"] {
+  background-color: #ecfdf5 !important;
+  color: #065f46 !important;
+  border-color: #a7f3d0 !important;
+}
+
+html.theme-light [class*="bg-amber-950"],
+html.theme-light [class*="bg-amber-900"] {
+  background-color: #fffbeb !important;
+  color: #92400e !important;
+  border-color: #fde68a !important;
+}
+
+html.theme-light [class*="bg-rose-950"],
+html.theme-light [class*="bg-red-950"],
+html.theme-light [class*="bg-red-900"] {
+  background-color: #fef2f2 !important;
+  color: #991b1b !important;
+  border-color: #fecaca !important;
+}
+
+/* Texto de tráfego de interface (Download / Upload) */
+html.theme-light .font-mono.text-\[9px\] .text-slate-400 {
+  color: #334155 !important;
+  font-weight: 600 !important;
+}
+
+/* ==========================================================================
+   6. FORMULÁRIOS, INPUTS E SELECTS
+   ========================================================================== */
 html.theme-light input:not([type="checkbox"]):not([type="radio"]),
 html.theme-light textarea,
 html.theme-light select {
   background-color: #ffffff !important;
   color: #0f172a !important;
-  border-color: #cbd5e1 !important;
+  border: 1px solid #cbd5e1 !important;
 }
 html.theme-light input::placeholder,
 html.theme-light textarea::placeholder {
@@ -108,28 +327,12 @@ html.theme-light input:focus,
 html.theme-light textarea:focus,
 html.theme-light select:focus {
   border-color: #0284c7 !important;
-  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15) !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15) !important;
 }
 
-/* Bordas no tema claro */
-html.theme-light .border-slate-800,
-html.theme-light .border-slate-800\/80,
-html.theme-light .border-slate-800\/60,
-html.theme-light .border-slate-800\/50,
-html.theme-light .border-slate-800\/40,
-html.theme-light .border-slate-700,
-html.theme-light .border-slate-700\/60 {
-  border-color: #e2e8f0 !important;
-}
-
-html.theme-light .divide-slate-800,
-html.theme-light .divide-slate-800\/60,
-html.theme-light .divide-slate-800\/40,
-html.theme-light .divide-slate-700 {
-  border-color: #e2e8f0 !important;
-}
-
-/* Tipografia de Alto Contraste para o Tema Claro */
+/* ==========================================================================
+   7. TIPOGRAFIA DE ALTO CONTRASTE
+   ========================================================================== */
 html.theme-light .text-white,
 html.theme-light .text-slate-100 {
   color: #0f172a !important;
@@ -151,89 +354,43 @@ html.theme-light .text-slate-500 {
   color: #64748b !important;
 }
 
-/* Hover em linhas de tabela, cards e botões neutros */
-html.theme-light .hover\:bg-slate-800:hover,
-html.theme-light .hover\:bg-slate-800\/60:hover,
-html.theme-light .hover\:bg-slate-800\/50:hover,
-html.theme-light .hover\:bg-slate-800\/40:hover,
-html.theme-light .hover\:bg-slate-800\/30:hover,
-html.theme-light .hover\:bg-slate-800\/20:hover,
-html.theme-light .hover\:bg-slate-900\/80:hover,
-html.theme-light .hover\:bg-slate-900:hover {
-  background-color: #f1f5f9 !important;
+html.theme-light .text-slate-600 {
+  color: #94a3b8 !important;
 }
 
-html.theme-light .hover\:border-slate-700:hover,
-html.theme-light .hover\:border-slate-600:hover {
-  border-color: #cbd5e1 !important;
+/* Cores semânticas ajustadas para fundo claro */
+html.theme-light .text-emerald-400,
+html.theme-light .text-emerald-300 {
+  color: #059669 !important;
 }
 
-/* Badges e Status contrastantes no tema claro */
-html.theme-light .bg-emerald-950\/50,
-html.theme-light .bg-emerald-950\/60,
-html.theme-light .bg-emerald-950\/40 {
-  background-color: #ecfdf5 !important;
-  color: #065f46 !important;
-  border-color: #a7f3d0 !important;
+html.theme-light .text-sky-400,
+html.theme-light .text-sky-300 {
+  color: #0284c7 !important;
 }
 
-html.theme-light .bg-red-950\/50,
-html.theme-light .bg-red-950\/60,
-html.theme-light .bg-red-950\/40 {
-  background-color: #fef2f2 !important;
-  color: #991b1b !important;
-  border-color: #fecaca !important;
+html.theme-light .text-amber-400,
+html.theme-light .text-amber-300,
+html.theme-light .text-amber-200 {
+  color: #d97706 !important;
 }
 
-html.theme-light .bg-amber-950\/50,
-html.theme-light .bg-amber-950\/60,
-html.theme-light .bg-amber-950\/40 {
-  background-color: #fffbeb !important;
-  color: #92400e !important;
-  border-color: #fde68a !important;
+html.theme-light .text-rose-400,
+html.theme-light .text-rose-300,
+html.theme-light .text-red-400,
+html.theme-light .text-red-300 {
+  color: #dc2626 !important;
 }
 
-html.theme-light .bg-sky-950\/50,
-html.theme-light .bg-sky-950\/60,
-html.theme-light .bg-sky-950\/40 {
+/* Badges e tags hierárquicas */
+html.theme-light [class*="bg-sky-950"] {
   background-color: #f0f9ff !important;
-  color: #075985 !important;
+  color: #0369a1 !important;
   border-color: #bae6fd !important;
 }
 
-html.theme-light .bg-indigo-950\/50,
-html.theme-light .bg-indigo-950\/60,
-html.theme-light .bg-indigo-950\/40 {
-  background-color: #eef2ff !important;
-  color: #3730a3 !important;
-  border-color: #c7d2fe !important;
-}
-
-html.theme-light .bg-purple-950\/50,
-html.theme-light .bg-purple-950\/60,
-html.theme-light .bg-purple-950\/40 {
+html.theme-light [class*="bg-purple-950"] {
   background-color: #faf5ff !important;
   color: #6b21a8 !important;
   border-color: #e9d5ff !important;
 }
-
-/* Ajuste de saturação dos textos de status para legibilidade no claro */
-html.theme-light .text-emerald-400 {
-  color: #059669 !important;
-}
-html.theme-light .text-red-400 {
-  color: #dc2626 !important;
-}
-html.theme-light .text-amber-400 {
-  color: #d97706 !important;
-}
-html.theme-light .text-sky-400 {
-  color: #0284c7 !important;
-}
-html.theme-light .text-indigo-400 {
-  color: #4f46e5 !important;
-}
-html.theme-light .text-purple-400 {
-  color: #7c3aed !important;
-}
-
