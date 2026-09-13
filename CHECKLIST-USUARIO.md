@@ -128,4 +128,9 @@
 - `[x]` Monitoramento visual de consumo de cotas (Equipamentos, Usuários, Storages) com barras de progresso nos cards de Tenant
 - `[x]` Bloqueio com erro `403 Forbidden` na criação de recursos quando a cota do plano é atingida
 - `[x]` Auto-migração resiliente no startup para vincular registros órfãos pré-existentes ao tenant padrão `noc-corp`
+- `[x]` Botão de Clonagem de Equipamentos nos Cards e no Cofre para aceleração de cadastro em massa
+- `[x]` Preservação segura de identidade (`username`, `authMethod`, grupo, tags) na clonagem com expurgo de senhas/tokens
+- `[x]` Validação rigorosa contra duplicidade: proibido salvar equipamentos com mesmo nome ou mesmo host/endpoint no tenant
+- `[x]` Monitoramento de Internet Ativa no Mikrotik RouterOS com leitura de rota padrão `0.0.0.0/0` e comentários de WAN
+- `[x]` Exibição de tráfego de rede `RX` e `TX` e badges de failover (`INTERNET ATIVA`, `STANDBY / BACKUP`, `DOWN`) nos cards Mikrotik
 

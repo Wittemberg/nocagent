@@ -31,7 +31,7 @@ async function resolveTargetEquipment(text, tenantId = null) {
 
     const lower = text.toLowerCase();
 
-    // 1. Identifica se o usuário mencionou algum GRUPO / TENANT (ex: "SuperTop", "Matriz", "Cliente X")
+    // 1. Identifica se o usuário mencionou algum GRUPO / TENANT (ex: "Matriz", "Filial 01", "Datacenter")
     const distinctGroups = Array.from(new Set(equipments.map((e) => e.group?.trim()).filter(Boolean)));
     let matchedGroup = null;
     for (const g of distinctGroups) {
@@ -62,7 +62,7 @@ async function resolveTargetEquipment(text, tenantId = null) {
       groupEquipments = equipments.filter((e) => (e.subgroup || '').toLowerCase() === matchedSubgroup.toLowerCase());
     }
 
-    // 4. Busca correspondência direta pelo nome do equipamento individual (ex: "ProxMox SuperTop", "Mikrotik Loja 01")
+    // 4. Busca correspondência direta pelo nome do equipamento individual (ex: "ProxMox Cluster", "Mikrotik Borda")
     for (const eq of equipments) {
       const eqNameLower = eq.name.toLowerCase();
       if (lower.includes(eqNameLower)) {
@@ -399,7 +399,7 @@ async function formatPureStatusReadout(matchedEquipment, telemetry, normalized, 
  * Garante que o Hermes "pense" criticamente sobre a telemetria mesmo sem chaves de LLM externas.
  */
 function autonomousDiagnosticReasoner({ text, normalized, matchedEquipment, telemetry, allEquipments, scope = {} }) {
-  // CASO 0: Visão e Diagnóstico do Grupo / Tenant Multi-Unidades (ex: "SuperTop")
+  // CASO 0: Visão e Diagnóstico do Grupo / Tenant Multi-Unidades (ex: "Matriz")
   if (scope?.group && (normalized.includes(scope.group.toLowerCase()) || scope.groupEquipments?.length > 0) && !matchedEquipment) {
     const groupName = scope.group;
     const items = scope.groupEquipments || [];
@@ -435,7 +435,7 @@ function autonomousDiagnosticReasoner({ text, normalized, matchedEquipment, tele
 
   // CASO 1: Otimização e redução de uso de RAM no Proxmox VE
   if (
-    (telemetry?.type === 'PROXMOX' || normalized.includes('proxmox') || normalized.includes('supertop') || normalized.includes('calvi')) &&
+    (telemetry?.type === 'PROXMOX' || normalized.includes('proxmox') || normalized.includes('pve') || normalized.includes('cluster')) &&
     (normalized.includes('ram') || normalized.includes('memoria') || normalized.includes('diminuir') || normalized.includes('reduzir') || normalized.includes('otimizar') || normalized.includes('consumo'))
   ) {
     const nodeStatus = telemetry?.nodeStatus;

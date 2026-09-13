@@ -36,28 +36,36 @@ function probeMikrotikPort(host, port = 8728, timeoutMs = 4000) {
   });
 }
 
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0 || isNaN(bytes)) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
 /**
  * Tenta coletar dados completos via RouterOS v7 REST API
  */
 async function getMikrotikRestData(host, credentials, port) {
-  let cleanHost = host.trim().replace(/\/+$/, '');
-  if (!cleanHost.startsWith('http://') && !cleanHost.startsWith('https://')) {
-    cleanHost = `https://${cleanHost}`;
-  }
+  let rawHost = host.trim().replace(/\/+$/, '');
+  let isHttps = !rawHost.startsWith('http://');
+  let cleanHost = rawHost.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').split(':')[0];
 
-  const urlObj = new URL(cleanHost);
-  // Se for porta customizada ou REST API
-  if (port && port !== 8728 && port !== 8729) {
-    urlObj.port = String(port);
+  // Determina porta REST: se port for 8728/8729 (Winbox/API), tenta 443 ou 80
+  let targetPort = port;
+  if (!port || port === 8728 || port === 8729) {
+    targetPort = isHttps ? 443 : 80;
   }
 
   const username = credentials?.username || 'admin';
   const password = credentials?.password || '';
-
   const authHeader = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
 
+  const baseURL = `${isHttps ? 'https' : 'http'}://${cleanHost}:${targetPort}/rest`;
+
   const client = axios.create({
-    baseURL: `${urlObj.origin}/rest`,
+    baseURL,
     headers: {
       Authorization: authHeader,
       Accept: 'application/json',
@@ -66,19 +74,97 @@ async function getMikrotikRestData(host, credentials, port) {
     timeout: 5000,
   });
 
-  const [resourceRes, interfacesRes] = await Promise.all([
-    client.get('/system/resource'),
+  const [resourceRes, interfacesRes, routesRes] = await Promise.all([
+    client.get('/system/resource').catch(() => ({ data: {} })),
     client.get('/interface').catch(() => ({ data: [] })),
+    client.get('/ip/route').catch(() => ({ data: [] })),
   ]);
 
   const resData = resourceRes.data || {};
-  const interfaces = (interfacesRes.data || []).map((iface) => ({
-    name: iface.name,
-    type: iface.type,
-    running: iface.running === 'true' || iface.running === true,
-    disabled: iface.disabled === 'true' || iface.disabled === true,
-    comment: iface.comment || '',
-  }));
+  const rawInterfaces = Array.isArray(interfacesRes.data) ? interfacesRes.data : [];
+  const rawRoutes = Array.isArray(routesRes.data) ? routesRes.data : [];
+
+  // 1. Identifica a interface da Rota Padrão Ativa (Default Gateway: 0.0.0.0/0)
+  let activeDefaultInterface = null;
+  const defaultRoutes = rawRoutes.filter(r => 
+    (r['dst-address'] === '0.0.0.0/0' || r.dstAddress === '0.0.0.0/0')
+  );
+
+  const activeDefaultRoute = defaultRoutes.find(r => 
+    r.active === true || r.active === 'true'
+  );
+
+  if (activeDefaultRoute) {
+    const immGateway = activeDefaultRoute['immediate-gateway'] || activeDefaultRoute.immediateGateway || '';
+    const gw = activeDefaultRoute.gateway || '';
+    // Ex: "192.168.15.1%ether1" -> "ether1"
+    const match = immGateway.match(/%([a-zA-Z0-9_\-\.]+)/) || gw.match(/%([a-zA-Z0-9_\-\.]+)/);
+    if (match) {
+      activeDefaultInterface = match[1];
+    } else if (gw && !gw.includes('.')) {
+      activeDefaultInterface = gw;
+    }
+  }
+
+  // 2. Mapeia e sanitiza todas as interfaces
+  const interfaces = rawInterfaces.map((iface) => {
+    const name = iface.name || '';
+    const type = iface.type || '';
+    const comment = iface.comment ? String(iface.comment).trim() : '';
+    const running = iface.running === 'true' || iface.running === true;
+    const disabled = iface.disabled === 'true' || iface.disabled === true;
+    const rxBytes = parseInt(iface['rx-byte'] || iface['rx-bytes'] || iface['actual-mtu'] || 0, 10) || 0;
+    const txBytes = parseInt(iface['tx-byte'] || iface['tx-bytes'] || 0, 10) || 0;
+    const isDefaultRoute = activeDefaultInterface ? (name === activeDefaultInterface || activeDefaultInterface.includes(name)) : false;
+
+    return {
+      name,
+      type,
+      comment,
+      running,
+      disabled,
+      rxBytes,
+      txBytes,
+      formattedRx: formatBytes(rxBytes),
+      formattedTx: formatBytes(txBytes),
+      isDefaultRoute,
+    };
+  });
+
+  // 3. Filtra especificamente interfaces WAN / Links de Internet
+  const wanRegex = /(wan|link|internet|fibra|vivo|claro|oi|tim|starlink|operadora|dedicado|backup|contingencia|principal|secundario|gvt|embratel|algar)/i;
+  
+  let wanLinks = interfaces.filter(iface => {
+    const textToMatch = `${iface.name} ${iface.comment}`;
+    return wanRegex.test(textToMatch) || 
+           iface.type === 'pppoe-out' || 
+           iface.type === 'lte' || 
+           iface.name.toLowerCase().startsWith('wan') || 
+           iface.isDefaultRoute;
+  });
+
+  // Se nenhuma tiver comentário WAN explícito, busca interfaces ativas com rota padrão ou tráfego relevante
+  if (wanLinks.length === 0) {
+    wanLinks = interfaces.filter(iface => iface.isDefaultRoute || (iface.running && !iface.name.includes('bridge') && !iface.name.includes('loopback')));
+  }
+
+  // Define se a interface está ativa como internet principal
+  wanLinks = wanLinks.map(w => {
+    const isActive = w.isDefaultRoute || (w.running && (wanLinks.length === 1 || (w.comment && /principal|primario|vivo|dedicado/i.test(w.comment))));
+    return {
+      ...w,
+      isActive,
+      status: (!w.running || w.disabled) ? 'DOWN' : (isActive ? 'ACTIVE' : 'STANDBY'),
+    };
+  });
+
+  // Ordena colocando a Internet Ativa no topo
+  wanLinks.sort((a, b) => (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0));
+
+  const activeWan = wanLinks.find(w => w.isActive);
+  const activeWanName = activeWan 
+    ? (activeWan.comment ? `${activeWan.comment} (${activeWan.name})` : activeWan.name)
+    : null;
 
   const freeMem = parseInt(resData['free-memory'] || 0, 10);
   const totalMem = parseInt(resData['total-memory'] || 0, 10);
@@ -95,6 +181,8 @@ async function getMikrotikRestData(host, credentials, port) {
       usedPercent: memUsedPercent,
     },
     interfaces,
+    wanLinks,
+    activeWanName,
     hasRestApi: true,
   };
 }

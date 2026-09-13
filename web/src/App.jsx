@@ -73,12 +73,20 @@ axios.interceptors.response.use(
   }
 );
 
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0 || isNaN(bytes)) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
 const initialEquipmentForm = {
   name: '',
   type: 'PFSENSE',
   host: '',
   port: '',
-  group: 'SuperTop',
+  group: 'Geral',
   subgroup: '',
   tags: '',
   connectionMode: 'DIRECT',
@@ -157,7 +165,7 @@ function EquipmentCredentialInputs({ form, setForm, storages = [], isEdit = fals
         <input
           type="text"
           required
-          placeholder="Ex: pfSense Matriz, Mikrotik SuperTop Loja 01, Proxmox Cluster"
+          placeholder="Ex: pfSense Matriz, Mikrotik Borda, Proxmox Cluster"
           value={form.name}
           onChange={e => setForm({ ...form, name: e.target.value })}
           className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
@@ -201,7 +209,7 @@ function EquipmentCredentialInputs({ form, setForm, storages = [], isEdit = fals
               <input
                 type="text"
                 autoFocus
-                placeholder="Ex: SuperTop, Matriz, Cliente ABC"
+                placeholder="Ex: Matriz, Filial Norte, Datacenter"
                 value={form.group || ''}
                 onChange={e => setForm({ ...form, group: e.target.value })}
                 className="w-full bg-slate-900 border border-sky-500/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-400"
@@ -1304,6 +1312,32 @@ export default function App() {
     }
   };
 
+  const handleCloneEquipment = (eq) => {
+    setSaveError(null);
+    setNewEquipment({
+      ...initialEquipmentForm,
+      name: `${eq.name} (Clone)`,
+      type: eq.type,
+      host: '', // Limpa o host para exigir a definição do IP do novo ativo e evitar duplicidade
+      port: eq.port != null ? String(eq.port) : '',
+      connectionMode: eq.connectionMode || 'DIRECT',
+      backupStorageId: eq.backupStorageId || '',
+      backupSchedule: eq.backupSchedule || 'DAILY',
+      group: eq.group || 'Geral',
+      subgroup: eq.subgroup || '',
+      tags: Array.isArray(eq.tags) ? eq.tags.join(', ') : eq.tags || '',
+      username: eq.username || '',
+      authMethod: eq.authMethod || 'KEY',
+      realm: eq.realm || 'pam',
+      password: '',
+      apiKey: '',
+      privateKey: '',
+      tokenId: '',
+      tokenSecret: '',
+    });
+    setIsModalOpen(true);
+  };
+
   const handleOpenEditModal = (eq) => {
     setEditError(null);
     setEditEquipment({
@@ -1508,6 +1542,29 @@ export default function App() {
     if (newEquipment.connectionMode === 'DIRECT' && !newEquipment.host) {
       setSaveError('Para conexão direta, informe o Host ou IP do equipamento.');
       return;
+    }
+
+    const trimmedName = newEquipment.name.trim();
+    const trimmedHost = newEquipment.host ? newEquipment.host.trim() : '';
+
+    const nameExists = equipments.some(eq => eq.name?.trim().toLowerCase() === trimmedName.toLowerCase());
+    if (nameExists) {
+      setSaveError(`Já existe um equipamento cadastrado com o nome "${trimmedName}". Por favor, utilize um nome exclusivo.`);
+      return;
+    }
+
+    if (newEquipment.connectionMode === 'DIRECT' && trimmedHost) {
+      const hostExists = equipments.some(eq => {
+        if (!eq.host) return false;
+        const sameHost = eq.host.trim().toLowerCase() === trimmedHost.toLowerCase();
+        const eqPort = eq.port != null ? String(eq.port) : '';
+        const newPort = newEquipment.port != null ? String(newEquipment.port).trim() : '';
+        return sameHost && (eqPort === newPort || (!eqPort && !newPort));
+      });
+      if (hostExists) {
+        setSaveError(`Já existe um equipamento cadastrado com o host/endpoint "${trimmedHost}${newEquipment.port ? ':' + newEquipment.port : ''}". Por favor, defina um endpoint exclusivo.`);
+        return;
+      }
     }
 
     setSavingEquipment(true);
@@ -1729,6 +1786,13 @@ export default function App() {
 
             <div className="flex items-center gap-1.5 flex-shrink-0">
               <button
+                onClick={() => handleCloneEquipment(eq)}
+                title="Clonar Equipamento (Cadastro Rápido)"
+                className="p-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-sky-300 border border-slate-700/60 transition"
+              >
+                <Copy className="w-3 h-3" />
+              </button>
+              <button
                 onClick={() => handleOpenEditModal(eq)}
                 title="Editar Credenciais no Cofre"
                 className="p-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700/60 transition"
@@ -1876,8 +1940,89 @@ export default function App() {
             </div>
           )}
 
-          {/* GATEWAYS MONITORADOS (PFSENSE) */}
-          {eq.subItems && eq.subItems.length > 0 && (
+          {/* LINKS DE INTERNET / WAN MONITORADAS (MIKROTIK) */}
+          {eq.type === 'MIKROTIK' && (
+            <div className="mt-2.5 pt-2 border-t border-slate-800/60 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold px-0.5">
+                <span className="flex items-center gap-1 text-sky-400">
+                  <Radio className="w-3 h-3" />
+                  Links de Internet (WAN / Failover)
+                </span>
+                {eq.mikrotikData?.activeWanName && (
+                  <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800/60 truncate max-w-[180px]">
+                    Ativo: {eq.mikrotikData.activeWanName}
+                  </span>
+                )}
+              </div>
+
+              {eq.subItems && eq.subItems.length > 0 ? (
+                eq.subItems.map((wan, idx) => {
+                  const isActive = wan.isActive || wan.isDefaultRoute || wan.status === 'ACTIVE';
+                  const isStandby = wan.running && !isActive;
+
+                  return (
+                    <div key={idx} className={`p-2 rounded-lg border text-[11px] flex flex-col gap-1 transition ${
+                      isActive 
+                        ? 'bg-emerald-950/40 border-emerald-800/70 shadow-sm'
+                        : isStandby
+                        ? 'bg-slate-950/60 border-amber-800/40 text-slate-300'
+                        : 'bg-rose-950/20 border-rose-900/40 text-slate-400'
+                    }`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                            isActive ? 'bg-emerald-400 animate-pulse' : isStandby ? 'bg-amber-400' : 'bg-rose-500'
+                          }`} />
+                          <div className="min-w-0">
+                            <span className="font-bold text-white font-mono text-[11px]">
+                              {wan.name}
+                            </span>
+                            {wan.comment && (
+                              <span className="ml-1.5 text-[10px] text-slate-300 font-medium truncate inline-block max-w-[160px]" title={wan.comment}>
+                                • {wan.comment}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider font-mono border flex-shrink-0 ${
+                          isActive
+                            ? 'bg-emerald-900/70 text-emerald-300 border-emerald-700/80'
+                            : isStandby
+                            ? 'bg-amber-900/40 text-amber-300 border-amber-700/60'
+                            : 'bg-rose-900/40 text-rose-300 border-rose-700/60'
+                        }`}>
+                          {isActive ? 'INTERNET ATIVA' : isStandby ? 'STANDBY / BACKUP' : 'DOWN'}
+                        </span>
+                      </div>
+
+                      {/* Tráfego de Rede RX / TX */}
+                      {(wan.formattedRx || wan.formattedTx || wan.rxBytes != null) && (
+                        <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-1 border-t border-slate-800/40">
+                          <span className="flex items-center gap-1">
+                            <span className="text-sky-400 font-bold">↓ RX:</span> {wan.formattedRx || formatBytes(wan.rxBytes)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="text-emerald-400 font-bold">↑ TX:</span> {wan.formattedTx || formatBytes(wan.txBytes)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="p-2 bg-slate-950/40 rounded-lg border border-slate-800/50 text-[10px] text-slate-400">
+                  <p className="flex items-center gap-1 text-slate-400">
+                    <Info className="w-3 h-3 text-sky-400 flex-shrink-0" />
+                    <span>Adicione comentários nas portas WAN do Mikrotik (ex: <code>VIVO FIBRA</code>, <code>CLARO BACKUP</code>) para leitura em tempo real.</span>
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* GATEWAYS MONITORADOS (PFSENSE / OUTROS) */}
+          {eq.type !== 'MIKROTIK' && eq.subItems && eq.subItems.length > 0 && (
             <div className="mt-2 pt-2 border-t border-slate-800/60 space-y-1">
               {eq.subItems.slice(0, 3).map((sub, idx) => (
                 <div key={idx} className="flex items-center justify-between text-[10px] bg-slate-950/40 px-2 py-1 rounded border border-slate-800/50">
@@ -2714,6 +2859,13 @@ export default function App() {
                                 <Terminal className="w-4 h-4" />
                               </button>
                             )}
+                            <button
+                              onClick={() => handleCloneEquipment(eq)}
+                              title="Clonar Equipamento (Cadastro Rápido)"
+                              className="p-1.5 text-slate-400 hover:text-sky-300 hover:bg-sky-950/40 rounded-lg transition"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => handleOpenEditModal(eq)}
                               title="Editar Equipamento no Cofre"
@@ -4274,7 +4426,7 @@ export default function App() {
                   <input
                     type="text"
                     required
-                    placeholder="Ex: Supermercados SuperTop, Hospital Central"
+                    placeholder="Ex: Minha Empresa, Hospital Central"
                     value={tenantForm.name}
                     onChange={(e) => setTenantForm({ ...tenantForm, name: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"
@@ -4286,7 +4438,7 @@ export default function App() {
                     <label className="block text-slate-300 font-medium mb-1">Identificador (Slug)</label>
                     <input
                       type="text"
-                      placeholder="supertop (auto se vazio)"
+                      placeholder="minha-empresa (auto se vazio)"
                       value={tenantForm.slug}
                       onChange={(e) => setTenantForm({ ...tenantForm, slug: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500"

@@ -92,26 +92,28 @@ O agente consulta o endpoint `/api/v2/status/gateways` no firewall e responde em
 - Comandos de risco (reiniciar VM de banco de dados, reiniciar roteador, derrubar rota estática) **nunca** são executados diretamente.
 - O agente gera um código temporário de autorização (ex: `APROVAR 4821`), descreve o impacto técnico e aguarda a confirmação explícita de um operador autorizado.
 
-### 5. 🔐 Cofre Cifrado de Senhas (Padrão AES-256-GCM)
+### 5. 🔐 Cofre Cifrado de Senhas (Padrão AES-256-GCM) & Clonagem Rápida
 ![Cofre Cifrado](assets/images/secure_vault.jpg)
 - As credenciais dos roteadores e firewalls **nunca** são armazenadas em texto puro.
 - A IA **nunca** lê nem recebe senhas nas respostas.
 - A chave mestra descriptografa o token estritamente na memória RAM durante a fração de segundo necessária para disparar a chamada de rede.
+- **Clonagem Rápida de Ativos (Cadastro em Massa):** Botão de 1-clique para clonar equipamentos replicando configurações de conexão, grupos, subgrupos, tags e usuário (`username`), limpando chaves/tokens confidenciais e bloqueando duplicidade de nomes ou endpoints na organização.
 
 ### 6. 🏢 Gestão Hierárquica Multi-Tenant & Isolamento Estrito de Dados
 - **Isolamento de Dados em Profundidade:** Cada organização (`Tenant`) possui seus próprios usuários, firewalls pfSense, roteadores Mikrotik, servidores, storages de backup e logs de auditoria completamente isolados via particionamento estrito por `tenantId`.
 - **Zero Data Leak:** Usuários com perfil `TENANT_MASTER`, `OPERATOR` ou `VIEWER` visualizam única e exclusivamente os ativos de sua organização. Clientes recém-cadastrados iniciam em estado limpo (`empty state`) sem contaminação cruzada de status ou alertas legados.
-- **Hierarquia Interna Flexível:** Gestão de filiais e unidades (`group`, `subgroup` e `tags`), permitindo agrupar dezenas de lojas de um mesmo cliente corporativo com visualização dedicada por raias.
+- **Hierarquia Interna Flexível:** Gestão de filiais e unidades (`group`, `subgroup` e `tags`), permitindo agrupar dezenas de lojas ou unidades corporativas com visualização dedicada por raias.
 
 ### 7. 📊 Dashboard Web de Alta Densidade com Telemetria Real
 - Cards compactos para monitorar dezenas de nós em uma única tela sem poluição visual.
+- **Links de Internet & Failover no Mikrotik:** Identificação visual de qual internet está ativa em tempo real (leitura de comentários da interface, rota padrão ativa `0.0.0.0/0`, badges `INTERNET ATIVA`, `STANDBY / BACKUP`, `DOWN` e tráfego `RX / TX`).
 - Barras de consumo em tempo real para **CPU, RAM e Disco**, além do inventário de VMs e storages do Proxmox.
 - **Silenciador de Alertas (Snooze):** Oculta alertas pontuais de redundância/contingência por tempo determinado (15m, 30m, 1h, 4h, 24h) com persistência em `localStorage`.
 - **Resiliência Integrada:** Polling automático de telemetria a cada 30 segundos e botão de retry inteligente.
 
 ### 8. 🧠 Raciocínio Diagnóstico Autônomo (Hermes AI RAG)
 - O Hermes AI Engine analisa a telemetria ao vivo via RAG antes de responder qualquer interação, respeitando estritamente o `tenantId` da sessão ativa.
-- Identificação precisa de entidades no prompt (ex: *"como está a Loja 01 do SuperTop?"*, *"quais VMs estão no Proxmox Calvi?"*).
+- Identificação precisa de entidades no prompt (ex: *"como está a Filial 01?"*, *"quais VMs estão no Proxmox Cluster?"*).
 - Diagnóstico estruturado com 6 padrões operacionais: Visão de Grupo/Tenant, Nó Proxmox, Gateway pfSense, Mikrotik BGP, Auditoria de Backups e Saúde Global.
 
 ### 9. 🔐 Autenticação Segura, RBAC Multi-Tenant, 2FA TOTP & Gestão de Cotas

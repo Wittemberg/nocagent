@@ -1067,7 +1067,7 @@ app.get('/api/equipments/status', authenticateToken, async (req, res) => {
           if (mktMetrics.error) item.error = mktMetrics.error;
           if (mktMetrics.hasRestApi) {
             item.mikrotikData = mktMetrics;
-            item.subItems = mktMetrics.interfaces || [];
+            item.subItems = (mktMetrics.wanLinks && mktMetrics.wanLinks.length > 0) ? mktMetrics.wanLinks : (mktMetrics.interfaces || []);
           }
 
           prisma.equipment.update({
@@ -1363,6 +1363,9 @@ app.get('/api/equipments', authenticateToken, async (req, res) => {
         },
         active: true,
         createdAt: true,
+        encryptedCredentials: true,
+        iv: true,
+        authTag: true,
       },
     });
 
@@ -1381,8 +1384,28 @@ app.get('/api/equipments', authenticateToken, async (req, res) => {
           };
         }
       }
+
+      // Extrai apenas identidade não-sensível (usuário/método) para suporte à clonagem sem expor senhas/tokens
+      let username = '';
+      let authMethod = 'PASSWORD';
+      let realm = 'pam';
+      if (eq.encryptedCredentials && eq.iv && eq.authTag) {
+        try {
+          const creds = decryptCredentials(eq.encryptedCredentials, eq.iv, eq.authTag);
+          if (creds) {
+            username = creds.username || '';
+            authMethod = creds.authMethod || (creds.privateKey ? 'KEY' : creds.tokenId ? 'TOKEN' : 'PASSWORD');
+            realm = creds.realm || 'pam';
+          }
+        } catch {}
+      }
+
+      const { encryptedCredentials, iv, authTag, ...restEq } = eq;
       return {
-        ...eq,
+        ...restEq,
+        username,
+        authMethod,
+        realm,
         group: eq.group || 'Geral',
         subgroup: eq.subgroup || null,
         tags: eq.tags || [],
@@ -1447,6 +1470,39 @@ app.post('/api/equipments', authenticateToken, async (req, res) => {
       return res.status(400).json({
         error: 'Para conexão direta, informe o Host ou IP do equipamento.',
       });
+    }
+
+    const cleanName = String(name).trim();
+    const cleanHost = host ? String(host).trim() : (mode === 'AGENT' ? 'outbound-agent' : '0.0.0.0');
+    const cleanPort = port ? parseInt(port, 10) : null;
+
+    // Validação de Duplicidade: Não permitir mesmo nome no mesmo tenant
+    const existingName = await prisma.equipment.findFirst({
+      where: {
+        ...(targetTenantId ? { tenantId: targetTenantId } : {}),
+        name: { equals: cleanName, mode: 'insensitive' },
+      },
+    });
+    if (existingName) {
+      return res.status(400).json({
+        error: `Já existe um equipamento cadastrado com o nome "${cleanName}". Por favor, utilize um nome exclusivo para clonagem/cadastro.`,
+      });
+    }
+
+    // Validação de Duplicidade: Não permitir mesmo endpoint (host + port) no mesmo tenant para modo DIRECT
+    if (mode === 'DIRECT' && cleanHost !== '0.0.0.0' && cleanHost !== 'outbound-agent') {
+      const existingEndpoint = await prisma.equipment.findFirst({
+        where: {
+          ...(targetTenantId ? { tenantId: targetTenantId } : {}),
+          host: { equals: cleanHost, mode: 'insensitive' },
+          port: cleanPort,
+        },
+      });
+      if (existingEndpoint) {
+        return res.status(400).json({
+          error: `Já existe um equipamento cadastrado com o host/endpoint "${cleanHost}${cleanPort ? ':' + cleanPort : ''}". Defina um IP/Host exclusivo para salvar.`,
+        });
+      }
     }
 
     // Normaliza credenciais: se string, converte em objeto

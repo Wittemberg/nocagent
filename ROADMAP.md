@@ -186,6 +186,9 @@ FASE 5: Enterprise Engine, Observabilidade & Feature Flags (Pennant + Telescope 
 | **5.7** | Status Indicator em Tempo Real | Header do Dashboard | Badge dinâmico no topo com alerta pulsante quando o Kill-Switch estiver ativo | ✅ Concluído |
 | **5.8** | Isolamento Estrito Multi-Tenant & Zero Data Leak | `core/src/server.js`, `hermes.js`, `schema.prisma` | Particionamento por `tenantId` em 100% dos endpoints, RAG contextualizado e migração de órfãos | ✅ Concluído |
 | **5.9** | Gestão Visual de Planos & Cotas Operacionais | `web/src/App.jsx`, `core/src/server.js` | Modal e cards com cotas (Equipamentos, Usuários, Storages, IA L1-L3, Retenção) e bloqueio 403 | ✅ Concluído |
+| **5.10** | Clonagem Rápida de Ativos & Antiduplicação | `web/src/App.jsx`, `core/src/server.js` | Botão clonar no card e cofre, replicação de parâmetros e validação de nome/endpoint único | ✅ Concluído |
+| **5.11** | Detecção de Internet Ativa & WAN no Mikrotik | `core/src/drivers/mikrotik.js`, `web/src/App.jsx` | Rota default 0.0.0.0/0, leitura de comentários, failover (Ativa/Standby/Down) e telemetria RX/TX | ✅ Concluído |
+
 
 
 

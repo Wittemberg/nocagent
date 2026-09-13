@@ -187,3 +187,21 @@ Se por qualquer motivo as credenciais do superadmin precisarem ser restauradas p
    - A tentativa de cadastrar novos equipamentos, usuários ou repositórios de backup além da cota configurada retorna `HTTP 403 Forbidden` com a mensagem indicando a capacidade máxima atingida.
    - Para expandir os limites de uma organização, o Superadmin deve acessar **Tenants → Editar**, ajustar os valores de cota desejados e salvar.
 
+### C. Procedimento Operacional: Clonagem de Equipamentos (Cadastro em Massa)
+1. **Fluxo Rápido:**
+   - No card do equipamento (Visão Geral) ou na tabela do Cofre, clique no ícone **Clonar Equipamento** (`Copy`).
+   - O modal de cadastro se abrirá com tipo, grupo, subgrupo, tags, políticas de backup e usuário (`username`) pré-preenchidos.
+   - Senhas, tokens e chaves privadas são zerados por política de segurança.
+2. **Prevenção de Duplicidade:**
+   - O sistema bloqueia a gravação se o nome ou o endpoint (`host:port`) forem idênticos a qualquer equipamento já cadastrado na organização.
+   - O operador deve obrigatoriamente preencher o novo IP/Host e definir a senha/token do novo ativo.
+
+### D. Identificação de Internet Ativa no Mikrotik (RouterOS)
+1. **Boas Práticas de Nomenclatura e Comentários:**
+   - Para que o NOC-Agent identifique e exiba o link com máxima clareza, adicione comentários descritivos nas portas WAN do Mikrotik (ex: `"VIVO FIBRA 600M"`, `"CLARO 4G BACKUP"`, `"STARLINK DEDICADO"`).
+2. **Detecção Automática:**
+   - O driver RouterOS inspeciona a rota padrão ativa (`dst-address=0.0.0.0/0`, `active=true`), mapeando a interface de saída principal como `INTERNET ATIVA`.
+   - Links secundários conectados e em espera são sinalizados como `STANDBY / BACKUP`.
+   - Portas desativadas ou sem link físico são exibidas como `DOWN`.
+   - O tráfego acumulado `RX` (download) e `TX` (upload) é lido diretamente das interfaces e exibido no card.
+
