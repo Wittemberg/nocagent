@@ -49,26 +49,84 @@ function formatBytes(bytes) {
 /**
  * Processador unificado para telemetria de Mikrotik (tanto Native API v6/v7 quanto REST API v7)
  */
-function processMikrotikRawData(resData = {}, rawInterfaces = [], rawRoutes = []) {
+function processMikrotikRawData(resData = {}, rawInterfaces = [], rawRoutes = [], rawAddresses = []) {
   // 1. Identifica a interface da Rota Padrão Ativa (Default Gateway: 0.0.0.0/0)
   let activeDefaultInterface = null;
-  const defaultRoutes = rawRoutes.filter(r => 
-    (r['dst-address'] === '0.0.0.0/0' || r.dstAddress === '0.0.0.0/0')
-  );
+  const defaultRoutes = (Array.isArray(rawRoutes) ? rawRoutes : []).filter(r => {
+    const dst = r['dst-address'] || r.dstAddress || '';
+    const isDisabled = r.disabled === true || r.disabled === 'true';
+    return dst === '0.0.0.0/0' && !isDisabled;
+  });
 
-  const activeDefaultRoute = defaultRoutes.find(r => 
-    r.active === true || r.active === 'true'
-  );
+  // Ordena colocando rotas ativas primeiro e com menor distance (menor métrica ganha)
+  defaultRoutes.sort((a, b) => {
+    const aActive = (a.active === true || a.active === 'true') ? 1 : 0;
+    const bActive = (b.active === true || b.active === 'true') ? 1 : 0;
+    if (bActive !== aActive) return bActive - aActive;
+    const distA = parseInt(a.distance || 1, 10);
+    const distB = parseInt(b.distance || 1, 10);
+    return distA - distB;
+  });
 
-  if (activeDefaultRoute) {
-    const immGateway = activeDefaultRoute['immediate-gateway'] || activeDefaultRoute.immediateGateway || '';
-    const gw = activeDefaultRoute.gateway || '';
-    // Ex: "192.168.15.1%ether1-isp1" -> "ether1-isp1"
-    const match = String(immGateway).match(/%([a-zA-Z0-9_\-\.]+)/) || String(gw).match(/%([a-zA-Z0-9_\-\.]+)/);
-    if (match) {
-      activeDefaultInterface = match[1];
-    } else if (gw && !gw.includes('.')) {
+  for (const r of defaultRoutes) {
+    const gwStatus = String(r['gateway-status'] || r.gatewayStatus || '');
+    const immGateway = String(r['immediate-gateway'] || r.immediateGateway || '');
+    const gw = String(r.gateway || '');
+    const iface = String(r.interface || '');
+
+    // RouterOS v6: "192.168.15.1 reachable via  ether1-isp1"
+    let m = gwStatus.match(/via\s+([a-zA-Z0-9_\-\.]+)/i);
+    if (m) {
+      activeDefaultInterface = m[1];
+      break;
+    }
+
+    // RouterOS v6 PPPoE / direta: "pppoe-Link2-NWT reachable" ou "ether1 reachable"
+    m = gwStatus.match(/^([a-zA-Z0-9_\-\.]+)\s+reachable/i);
+    if (m) {
+      activeDefaultInterface = m[1];
+      break;
+    }
+
+    // RouterOS v7 ou notação com interface: "%ether1-isp1"
+    m = `${immGateway} ${gw} ${gwStatus}`.match(/%([a-zA-Z0-9_\-\.]+)/);
+    if (m) {
+      activeDefaultInterface = m[1];
+      break;
+    }
+
+    // Se immediate-gateway for diretamente o nome da interface
+    if (immGateway && !immGateway.includes('.') && !immGateway.includes('/')) {
+      activeDefaultInterface = immGateway;
+      break;
+    }
+
+    // Se gateway for diretamente o nome da interface (ex: pppoe-out1 ou ether1)
+    if (gw && !gw.includes('.') && !gw.includes('/')) {
       activeDefaultInterface = gw;
+      break;
+    }
+
+    if (iface) {
+      activeDefaultInterface = iface;
+      break;
+    }
+  }
+
+  // Se rota padrão tiver apenas IP de gateway e não encontramos a interface pelo status da rota,
+  // consulta tabela de endereços (/ip/address) para mapear a qual interface a rede do gateway pertence
+  if (!activeDefaultInterface && defaultRoutes[0]) {
+    const gw = String(defaultRoutes[0].gateway || '');
+    if (gw && gw.match(/^\d+\.\d+\.\d+\.\d+$/) && Array.isArray(rawAddresses)) {
+      const gwParts = gw.split('.').slice(0, 3).join('.');
+      const matchedAddr = rawAddresses.find(a => {
+        const net = String(a.network || '');
+        const addr = String(a.address || '');
+        return net.startsWith(gwParts) || addr.startsWith(gwParts);
+      });
+      if (matchedAddr && (matchedAddr.interface || matchedAddr['actual-interface'])) {
+        activeDefaultInterface = matchedAddr.interface || matchedAddr['actual-interface'];
+      }
     }
   }
 
@@ -83,7 +141,12 @@ function processMikrotikRawData(resData = {}, rawInterfaces = [], rawRoutes = []
     const disabled = iface.disabled === 'true' || iface.disabled === true;
     const rxBytes = parseInt(iface['rx-byte'] || iface['rx-bytes'] || iface['bytes-in'] || iface.rxByte || 0, 10) || 0;
     const txBytes = parseInt(iface['tx-byte'] || iface['tx-bytes'] || iface['bytes-out'] || iface.txByte || 0, 10) || 0;
-    const isDefaultRoute = activeDefaultInterface ? (name === activeDefaultInterface || activeDefaultInterface.includes(name)) : false;
+
+    const isDefaultRoute = activeDefaultInterface ? (
+      name.toLowerCase() === activeDefaultInterface.toLowerCase() ||
+      activeDefaultInterface.toLowerCase().includes(name.toLowerCase()) ||
+      name.toLowerCase().includes(activeDefaultInterface.toLowerCase())
+    ) : false;
 
     return {
       name,
@@ -101,7 +164,7 @@ function processMikrotikRawData(resData = {}, rawInterfaces = [], rawRoutes = []
   });
 
   // 3. Filtra especificamente interfaces WAN / Links de Internet
-  const wanRegex = /(wan|link|isp|internet|fibra|adsl|vivo|claro|oi|tim|starlink|operadora|dedicado|backup|contingencia|principal|secundario|gvt|embratel|algar)/i;
+  const wanRegex = /(wan|link|isp|internet|fibra|adsl|vivo|claro|oi|tim|starlink|operadora|dedicado|backup|contingencia|principal|secundario|gvt|embratel|algar|nwt|elonline)/i;
   
   let wanLinks = interfaces.filter(iface => {
     const textToMatch = `${iface.name} ${iface.rawComment} ${iface.comment}`;
@@ -118,15 +181,45 @@ function processMikrotikRawData(resData = {}, rawInterfaces = [], rawRoutes = []
     wanLinks = interfaces.filter(iface => iface.isDefaultRoute || (iface.running && !iface.name.includes('bridge') && !iface.name.includes('loopback')));
   }
 
-  // Define se a interface está ativa como internet principal
+  // 4. Determina qual link está ativo
+  let hasActive = false;
   wanLinks = wanLinks.map(w => {
-    const isActive = w.isDefaultRoute || (w.running && (wanLinks.length === 1 || (w.comment && /principal|primario|vivo|dedicado|adsl/i.test(w.comment))));
+    const isActive = Boolean(w.isDefaultRoute && w.running && !w.disabled);
+    if (isActive) hasActive = true;
     return {
       ...w,
       isActive,
-      status: (!w.running || w.disabled) ? 'DOWN' : (isActive ? 'ACTIVE' : 'STANDBY'),
     };
   });
+
+  // Se a rota padrão não foi associada diretamente a nenhuma interface WAN (ex: rotas recursivas ou scripts),
+  // aplica heurística determinística garantindo que o link principal seja identificado visualmente
+  if (!hasActive) {
+    const runningLinks = wanLinks.filter(w => w.running && !w.disabled);
+    if (runningLinks.length === 1) {
+      runningLinks[0].isActive = true;
+    } else if (runningLinks.length > 1) {
+      // Prioridade 1: Comentário ou nome com Link 1, ISP 1, WAN 1, Principal, Primário, Fibra
+      const primaryCandidate = runningLinks.find(w => 
+        /(link\s*1|isp\s*1|wan\s*1|principal|prim[aá]ri[oa]|fibra|dedicado|adsl)/i.test(`${w.name} ${w.comment}`)
+      );
+      if (primaryCandidate) {
+        primaryCandidate.isActive = true;
+      } else {
+        // Prioridade 2: Interface com maior tráfego acumulado (RX + TX)
+        const sortedByTraffic = [...runningLinks].sort((a, b) => 
+          ((b.rxBytes + b.txBytes) - (a.rxBytes + a.txBytes))
+        );
+        sortedByTraffic[0].isActive = true;
+      }
+    }
+  }
+
+  // 5. Atribui status final (ACTIVE, STANDBY, DOWN)
+  wanLinks = wanLinks.map(w => ({
+    ...w,
+    status: (!w.running || w.disabled) ? 'DOWN' : (w.isActive ? 'ACTIVE' : 'STANDBY'),
+  }));
 
   // Ordena colocando a Internet Ativa no topo
   wanLinks.sort((a, b) => (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0));
@@ -178,14 +271,15 @@ async function getMikrotikNativeApiData(host, credentials, port = 8728) {
 
   await conn.connect();
   try {
-    const [resourceRows, interfaceRows, routeRows] = await Promise.all([
+    const [resourceRows, interfaceRows, routeRows, addressRows] = await Promise.all([
       conn.write('/system/resource/print').catch(() => []),
       conn.write('/interface/print').catch(() => []),
       conn.write('/ip/route/print').catch(() => []),
+      conn.write('/ip/address/print').catch(() => []),
     ]);
 
     const resData = resourceRows[0] || {};
-    return processMikrotikRawData(resData, interfaceRows, routeRows);
+    return processMikrotikRawData(resData, interfaceRows, routeRows, addressRows);
   } finally {
     conn.close().catch(() => {});
   }
@@ -220,17 +314,19 @@ async function getMikrotikRestData(host, credentials, port) {
     timeout: 5000,
   });
 
-  const [resourceRes, interfacesRes, routesRes] = await Promise.all([
+  const [resourceRes, interfacesRes, routesRes, addressRes] = await Promise.all([
     client.get('/system/resource').catch(() => ({ data: {} })),
     client.get('/interface').catch(() => ({ data: [] })),
     client.get('/ip/route').catch(() => ({ data: [] })),
+    client.get('/ip/address').catch(() => ({ data: [] })),
   ]);
 
   const resData = resourceRes.data || {};
   const rawInterfaces = Array.isArray(interfacesRes.data) ? interfacesRes.data : [];
   const rawRoutes = Array.isArray(routesRes.data) ? routesRes.data : [];
+  const rawAddresses = Array.isArray(addressRes.data) ? addressRes.data : [];
 
-  return processMikrotikRawData(resData, rawInterfaces, rawRoutes);
+  return processMikrotikRawData(resData, rawInterfaces, rawRoutes, rawAddresses);
 }
 
 /**
