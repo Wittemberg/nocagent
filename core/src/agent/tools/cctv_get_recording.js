@@ -51,8 +51,10 @@ module.exports = {
       const ip = equipment.port ? `${equipment.host}:${equipment.port}` : equipment.host;
       
       // Formatação de datas para a API da Dahua/Intelbras
-      const stUrl = encodeURIComponent(startTime);
-      const etUrl = encodeURIComponent(endTime);
+      // NOTA: Dahua C parser não gosta de URL encode agressivo (%3A para :).
+      // Ele espera o formato exato: YYYY-MM-DD%20HH:MM:SS
+      const stUrl = startTime.trim().replace(/ /g, '%20');
+      const etUrl = endTime.trim().replace(/ /g, '%20');
       
       let url = '';
       if (vendor.toLowerCase() === 'intelbras' || vendor.toLowerCase() === 'dahua') {
