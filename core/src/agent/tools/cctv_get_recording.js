@@ -48,19 +48,34 @@ module.exports = {
         fs.mkdirSync(mediaDir, { recursive: true });
       }
       
-      const ip = equipment.ipAddress;
+      const ip = equipment.port ? `${equipment.host}:${equipment.port}` : equipment.host;
       
-      // Nota Arquitetural: Download de vídeo real em DVRs varia imensamente.
-      // - Intelbras (Dahua): /cgi-bin/loadfile.cgi?action=startLoad...
-      // - Hikvision (ISAPI): /ISAPI/ContentMgmt/download via XML payload.
-      //
-      // Aqui vamos criar um arquivo de vídeo "dummy" simulando o processamento
-      // de extração, para que o fluxo no Chatwoot/WhatsApp possa ser validado.
+      // Formatação de datas para a API da Dahua/Intelbras
+      const stUrl = encodeURIComponent(startTime);
+      const etUrl = encodeURIComponent(endTime);
+      
+      let url = '';
+      if (vendor.toLowerCase() === 'intelbras' || vendor.toLowerCase() === 'dahua') {
+        // CGI Dahua/Intelbras: /cgi-bin/loadfile.cgi?action=startLoad...
+        url = `http://${ip}/cgi-bin/loadfile.cgi?action=startLoad&channel=${channel}&startTime=${stUrl}&endTime=${etUrl}`;
+      } else {
+        return { success: false, error: 'Download de gravação só suportado atualmente para Intelbras/Dahua.' };
+      }
       
       const publicUrl = `/api/media/${fileName}`;
       
-      // Criação do arquivo dummy
-      fs.writeFileSync(filePath, 'DUMMY_VIDEO_CONTENT');
+      // Executar CURL com Digest Auth que salva direto no arquivo
+      const cmd = `curl -s -f -g --anyauth -u "${creds.username}:${creds.password}" "${url}" -o "${filePath}"`;
+      
+      try {
+        // 60 segundos de timeout para dar tempo de baixar um trecho curto
+        await execPromise(cmd, { timeout: 60000 }); 
+      } catch (curlError) {
+        console.error('Falha real ao baixar gravação:', curlError.message);
+        // Fallback: Criar vídeo dummy apenas se estiver em lab, mas como o usuário reclamou, 
+        // vamos retornar o erro real para ele saber se o IP responde.
+        return { success: false, error: `Falha de comunicação com o DVR ao baixar vídeo: ${curlError.message}` };
+      }
       
       return {
         success: true,
