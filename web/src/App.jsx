@@ -2705,7 +2705,7 @@ export default function App() {
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col font-sans">
       {/* HEADER SUPERIOR */}
       <header className="border-b border-slate-800 bg-[#0d1322]/90 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-[1920px] mx-auto px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-sky-500/20">
               <Radio className="w-6 h-6 text-white animate-pulse" />
@@ -2819,7 +2819,7 @@ export default function App() {
 
         {/* NAVEGAÇÃO POR TABS */}
         <div className="w-full border-t border-slate-200 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-950/40">
-          <div className="max-w-[1920px] mx-auto px-3 sm:px-6 flex items-center justify-between gap-1.5 sm:gap-2 overflow-x-auto text-xs lg:text-sm py-2 scrollbar-none w-full">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 flex items-center justify-between gap-1.5 sm:gap-2 overflow-x-auto text-xs lg:text-sm py-2 scrollbar-none w-full">
             {[
               { id: 'overview', label: 'Visão Geral', fullLabel: 'Visão Geral (NOC)', icon: Activity },
               { id: 'chat', label: 'Terminal IA', fullLabel: 'Terminal IA (Chat)', icon: MessageSquare },
@@ -2853,7 +2853,7 @@ export default function App() {
       </header>
 
       {/* CONTEÚDO PRINCIPAL */}
-      <main className="max-w-[1920px] mx-auto px-3 sm:px-6 py-4 flex-1 w-full">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 flex-1 w-full">
         {(!authToken || !currentUser) ? (
           <div className="min-h-[65vh] flex items-center justify-center py-12 px-4">
             <div className="w-full max-w-md bg-[#0d1322] border border-slate-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
