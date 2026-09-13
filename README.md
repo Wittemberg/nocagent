@@ -105,9 +105,11 @@ O agente consulta o endpoint `/api/v2/status/gateways` no firewall e responde em
 - **Hierarquia Interna Flexível:** Gestão de filiais e unidades (`group`, `subgroup` e `tags`), permitindo agrupar dezenas de lojas ou unidades corporativas com visualização dedicada por raias.
 
 ### 7. 📊 Dashboard Web de Alta Densidade com Telemetria Real
-- Cards compactos para monitorar dezenas de nós em uma única tela sem poluição visual.
+- Design pautado pelo **Clean Lightmode**: uso de tons suaves de cinza (evitando o branco puro `#FFFFFF` e preto puro), hierarquia visual e tipografia espaçada para evitar fadiga visual nas operações do NOC.
+- Cards super compactos (Layout em Grid) para monitorar dezenas de nós em uma única tela sem poluição visual.
 - **Links de Internet & Failover no Mikrotik:** Identificação visual de qual internet está ativa em tempo real (leitura de comentários da interface, rota padrão ativa `0.0.0.0/0`, badges `INTERNET ATIVA`, `STANDBY / BACKUP`, `DOWN` e tráfego `RX / TX`).
-- Barras de consumo em tempo real para **CPU, RAM e Disco**, além do inventário de VMs e storages do Proxmox.
+- **Recursos Proxmox e Servidores:** Barras de consumo em tempo real para **CPU, RAM e VMs**, além de uma **lista compacta e completa de todos os storages do host** e suas capacidades.
+- **Tabelas de Cadastro Otimizadas:** Aproveitamento máximo da tela reduzindo "gorduras" de espaçamento para exibição de dezenas de equipamentos e chaves criptográficas sem scroll excessivo.
 - **Silenciador de Alertas (Snooze):** Oculta alertas pontuais de redundância/contingência por tempo determinado (15m, 30m, 1h, 4h, 24h) com persistência em `localStorage`.
 - **Resiliência Integrada:** Polling automático de telemetria a cada 30 segundos e botão de retry inteligente.
 
