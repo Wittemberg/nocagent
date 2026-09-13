@@ -903,7 +903,7 @@ app.post('/api/webhooks/chatwoot', async (req, res) => {
  */
 app.post('/api/chat', authenticateToken, async (req, res) => {
   try {
-    const { message, senderName } = req.body;
+    const { message, senderName, dashboardContext } = req.body;
     if (!message) {
       return res.status(400).json({ error: 'Campo "message" obrigatório.' });
     }
@@ -914,6 +914,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
       senderName: senderName || req.user?.name || 'Operador Web',
       tenantId: req.user?.role === 'SUPERADMIN' ? (req.body?.tenantId || null) : req.user?.tenantId,
       role: req.user?.role || 'OPERATOR',
+      dashboardContext
     });
 
     return res.json({ reply, timestamp: new Date().toISOString() });

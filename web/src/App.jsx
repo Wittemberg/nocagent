@@ -2224,7 +2224,16 @@ export default function App() {
     setLoadingChat(true);
 
     try {
-      const res = await axios.post('/api/chat', { message: userText, senderName: 'Operador Web' });
+      // Gera um resumo do que está na tela (telemetria em cache no front)
+      const dashboardContext = Array.isArray(equipmentList) ? equipmentList.map(eq => {
+        return `[${eq.name} (${eq.type})] Status: ${eq.status}, Latência: ${eq.lastLatency || 'N/A'}ms, Perda: ${eq.lastLossPercent || 0}%`;
+      }).join('\n') : '';
+
+      const res = await axios.post('/api/chat', { 
+        message: userText, 
+        senderName: 'Operador Web',
+        dashboardContext 
+      });
       const botReply = res.data?.reply || 'Comando processado com sucesso.';
       setChatMessages(prev => [...prev, { 
         sender: 'bot', 

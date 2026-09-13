@@ -652,7 +652,7 @@ async function callLlmReasoning({ systemPrompt, telemetryContext, userPrompt, se
 /**
  * Processador principal de mensagens do Hermes AI Engine com Telemetria RAG e Raciocínio Diagnóstico
  */
-async function processMessage({ text, senderPhone, senderName, tenantId = null, role = 'OPERATOR' }) {
+async function processMessage({ text, senderPhone, senderName, tenantId = null, role = 'OPERATOR', dashboardContext = '' }) {
   const normalized = (text || '').toLowerCase().trim();
 
   // 0. Trava de Emergência Global (Emergency Kill-Switch)
@@ -709,7 +709,10 @@ async function processMessage({ text, senderPhone, senderName, tenantId = null, 
 
   // 7. MODO DE RACIOCÍNIO E PENSAMENTO DIAGNÓSTICO (CONSULTATIVE_REASONING)
   // Monta o contexto operacional de telemetria
-  const telemetryContext = buildTelemetryContextText(matchedEquipment, telemetry, allEquipments, scope);
+  let telemetryContext = buildTelemetryContextText(matchedEquipment, telemetry, allEquipments, scope);
+  if (dashboardContext) {
+    telemetryContext += `\n[CONTEXTO VISUAL DA TELA DO OPERADOR (DASHBOARD CACHE)]\nAqui estão as latências e perdas de pacotes atuais que o usuário está vendo na tela para os equipamentos ativos (não é necessário rodar testes de ping para estes equipamentos):\n${dashboardContext}\n`;
+  }
 
   // Tenta processar com as LLMs configuradas (Claude 3.5 Sonnet, GPT-4o, Gemini ou Ollama)
   const llmResponse = await callLlmReasoning({
