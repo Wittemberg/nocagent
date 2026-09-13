@@ -265,7 +265,7 @@ async function getMikrotikNativeApiData(host, credentials, port = 8728) {
     user: username,
     password: password,
     port: targetPort,
-    timeout: 4,
+    timeout: 10,
     keepalive: false,
   });
 
@@ -363,6 +363,8 @@ async function getMikrotikMetrics(host, credentials, port = 8728) {
   }
 
   let data = null;
+  let lastApiError = null;
+
   if (credentials?.username && credentials?.password) {
     // Candidatos de porta para a API RouterOS (Native Binary Protocol)
     // Ordem: porta cadastrada → 8728 padrão → 8729 SSL
@@ -372,8 +374,8 @@ async function getMikrotikMetrics(host, credentials, port = 8728) {
       try {
         data = await getMikrotikNativeApiData(host, credentials, apiPort);
         break; // Sucesso — para de tentar outras portas
-      } catch {
-        // Porta não suporta API nativa, tenta próxima
+      } catch (err) {
+        lastApiError = err?.message || String(err);
       }
     }
 
@@ -381,10 +383,12 @@ async function getMikrotikMetrics(host, credentials, port = 8728) {
     if (!data) {
       try {
         data = await getMikrotikRestData(host, credentials, probe.port);
-      } catch {
-        // REST API também falhou — credenciais erradas ou API não habilitada
+      } catch (err) {
+        if (!lastApiError) lastApiError = err?.message || String(err);
       }
     }
+  } else {
+    lastApiError = 'Credenciais de acesso (usuário/senha) não configuradas no Cofre.';
   }
 
   return {
@@ -392,6 +396,7 @@ async function getMikrotikMetrics(host, credentials, port = 8728) {
     lastLatency: probe.rtt,
     lastLossPercent: 0,
     port: probe.port,
+    apiError: data ? null : lastApiError,
     ...(data || {
       version: 'RouterOS (API Indisponível)',
       hasRestApi: false,
