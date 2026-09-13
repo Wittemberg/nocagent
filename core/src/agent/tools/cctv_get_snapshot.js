@@ -5,7 +5,7 @@ const util = require('util');
 const execPromise = util.promisify(exec);
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const { getEquipmentCredentials } = require('../equipmentUtils');
+const { getDecryptedEquipment } = require('../equipmentUtils');
 
 module.exports = {
   definition: {
@@ -25,18 +25,17 @@ module.exports = {
     const { equipmentId, channel, vendor } = args;
     
     try {
-      // 1. Validar Equipamento e Credenciais
-      const equipment = await prisma.equipment.findUnique({
-        where: { id: equipmentId }
-      });
-      
-      if (!equipment) {
-        return { success: false, error: 'Equipamento não encontrado no banco de dados.' };
+      let equipment, creds;
+      try {
+        const result = await getDecryptedEquipment(equipmentId);
+        equipment = result.eq;
+        creds = result.credentials;
+      } catch (e) {
+        return { success: false, error: e.message };
       }
       
-      const creds = await getEquipmentCredentials(equipmentId);
       if (!creds || !creds.username || !creds.password) {
-        return { success: false, error: 'Credenciais não configuradas para este equipamento no Vault.' };
+        return { success: false, error: 'Credenciais (usuário e senha) não configuradas para este equipamento no Vault.' };
       }
       
       // 2. Preparar diretório de mídia pública

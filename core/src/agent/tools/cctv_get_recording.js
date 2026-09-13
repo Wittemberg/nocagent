@@ -5,7 +5,7 @@ const util = require('util');
 const execPromise = util.promisify(exec);
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const { getEquipmentCredentials } = require('../equipmentUtils');
+const { getDecryptedEquipment } = require('../equipmentUtils');
 
 module.exports = {
   definition: {
@@ -27,14 +27,18 @@ module.exports = {
     const { equipmentId, channel, vendor, startTime, endTime } = args;
     
     try {
-      const equipment = await prisma.equipment.findUnique({
-        where: { id: equipmentId }
-      });
-      if (!equipment) return { success: false, error: 'Equipamento não encontrado.' };
+      let equipment, creds;
+      try {
+        const result = await getDecryptedEquipment(equipmentId);
+        equipment = result.eq;
+        creds = result.credentials;
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
       
-      const creds = await getEquipmentCredentials(equipmentId);
-      if (!creds) return { success: false, error: 'Credenciais ausentes no Vault.' };
-      
+      if (!creds || !creds.username || !creds.password) {
+        return { success: false, error: 'Credenciais (usuário e senha) não configuradas para este equipamento no Vault.' };
+      }
       const timestamp = Date.now();
       const fileName = `clip_${equipmentId}_cam${channel}_${timestamp}.mp4`;
       const mediaDir = path.resolve(__dirname, '../../../../public/media');
