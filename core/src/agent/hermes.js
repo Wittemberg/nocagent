@@ -815,8 +815,11 @@ async function processMessage({ text, senderPhone, senderName, tenantId = null, 
   }
 
   // Tenta processar com as LLMs configuradas (Claude 3.5 Sonnet, GPT-4o, Gemini ou Ollama)
-  
-  const finalSystemPrompt = SYSTEM_PROMPT.replace('[AS_SKILLS_SERAO_INJETADAS_AQUI_PELO_BACKEND]', 'Skills disponíveis: ' + getSkillsListText());
+  const baseSystemPrompt = typeof SYSTEM_PROMPT === 'function' ? SYSTEM_PROMPT() : SYSTEM_PROMPT;
+  const finalSystemPrompt = baseSystemPrompt.replace(
+    '[AS_SKILLS_SERAO_INJETADAS_AQUI_PELO_BACKEND]',
+    getSkillsListText()
+  );
 
   // Tenta processar com as LLMs configuradas (Claude 3.5 Sonnet, GPT-4o, Gemini ou Ollama)
   const llmResponse = await callLlmReasoning({
