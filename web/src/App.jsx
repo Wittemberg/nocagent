@@ -53,6 +53,8 @@ import {
   Moon,
   Network,
   WifiOff,
+  Monitor,
+  Camera,
 } from 'lucide-react';
 import axios from 'axios';
 import QRCodeLib from 'qrcode';
@@ -465,6 +467,9 @@ winrm enumerate winrm/config/listener
             <option value="PROXMOX">Proxmox VE Cluster</option>
             <option value="ZABBIX">Zabbix Server</option>
             <option value="GENERIC_SNMP">SNMP Genérico</option>
+            <option value="DVR">DVR (CFTV Intelbras/Hikvision)</option>
+            <option value="NVR">NVR (Gravador IP)</option>
+            <option value="IP_CAMERA">Câmera IP</option>
           </select>
         </div>
         <div>
@@ -2538,6 +2543,26 @@ export default function App() {
                           </div>
                         </div>
                       )}
+                    </div>
+                  </>
+                ) : ['DVR', 'NVR', 'IP_CAMERA'].includes(eq.type) ? (
+                  <>
+                    <div className="text-[10px] font-bold text-indigo-600 dark:text-[#a0b0ff] flex items-center gap-1 mb-1.5">
+                      <Monitor className="w-3 h-3" /> Info do CFTV
+                    </div>
+                    <div className="flex flex-col gap-1.5 h-[55px]">
+                      <div className="flex-1 flex items-center justify-between px-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm text-[10px] font-mono">
+                        <span className="text-slate-500 dark:text-slate-400">Canais Ativos</span>
+                        <strong className="text-indigo-600 dark:text-indigo-400">
+                          {eq.cctvData?.channels || (eq.type === 'IP_CAMERA' ? '1' : '16')}
+                        </strong>
+                      </div>
+                      <div className="flex-1 flex items-center justify-between px-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm text-[10px] font-mono">
+                        <span className="text-slate-500 dark:text-slate-400">Armazenamento</span>
+                        <strong className="text-emerald-600 dark:text-emerald-400">
+                          {eq.cctvData?.storageStatus || 'Gravando (OK)'}
+                        </strong>
+                      </div>
                     </div>
                   </>
                 ) : eq.osInfo ? (

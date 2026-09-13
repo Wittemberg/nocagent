@@ -22,6 +22,9 @@ enum EquipmentType {
   PROXMOX
   ZABBIX
   GENERIC_SNMP
+  DVR
+  NVR
+  IP_CAMERA
 }
 
 enum IncidentSeverity {
