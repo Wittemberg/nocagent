@@ -3309,15 +3309,17 @@ export default function App() {
               <div className="flex flex-wrap gap-3">
                 <button 
                   onClick={() => { setActiveTab('chat'); setInputMsg('como estão os gateways do pfsense?'); }}
-                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md shadow-sky-600/30 transition"
+                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md shadow-sky-600/20 transition flex items-center gap-1.5"
                 >
-                  📡 Testar Conectividade via Chat
+                  <Radio className="w-3.5 h-3.5" />
+                  <span>Testar Conectividade via Chat</span>
                 </button>
                 <button 
                   onClick={() => { setActiveTab('chat'); setInputMsg('auditar backups recentes dos equipamentos'); }}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
+                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md shadow-sky-600/20 transition flex items-center gap-1.5"
                 >
-                  💾 Consultar Backups via Chat
+                  <HardDrive className="w-3.5 h-3.5" />
+                  <span>Consultar Backups via Chat</span>
                 </button>
               </div>
             </div>
@@ -4499,7 +4501,7 @@ export default function App() {
                     setUserError(null);
                     setIsUserModalOpen(true);
                   }}
-                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-semibold text-white flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition"
+                  className="px-3.5 py-2 bg-sky-600 hover:bg-sky-500 rounded-xl text-xs font-semibold text-white flex items-center gap-1.5 shadow-lg shadow-sky-600/20 transition"
                 >
                   <UserPlus className="w-4 h-4" />
                   Novo Usuário
@@ -4596,7 +4598,7 @@ export default function App() {
                             setUserError(null);
                             setIsUserModalOpen(true);
                           }}
-                          className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                          className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-sky-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-transparent text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-300 transition"
                           title="Editar Usuário"
                         >
                           <Pencil className="w-3.5 h-3.5" />
@@ -4604,7 +4606,7 @@ export default function App() {
                         {u.id !== currentUser.id && (
                           <button
                             onClick={() => handleDeleteUser(u.id, u.name)}
-                            className="p-2 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-red-300 transition"
+                            className="p-2 rounded-lg bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60 border border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-300 transition"
                             title="Excluir Usuário"
                           >
                             <Trash2 className="w-3.5 h-3.5" />

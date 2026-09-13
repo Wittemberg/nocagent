@@ -394,3 +394,81 @@ html.theme-light [class*="bg-purple-950"] {
   color: #6b21a8 !important;
   border-color: #e9d5ff !important;
 }
+
+/* ==========================================================================
+   8. BOTÕES, CONTROLES E AÇÕES (HARMONIZAÇÃO TOTAL NO TEMA CLARO)
+   ========================================================================== */
+/* Botões secundários neutros ("Atualizar", "Resetar Ordem", etc.) */
+html.theme-light button.bg-slate-900,
+html.theme-light button.bg-slate-900\/90,
+html.theme-light button.bg-slate-900\/80,
+html.theme-light button.bg-slate-900\/60,
+html.theme-light .border-slate-800.bg-slate-900\/90,
+html.theme-light .border-slate-700.bg-slate-900 {
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #334155 !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+html.theme-light button.bg-slate-900:hover,
+html.theme-light button.bg-slate-900\/90:hover,
+html.theme-light button.bg-slate-900\/80:hover,
+html.theme-light .border-slate-700.bg-slate-900:hover {
+  background-color: #f8fafc !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+}
+
+/* Filtros de cabeçalho do Dashboard ("Todos os Clientes", "Unidades", "Tipos") */
+html.theme-light div.bg-slate-900\/90 {
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #334155 !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+html.theme-light div.bg-slate-900\/90 select {
+  color: #334155 !important;
+  font-weight: 600 !important;
+  background-color: transparent !important;
+}
+html.theme-light select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Aba ativa da navegação superior */
+html.theme-light header .text-sky-400.bg-sky-500\/15 {
+  background-color: #e0f2fe !important;
+  color: #0369a1 !important;
+  font-weight: 700 !important;
+  border: 1px solid #bae6fd !important;
+  box-shadow: 0 1px 2px rgba(2, 132, 199, 0.08) !important;
+}
+html.theme-light header .text-sky-400.bg-sky-500\/15 svg {
+  color: #0284c7 !important;
+}
+
+/* Abas inativas */
+html.theme-light header .text-slate-400.hover\:text-slate-200 {
+  color: #64748b !important;
+}
+html.theme-light header .text-slate-400.hover\:text-slate-200:hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* Botões de Ação na Tabela de Equipamentos e Listas (Editar, Deletar, Copiar) */
+html.theme-light table td button {
+  color: #475569 !important;
+}
+html.theme-light table td button:hover {
+  background-color: #f0f9ff !important;
+  color: #0284c7 !important;
+}
+html.theme-light table td button[title*="Remover"]:hover,
+html.theme-light table td button[title*="Excluir"]:hover {
+  background-color: #fef2f2 !important;
+  color: #dc2626 !important;
+}
+
