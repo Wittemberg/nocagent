@@ -81,17 +81,48 @@ const renderMarkdown = (text) => {
     parts.push(text.substring(lastIndex));
   }
   
-  // Agora processar texto normal e negrito
+  // Agora processar texto normal, negrito e links
   return parts.map((part, i) => {
     if (typeof part === 'string') {
-      const boldParts = part.split(/(\*\*.*?\*\*)/g);
+      const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+      const strParts = [];
+      let strLastIndex = 0;
+      let strMatch;
+      
+      while ((strMatch = linkRegex.exec(part)) !== null) {
+        if (strMatch.index > strLastIndex) {
+          strParts.push(part.substring(strLastIndex, strMatch.index));
+        }
+        strParts.push({ type: 'link', text: strMatch[1], url: strMatch[2], key: strMatch.index });
+        strLastIndex = strMatch.index + strMatch[0].length;
+      }
+      if (strLastIndex < part.length) {
+        strParts.push(part.substring(strLastIndex));
+      }
+
       return (
         <span key={i}>
-          {boldParts.map((bp, j) => {
-            if (bp.startsWith('**') && bp.endsWith('**')) {
-              return <strong key={j} className="font-bold">{bp.slice(2, -2)}</strong>;
+          {strParts.map((sp, k) => {
+            if (typeof sp === 'string') {
+              const boldParts = sp.split(/(\*\*.*?\*\*)/g);
+              return (
+                <span key={k}>
+                  {boldParts.map((bp, j) => {
+                    if (bp.startsWith('**') && bp.endsWith('**')) {
+                      return <strong key={j} className="font-bold text-white">{bp.slice(2, -2)}</strong>;
+                    }
+                    return <span key={j}>{bp}</span>;
+                  })}
+                </span>
+              );
+            } else if (sp.type === 'link') {
+              return (
+                <a key={k} href={sp.url} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:text-sky-300 underline underline-offset-2 font-medium">
+                  {sp.text}
+                </a>
+              );
             }
-            return <span key={j}>{bp}</span>;
+            return null;
           })}
         </span>
       );

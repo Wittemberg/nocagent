@@ -79,14 +79,14 @@ module.exports = {
         return { 
           success: true, 
           message: 'Falha de comunicação real, gerada imagem de teste (ambiente de laboratório).',
-          imageUrl: `/media/${fileName}`, // URL Relativa para funcionar via Nginx
-          markdown: `![Foto Câmera ${channel}](/media/${fileName})\n\n[🔗 Abrir imagem em nova aba](/media/${fileName})`
+          imageUrl: `/api/media/${fileName}`, // URL Relativa para funcionar via Nginx
+          markdown: `![Foto Câmera ${channel}](/api/media/${fileName})\n\n[🔗 Abrir imagem em nova aba](/api/media/${fileName})`
         };
       }
       
       // 5. Retornar URL Pública
       // Assumindo que o frontend/dashboard sirva a pasta public via webserver na mesma porta ou nginx
-      const publicUrl = `/media/${fileName}`; // URL Relativa
+      const publicUrl = `/api/media/${fileName}`; // URL Relativa
       
       return {
         success: true,

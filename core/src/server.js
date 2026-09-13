@@ -104,7 +104,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Servir arquivos de mídia estáticos gerados pelos agentes (snapshots e vídeos)
-app.use('/media', express.static(path.join(__dirname, '../../public/media')));
+app.use('/api/media', express.static(path.join(__dirname, '../../public/media')));
 
 // Log de requisições simples
 app.use((req, res, next) => {

@@ -57,7 +57,7 @@ module.exports = {
       // Aqui vamos criar um arquivo de vídeo "dummy" simulando o processamento
       // de extração, para que o fluxo no Chatwoot/WhatsApp possa ser validado.
       
-      const publicUrl = `/media/${fileName}`;
+      const publicUrl = `/api/media/${fileName}`;
       
       // Criação do arquivo dummy
       fs.writeFileSync(filePath, 'DUMMY_VIDEO_CONTENT');
