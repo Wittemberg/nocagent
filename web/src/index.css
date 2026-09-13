@@ -348,6 +348,17 @@ html.theme-light select:focus {
 /* ==========================================================================
    7. TIPOGRAFIA DE ALTO CONTRASTE
    ========================================================================== */
+html.theme-light h1,
+html.theme-light h2,
+html.theme-light h3,
+html.theme-light h4,
+html.theme-light h5,
+html.theme-light h6,
+html.theme-light strong,
+html.theme-light b {
+  color: #0f172a !important;
+}
+
 html.theme-light .text-white,
 html.theme-light .text-slate-100 {
   color: #0f172a !important;
@@ -418,17 +429,21 @@ html.theme-light button.bg-slate-900,
 html.theme-light button.bg-slate-900\/90,
 html.theme-light button.bg-slate-900\/80,
 html.theme-light button.bg-slate-900\/60,
+html.theme-light button.bg-slate-900\/50,
+html.theme-light button.bg-slate-900\/40,
 html.theme-light .border-slate-800.bg-slate-900\/90,
+html.theme-light .border-slate-800.bg-slate-900,
 html.theme-light .border-slate-700.bg-slate-900 {
   background-color: #ffffff !important;
   border: 1px solid #cbd5e1 !important;
-  color: #334155 !important;
+  color: #1e293b !important;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
 }
 
 html.theme-light button.bg-slate-900:hover,
 html.theme-light button.bg-slate-900\/90:hover,
 html.theme-light button.bg-slate-900\/80:hover,
+html.theme-light .border-slate-800.bg-slate-900:hover,
 html.theme-light .border-slate-700.bg-slate-900:hover {
   background-color: #f8fafc !important;
   border-color: #94a3b8 !important;
@@ -436,14 +451,17 @@ html.theme-light .border-slate-700.bg-slate-900:hover {
 }
 
 /* Filtros de cabeçalho do Dashboard ("Todos os Clientes", "Unidades", "Tipos") */
-html.theme-light div.bg-slate-900\/90 {
+html.theme-light div.bg-slate-900,
+html.theme-light div.bg-slate-900\/90,
+html.theme-light div.bg-slate-900\/80 {
   background-color: #ffffff !important;
   border: 1px solid #cbd5e1 !important;
-  color: #334155 !important;
+  color: #1e293b !important;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
 }
+html.theme-light div.bg-slate-900 select,
 html.theme-light div.bg-slate-900\/90 select {
-  color: #334155 !important;
+  color: #0f172a !important;
   font-weight: 600 !important;
   background-color: transparent !important;
 }
