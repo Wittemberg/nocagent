@@ -2668,15 +2668,14 @@ app.get('/api/debug-cctv', async (req, res) => {
     const baseUrl = `http://${eq.host}:${eq.port || 80}/cgi-bin`;
     const curlOpts = `-m 5 --connect-timeout 3 -s -g --anyauth -u "${creds.username}:${creds.password}"`;
     const commands = [
-      'configManager.cgi?action=getConfig&name=VideoLoss',
-      'configManager.cgi?action=getConfig&name=Storage',
-      'devStorage.cgi?action=factory.instance',
-      'storage.cgi?action=getDeviceAllInfo',
-      'global.cgi?action=getSystemInfo',
-      'magicBox.cgi?action=getSystemInfo',
-      'magicBox.cgi?action=getMachineName',
-      'videoStat.cgi?action=getLoss',
-      'configManager.cgi?action=getConfig&name=ChannelTitle',
+      'configManager.cgi?action=getConfig&name=StorageGroup',
+      'configManager.cgi?action=getConfig&name=StoragePoint',
+      'devVideoInput.cgi?action=getSystemInfo',
+      'configManager.cgi?action=getConfig&name=VideoIn',
+      'magicBox.cgi?action=getSoftwareVersion',
+      'magicBox.cgi?action=getUpTime',
+      'magicBox.cgi?action=getDeviceType',
+      'configManager.cgi?action=getConfig&name=VideoColor',
     ];
     let results = {};
     for (const cmd of commands) {
