@@ -189,6 +189,23 @@ FASE 5: Enterprise Engine, Observabilidade & Feature Flags (Pennant + Telescope 
 | **5.10** | Clonagem Rápida de Ativos & Antiduplicação | `web/src/App.jsx`, `core/src/server.js` | Botão clonar no card e cofre, replicação de parâmetros e validação de nome/endpoint único | ✅ Concluído |
 | **5.11** | Detecção de Internet Ativa & WAN no Mikrotik | `core/src/drivers/mikrotik.js`, `web/src/App.jsx` | Rota default 0.0.0.0/0, leitura de comentários, failover (Ativa/Standby/Down) e telemetria RX/TX | ✅ Concluído |
 
+---
 
+## 📌 FASE 6: EXPANSÕES E VETORES DE ATAQUE FUTUROS (A Definir)
+> **Status:** Mapeados durante sessão de arquitetura. Aguardando priorização.
 
+### Vetor 1: Automação de Backups em Nuvem (Integração S3/MinIO)
+- **Objetivo:** Materializar o "Cofre de Storages Ativo".
+- **Ação:** Criar rotinas (Cron Jobs) autônomas que acessam Mikrotiks e pfSenses, realizam os dumps/exports de configuração, criptografam e enviam automaticamente para buckets S3/MinIO vinculados aos equipamentos.
 
+### Vetor 2: Super-Poderes de CFTV para a IA (Hermes Skills)
+- **Objetivo:** Habilitar a IA para atuar ativamente em DVRs e NVRs.
+- **Ação:** Implementar ferramentas MCP (`cctv_get_snapshot` e diagnósticos baseados na heurística de `AutoSignalType`) para que a IA consiga extrair fotos ao vivo e auditar câmeras remotamente via WhatsApp.
+
+### Vetor 3: Auto-Remediação Proativa (Zabbix -> Hermes)
+- **Objetivo:** Tornar o NOC ativo a incidentes sem intervenção inicial.
+- **Ação:** Conectar Webhooks do Zabbix diretamente ao Agent. Quando um alerta (ex: CPU alta no Proxmox) disparar, o Hermes é ativado, investiga a causa raiz e solicita aprovação no WhatsApp (L2/L3) para intervir.
+
+### Vetor 4: NetAgent Daemon Remoto (Golang)
+- **Objetivo:** Substituir scripts de telemetria por um binário nativo.
+- **Ação:** Desenvolver um agente compilado ultra-leve em Go para rodar nas filiais (Linux/Windows) como serviço, enviando telemetria periódica via HTTP (outbound) sem exigir portas abertas no firewall do cliente.
