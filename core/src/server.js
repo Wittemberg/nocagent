@@ -43,6 +43,9 @@ const {
 
 const crypto = require('crypto');
 const net = require('net');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 
 const prisma = new PrismaClient();
 const app = express();
@@ -1250,6 +1253,49 @@ app.get('/api/equipments/status', authenticateToken, async (req, res) => {
             item.lastLatency = probe.rtt;
             item.lastLossPercent = 0;
             item.lastCheck = new Date();
+            
+            // Tenta obter credenciais
+            let creds = null;
+            try { creds = decryptCredentials(eq.encryptedCredentials, eq.iv, eq.authTag); } catch {}
+            
+            if (creds && creds.username && creds.password) {
+              const baseUrl = `http://${eq.host}:${port}/cgi-bin`;
+              const curlOpts = `-m 3 --connect-timeout 2 -s -g --anyauth -u "${creds.username}:${creds.password}"`;
+              let cctvData = { channels: '?', storageStatus: 'Desconhecido', uptime: 'Desconhecido', camerasOk: 0, camerasDown: 0 };
+              
+              try {
+                // Storage
+                const stRes = await execPromise(`curl ${curlOpts} "${baseUrl}/devStorage.cgi?action=factory.instance"`).catch(() => ({ stdout: '' }));
+                if (stRes.stdout.includes('State=Normal')) cctvData.storageStatus = 'Normal';
+                else if (stRes.stdout.includes('State=')) {
+                  const match = stRes.stdout.match(/State=(\w+)/);
+                  cctvData.storageStatus = match ? match[1] : 'Erro';
+                }
+                
+                // Uptime
+                const upRes = await execPromise(`curl ${curlOpts} "${baseUrl}/magicBox.cgi?action=getSystemInfo"`).catch(() => ({ stdout: '' }));
+                const uptimeMatch = upRes.stdout.match(/UpTime=(\d+)/);
+                if (uptimeMatch) {
+                  const secs = parseInt(uptimeMatch[1], 10);
+                  const days = Math.floor(secs / 86400);
+                  const hours = Math.floor((secs % 86400) / 3600);
+                  cctvData.uptime = `${days}d ${hours}h`;
+                }
+
+                // Canais
+                const chRes = await execPromise(`curl ${curlOpts} "${baseUrl}/configManager.cgi?action=getConfig&name=VideoInOptions"`).catch(() => ({ stdout: '' }));
+                if (chRes.stdout.includes('table.VideoInOptions')) {
+                  const blocks = chRes.stdout.split('table.VideoInOptions[');
+                  cctvData.channels = String(blocks.length - 1);
+                } else if (eq.type === 'IP_CAMERA') {
+                  cctvData.channels = '1';
+                }
+
+                item.cctvData = cctvData;
+              } catch (e) {
+                // ignora falha de curl
+              }
+            }
           } else {
             item.status = 'offline';
             item.error = `CFTV inacessível na porta HTTP (${port}). Erro: ${probe.error}`;

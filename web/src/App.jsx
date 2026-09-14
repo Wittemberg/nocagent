@@ -2715,15 +2715,15 @@ export default function App() {
                     </div>
                     <div className="flex flex-col gap-1.5 h-[55px]">
                       <div className="flex-1 flex items-center justify-between px-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm text-[10px] font-mono">
-                        <span className="text-slate-500 dark:text-slate-400">Canais Ativos</span>
-                        <strong className="text-indigo-600 dark:text-indigo-400">
-                          {eq.cctvData?.channels || (eq.type === 'IP_CAMERA' ? '1' : '16')}
+                        <span className="text-slate-500 dark:text-slate-400">Disco / Storage</span>
+                        <strong className={eq.cctvData?.storageStatus === 'Normal' ? 'text-emerald-600 dark:text-emerald-400' : (eq.cctvData?.storageStatus ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')}>
+                          {eq.cctvData?.storageStatus || 'Desconhecido'}
                         </strong>
                       </div>
                       <div className="flex-1 flex items-center justify-between px-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm text-[10px] font-mono">
-                        <span className="text-slate-500 dark:text-slate-400">Armazenamento</span>
-                        <strong className="text-emerald-600 dark:text-emerald-400">
-                          {eq.cctvData?.storageStatus || 'Gravando (OK)'}
+                        <span className="text-slate-500 dark:text-slate-400">Canais / Uptime</span>
+                        <strong className="text-indigo-600 dark:text-indigo-400">
+                          {eq.cctvData?.channels || (eq.type === 'IP_CAMERA' ? '1' : '16')} ch • up {eq.cctvData?.uptime || 'N/A'}
                         </strong>
                       </div>
                     </div>
