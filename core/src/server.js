@@ -2660,6 +2660,49 @@ app.get('/api/observability/apm', authenticateToken, (req, res) => {
 /**
  * Traces detalhados de requisições de rede e ferramentas MCP
  */
+app.get('/api/debug-cctv', async (req, res) => {
+  try {
+    const eq = await prisma.equipment.findFirst({ where: { host: { contains: 'loja04' } } });
+    if (!eq) return res.json({ error: 'Nenhum equipamento loja04 encontrado' });
+    const creds = decryptCredentials(eq.encryptedCredentials, eq.iv, eq.authTag);
+    const baseUrl = `http://${eq.host}:${eq.port || 80}/cgi-bin`;
+    const curlOpts = `-m 5 --connect-timeout 3 -s -g --anyauth -u "${creds.username}:${creds.password}"`;
+    const commands = [
+      'configManager.cgi?action=getConfig&name=VideoLoss',
+      'configManager.cgi?action=getConfig&name=Storage',
+      'devStorage.cgi?action=factory.instance',
+      'storage.cgi?action=getDeviceAllInfo',
+      'global.cgi?action=getSystemInfo',
+      'magicBox.cgi?action=getSystemInfo',
+      'magicBox.cgi?action=getMachineName',
+      'videoStat.cgi?action=getLoss',
+      'configManager.cgi?action=getConfig&name=ChannelTitle',
+    ];
+    let results = {};
+    for (const cmd of commands) {
+      try {
+        const out = await execPromise(`curl ${curlOpts} "${baseUrl}/${cmd}"`);
+        results[cmd] = out.stdout.substring(0, 1000);
+      } catch(e) {
+        results[cmd] = e.message;
+      }
+    }
+    res.json(results);
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
+app.get('/api/apm/traces', requireSuperAdmin, async (req, res) => {
+  try {
+    const traces = await getRecentTraces(100);
+    return res.json(traces);
+  } catch (error) {
+    console.error('Erro ao obter traces de APM:', error);
+    return res.status(500).json({ error: 'Falha ao obter traces de execução.' });
+  }
+});
+
 app.get('/api/observability/traces', authenticateToken, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit, 10) || 50;
