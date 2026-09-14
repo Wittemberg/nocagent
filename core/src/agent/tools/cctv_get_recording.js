@@ -105,13 +105,25 @@ module.exports = {
       // ---------------------------------------------------------
       // CONVERSÃO DE DAV PARA MP4 USANDO FFMPEG
       // ---------------------------------------------------------
+      let ffmpegSuccess = false;
       try {
-        // Usa -c:v libx264 -crf 24 para garantir o formato MP4 super compatível
-        const ffmpegCmd = `ffmpeg -y -i "${filePathDav}" -c:v libx264 -crf 24 -preset fast -c:a aac "${filePathMp4}"`;
-        await execPromise(ffmpegCmd, { timeout: 60000 }); // 60 seg de timeout na conversão
+        // Removemos -c:a aac porque se a câmera não tiver microfone, o ffmpeg falhava.
+        // O .dav da Dahua costuma ser mal formatado no final, fazendo o ffmpeg dar exit code != 0, 
+        // então não podemos confiar apenas no throw do execPromise.
+        const ffmpegCmd = `ffmpeg -y -i "${filePathDav}" -c:v libx264 -crf 24 -preset fast "${filePathMp4}"`;
+        try {
+          await execPromise(ffmpegCmd, { timeout: 60000 });
+        } catch (e) {
+          console.warn('FFmpeg retornou erro/warning, mas vamos verificar se o arquivo mp4 foi gerado.', e.message);
+        }
         
-        // Apaga o .dav original para poupar disco
-        if (fs.existsSync(filePathDav)) fs.unlinkSync(filePathDav);
+        // Verifica se o MP4 foi realmente gerado e tem um tamanho razoável (ex: > 10KB)
+        if (fs.existsSync(filePathMp4) && fs.statSync(filePathMp4).size > 10 * 1024) {
+           ffmpegSuccess = true;
+           if (fs.existsSync(filePathDav)) fs.unlinkSync(filePathDav); // Apaga o .dav
+        } else {
+           throw new Error("Arquivo MP4 não foi gerado ou está vazio.");
+        }
         
       } catch (ffmpegErr) {
         console.error('Erro na conversão FFmpeg:', ffmpegErr.message);
