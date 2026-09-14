@@ -1265,23 +1265,28 @@ app.get('/api/equipments/status', authenticateToken, async (req, res) => {
               let cctvData = { channels: '?', storageStatus: 'Desconhecido', uptime: 'Desconhecido', camerasOk: 0, camerasDown: 0 };
               
               try {
-                // Storage
-                const stRes = await execPromise(`curl ${curlOpts} "${baseUrl}/devStorage.cgi?action=factory.instance"`).catch(() => ({ stdout: '' }));
-                if (stRes.stdout.includes('State=Normal')) cctvData.storageStatus = 'Normal';
-                else if (stRes.stdout.includes('State=')) {
-                  const match = stRes.stdout.match(/State=(\w+)/);
+                // Storage Fallbacks
+                let stRes = await execPromise(`curl ${curlOpts} "${baseUrl}/devStorage.cgi?action=factory.instance"`).catch(() => ({ stdout: '' }));
+                if (!stRes.stdout.includes('State=')) {
+                  stRes = await execPromise(`curl ${curlOpts} "${baseUrl}/storage.cgi?action=getDeviceAllInfo"`).catch(() => ({ stdout: '' }));
+                }
+                
+                if (stRes.stdout.match(/State=Normal/i)) cctvData.storageStatus = 'Normal';
+                else if (stRes.stdout.match(/State=(\w+)/i)) {
+                  const match = stRes.stdout.match(/State=(\w+)/i);
                   cctvData.storageStatus = match ? match[1] : 'Erro';
                 }
                 
-                // Uptime
-                const upRes = await execPromise(`curl ${curlOpts} "${baseUrl}/global.cgi?action=getSystemInfo"`).catch(() => ({ stdout: '' }));
-                let uptimeMatch = upRes.stdout.match(/UpTime=(\d+)/i);
-                if (!uptimeMatch) {
-                  // Fallback to magicBox
-                  const upRes2 = await execPromise(`curl ${curlOpts} "${baseUrl}/magicBox.cgi?action=getSystemInfo"`).catch(() => ({ stdout: '' }));
-                  uptimeMatch = upRes2.stdout.match(/UpTime=(\d+)/i);
+                // Uptime Fallbacks
+                let upRes = await execPromise(`curl ${curlOpts} "${baseUrl}/global.cgi?action=getSystemInfo"`).catch(() => ({ stdout: '' }));
+                if (!upRes.stdout.match(/UpTime=(\d+)/i)) {
+                  upRes = await execPromise(`curl ${curlOpts} "${baseUrl}/magicBox.cgi?action=getSystemInfo"`).catch(() => ({ stdout: '' }));
+                }
+                if (!upRes.stdout.match(/UpTime=(\d+)/i)) {
+                  upRes = await execPromise(`curl ${curlOpts} "${baseUrl}/devSystem.cgi?action=getSystemInfo"`).catch(() => ({ stdout: '' }));
                 }
                 
+                const uptimeMatch = upRes.stdout.match(/UpTime=(\d+)/i);
                 if (uptimeMatch) {
                   const secs = parseInt(uptimeMatch[1], 10);
                   const days = Math.floor(secs / 86400);
@@ -1304,22 +1309,34 @@ app.get('/api/equipments/status', authenticateToken, async (req, res) => {
                   cctvData.channels = '1';
                 }
                 
-                // Câmeras Ativas (Video Loss status)
+                // Câmeras Ativas (Video Loss status) Fallbacks
                 if (totalCh > 0) {
-                  const lossRes = await execPromise(`curl ${curlOpts} "${baseUrl}/videoStat.cgi?action=getLoss"`).catch(() => ({ stdout: '' }));
-                  if (lossRes.stdout) {
+                  let lossRes = await execPromise(`curl ${curlOpts} "${baseUrl}/videoStat.cgi?action=getLoss"`).catch(() => ({ stdout: '' }));
+                  let lossMatches = [...lossRes.stdout.matchAll(/loss\[\d+\]=(\d)/ig)];
+                  
+                  // Se videoStat.cgi nao funcionar, tenta configManager VideoLoss
+                  if (lossMatches.length === 0) {
+                     lossRes = await execPromise(`curl ${curlOpts} "${baseUrl}/configManager.cgi?action=getConfig&name=VideoLoss"`).catch(() => ({ stdout: '' }));
+                     // Formato: table.VideoLoss[0].Enable=true (mas não reflete o status real sempre).
+                     // Vamos tentar devVideoInput.cgi se existir
+                     if (!lossRes.stdout) {
+                        lossRes = await execPromise(`curl ${curlOpts} "${baseUrl}/devVideoInput.cgi?action=getSystemInfo"`).catch(() => ({ stdout: '' }));
+                        // match Signal=Normal
+                        const sigMatches = [...lossRes.stdout.matchAll(/Signal=(\w+)/ig)];
+                        if (sigMatches.length > 0) {
+                           let ok = 0;
+                           for (const m of sigMatches) if (m[1].toLowerCase() === 'normal') ok++;
+                           cctvData.channels = `${ok} ativas / ${totalCh}`;
+                        }
+                     }
+                  } else {
                      let losses = 0;
                      let ok = 0;
-                     // Ex: loss[0]=0, loss[1]=1... (1 = sem sinal)
-                     const lossMatches = [...lossRes.stdout.matchAll(/loss\[\d+\]=(\d)/g)];
-                     if (lossMatches.length > 0) {
-                       for (const m of lossMatches) {
-                         if (m[1] === '1') losses++;
-                         else ok++;
-                       }
-                       // Se o array loss não cobrir todos os canais (ex: IP cameras no DVR), assumimos ok para o resto
-                       cctvData.channels = `${ok} ativas / ${totalCh}`;
+                     for (const m of lossMatches) {
+                       if (m[1] === '1') losses++;
+                       else ok++;
                      }
+                     cctvData.channels = `${ok} ativas / ${totalCh}`;
                   }
                 }
 
