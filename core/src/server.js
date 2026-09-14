@@ -752,7 +752,7 @@ app.post('/api/users', authenticateToken, requireTenantMasterOrSuperAdmin, async
         where: { id: assignedTenantId },
         include: { _count: { select: { users: true } } },
       });
-      if (tenant && tenant.maxUsers && tenant.maxUsers > 0 && tenant._count.users >= tenant.maxUsers) {
+      if (tenant && tenant.plan !== 'ENTERPRISE' && tenant.maxUsers && tenant.maxUsers > 0 && tenant._count.users >= tenant.maxUsers) {
         return res.status(403).json({
           error: `Cota do plano excedida: limite máximo de ${tenant.maxUsers} usuário(s) atingido para esta organização (Plano ${tenant.plan || 'atual'}). Faça upgrade para adicionar mais operadores.`,
         });
@@ -1484,7 +1484,7 @@ app.post('/api/equipments', authenticateToken, async (req, res) => {
         where: { id: targetTenantId },
         include: { _count: { select: { equipments: true } } },
       });
-      if (tenant && tenant.maxEquipments && tenant.maxEquipments > 0 && tenant._count.equipments >= tenant.maxEquipments) {
+      if (tenant && tenant.plan !== 'ENTERPRISE' && tenant.maxEquipments && tenant.maxEquipments > 0 && tenant._count.equipments >= tenant.maxEquipments) {
         return res.status(403).json({
           error: `Cota do plano excedida: limite máximo de ${tenant.maxEquipments} equipamentos atingido para a organização no plano ${tenant.plan || 'atual'}. Faça upgrade de plano para cadastrar novos ativos.`,
         });
@@ -1883,7 +1883,7 @@ app.post('/api/storages', authenticateToken, async (req, res) => {
         where: { id: targetTenantId },
         include: { _count: { select: { storages: true } } },
       });
-      if (tenant && tenant.maxStorages && tenant.maxStorages > 0 && tenant._count.storages >= tenant.maxStorages) {
+      if (tenant && tenant.plan !== 'ENTERPRISE' && tenant.maxStorages && tenant.maxStorages > 0 && tenant._count.storages >= tenant.maxStorages) {
         return res.status(403).json({
           error: `Cota do plano excedida: limite máximo de ${tenant.maxStorages} storage(s) atingido para a organização no plano ${tenant.plan || 'atual'}. Faça upgrade de plano para adicionar mais destinos de backup.`,
         });
