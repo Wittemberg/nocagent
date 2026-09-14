@@ -16,5 +16,5 @@ COPY . .
 
 EXPOSE 3000
 
-# Executa sincronização do schema Prisma automaticamente e sobe o serviço
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node src/server.js"]
+# Executa sincronização do schema Prisma automaticamente (com retry) e sobe o serviço
+CMD ["sh", "-c", "until npx prisma db push --accept-data-loss; do echo 'Aguardando banco de dados...'; sleep 3; done && node src/server.js"]
