@@ -1314,20 +1314,26 @@ app.get('/api/equipments/status', authenticateToken, async (req, res) => {
                   let lossRes = await execPromise(`curl ${curlOpts} "${baseUrl}/videoStat.cgi?action=getLoss"`).catch(() => ({ stdout: '' }));
                   let lossMatches = [...lossRes.stdout.matchAll(/loss\[\d+\]=(\d)/ig)];
                   
-                  // Se videoStat.cgi nao funcionar, tenta configManager VideoLoss
+                  // Se videoStat.cgi nao funcionar, vamos usar uma heurística na configuração VideoIn (Intelbras MHDX)
                   if (lossMatches.length === 0) {
-                     lossRes = await execPromise(`curl ${curlOpts} "${baseUrl}/configManager.cgi?action=getConfig&name=VideoLoss"`).catch(() => ({ stdout: '' }));
-                     // Formato: table.VideoLoss[0].Enable=true (mas não reflete o status real sempre).
-                     // Vamos tentar devVideoInput.cgi se existir
-                     if (!lossRes.stdout) {
-                        lossRes = await execPromise(`curl ${curlOpts} "${baseUrl}/devVideoInput.cgi?action=getSystemInfo"`).catch(() => ({ stdout: '' }));
-                        // match Signal=Normal
-                        const sigMatches = [...lossRes.stdout.matchAll(/Signal=(\w+)/ig)];
-                        if (sigMatches.length > 0) {
+                     lossRes = await execPromise(`curl ${curlOpts} "${baseUrl}/configManager.cgi?action=getConfig&name=VideoIn"`).catch(() => ({ stdout: '' }));
+                     
+                     if (lossRes.stdout && lossRes.stdout.includes('table.VideoIn[')) {
+                        // Varre todos os canais. Se AutoSignalType=UNKNOWN ou vazio, a câmera pode estar desconectada.
+                        const signalMatches = [...lossRes.stdout.matchAll(/table\.VideoIn\[\d+\]\.AutoSignalType=(\w+)/g)];
+                        if (signalMatches.length > 0) {
                            let ok = 0;
-                           for (const m of sigMatches) if (m[1].toLowerCase() === 'normal') ok++;
+                           for (const m of signalMatches) {
+                              if (m[1].toUpperCase() !== 'UNKNOWN' && m[1].toUpperCase() !== 'NONE') {
+                                 ok++;
+                              }
+                           }
                            cctvData.channels = `${ok} ativas / ${totalCh}`;
+                        } else {
+                           cctvData.channels = `${totalCh}`; // fallback puro
                         }
+                     } else {
+                        cctvData.channels = `${totalCh}`; // fallback puro
                      }
                   } else {
                      let losses = 0;
