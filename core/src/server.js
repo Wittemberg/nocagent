@@ -2662,31 +2662,37 @@ app.get('/api/observability/apm', authenticateToken, (req, res) => {
  */
 app.get('/api/debug-cctv', async (req, res) => {
   try {
-    const eq = await prisma.equipment.findFirst({ where: { host: { contains: 'loja04' } } });
-    if (!eq) return res.json({ error: 'Nenhum equipamento loja04 encontrado' });
-    const creds = decryptCredentials(eq.encryptedCredentials, eq.iv, eq.authTag);
-    const baseUrl = `http://${eq.host}:${eq.port || 80}/cgi-bin`;
-    const curlOpts = `-m 5 --connect-timeout 3 -s -g --anyauth -u "${creds.username}:${creds.password}"`;
-    const commands = [
-      'configManager.cgi?action=getConfig&name=StorageGroup',
-      'configManager.cgi?action=getConfig&name=StoragePoint',
-      'devVideoInput.cgi?action=getSystemInfo',
-      'configManager.cgi?action=getConfig&name=VideoIn',
-      'magicBox.cgi?action=getSoftwareVersion',
-      'magicBox.cgi?action=getUpTime',
-      'magicBox.cgi?action=getDeviceType',
-      'configManager.cgi?action=getConfig&name=VideoColor',
-    ];
-    let results = {};
-    for (const cmd of commands) {
-      try {
-        const out = await execPromise(`curl ${curlOpts} "${baseUrl}/${cmd}"`);
-        results[cmd] = out.stdout.substring(0, 1000);
-      } catch(e) {
-        results[cmd] = e.message;
+    const eqs = await prisma.equipment.findMany({ where: { type: { in: ['DVR', 'NVR'] } } });
+    if (eqs.length === 0) return res.json({ error: 'Nenhum DVR encontrado' });
+    
+    let allResults = {};
+    for (const eq of eqs) {
+      const creds = decryptCredentials(eq.encryptedCredentials, eq.iv, eq.authTag);
+      if (!creds || !creds.username) continue;
+      
+      const baseUrl = `http://${eq.host}:${eq.port || 80}/cgi-bin`;
+      const curlOpts = `-m 4 --connect-timeout 2 -s -g --anyauth -u "${creds.username}:${creds.password}"`;
+      const commands = [
+        'configManager.cgi?action=getConfig&name=VideoIn',
+        'configManager.cgi?action=getConfig&name=StorageDevice',
+        'configManager.cgi?action=getConfig&name=Storage',
+        'storageDevice.cgi?action=factory.instance',
+        'encode.cgi?action=getConfig&name=ExtraFormat',
+        'devVideoInput.cgi?action=getSystemInfo',
+      ];
+      
+      let results = {};
+      for (const cmd of commands) {
+        try {
+          const out = await execPromise(`curl ${curlOpts} "${baseUrl}/${cmd}"`);
+          results[cmd] = out.stdout ? out.stdout.substring(0, 1000) : 'vazio';
+        } catch(e) {
+          results[cmd] = e.message;
+        }
       }
+      allResults[eq.name] = results;
     }
-    res.json(results);
+    res.json(allResults);
   } catch (e) {
     res.json({ error: e.message });
   }
