@@ -1985,7 +1985,7 @@ export default function App() {
       ...initialEquipmentForm,
       name: `${eq.name} (Clone)`,
       type: eq.type,
-      host: '', // Limpa o host para exigir a definição do IP do novo ativo e evitar duplicidade
+      host: eq.host || '', 
       port: eq.port != null ? String(eq.port) : '',
       connectionMode: eq.connectionMode || 'DIRECT',
       backupStorageId: eq.backupStorageId || '',
@@ -2339,6 +2339,10 @@ export default function App() {
     if (activeTab === 'vault') {
       fetchEquipments();
       fetchStorages();
+      const vaultTimer = setInterval(() => {
+        fetchEquipments();
+      }, 15000);
+      return () => clearInterval(vaultTimer);
     }
     if (activeTab === 'storages') fetchStorages();
     if (activeTab === 'backups') {
@@ -3750,7 +3754,7 @@ export default function App() {
                   <Lock className="w-4 h-4 text-amber-400" />
                   Cofre Criptográfico de Equipamentos
                 </h2>
-                <p className="text-xs text-slate-400">Tokens e chaves protegidos com AES-256-GCM no PostgreSQL. Nenhuma credencial trafega desprotegida.</p>
+                <p className="text-xs text-slate-400">Tokens e chaves protegidos com AES-256-GCM no banco de dados. Nenhuma credencial trafega desprotegida.</p>
               </div>
               <div className="flex items-center gap-2">
                 <button 
@@ -3804,7 +3808,6 @@ export default function App() {
                       <th className="px-3 py-2">Equipamento</th>
                       <th className="px-3 py-2">Driver / Tipo</th>
                       <th className="px-3 py-2">Host / Endpoint</th>
-                      <th className="px-3 py-2">Cofre de Credenciais</th>
                       <th className="px-3 py-2">Storage de Backup</th>
                       <th className="px-3 py-2">Status</th>
                       <th className="px-3 py-2 text-right">Ações</th>
@@ -3837,12 +3840,6 @@ export default function App() {
                         <td className="px-3 py-2 text-xs font-mono text-sky-400">{eq.type}</td>
                         <td className="px-3 py-2 text-xs font-mono text-slate-300">
                           {eq.host || (eq.connectionMode === 'AGENT' ? 'Conexão via Agente' : '—')}
-                        </td>
-                        <td className="px-3 py-2 text-xs">
-                          <span className="px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-300 border border-amber-800/80 font-mono text-[11px] inline-flex items-center gap-1">
-                            <Lock className="w-2.5 h-2.5" />
-                            AES-256-GCM
-                          </span>
                         </td>
                         <td className="px-3 py-2 text-xs">
                           {eq.backupStorage ? (
