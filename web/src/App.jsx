@@ -1288,6 +1288,29 @@ export default function App() {
     setLogin2faCode('');
     setLoginTempToken('');
     setLoginError(null);
+    
+    // Zera os estados do painel para não vazar dados entre Tenants
+    try {
+      if (typeof setChatMessages === 'function') {
+        setChatMessages([{
+          sender: 'bot',
+          text: '👋 Olá! Sou o **NOC-Agent**, seu Engenheiro de Operações 24/7. Como posso ajudar com a infraestrutura hoje?',
+          time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+        }]);
+      }
+      if (typeof setEquipments === 'function') setEquipments([]);
+      if (typeof setAlertHistory === 'function') setAlertHistory([]);
+      if (typeof setDashboardMetrics === 'function') setDashboardMetrics({ 
+        online: 0, offline: 0, total: 0, 
+        avgLatency: 0, avgPacketLoss: 0, 
+        cpuAvg: 0, memAvg: 0, storageAvg: 0, 
+        openAlerts: 0, totalAlerts24h: 0 
+      });
+      if (typeof setStorages === 'function') setStorages([]);
+      if (typeof setBackups === 'function') setBackups([]);
+    } catch (e) {
+      console.error('Erro ao resetar estados no logout', e);
+    }
   };
 
   const handleLoginSubmit = async (e) => {
