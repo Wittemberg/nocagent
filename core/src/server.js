@@ -1260,7 +1260,8 @@ app.get('/api/equipments/status', authenticateToken, async (req, res) => {
             
             if (creds && creds.username && creds.password) {
               const baseUrl = `http://${eq.host}:${port}/cgi-bin`;
-              const curlOpts = `-m 3 --connect-timeout 2 -s -g --anyauth -u "${creds.username}:${creds.password}"`;
+              // Timeout aumentado para redes lentas (RTT > 1s)
+              const curlOpts = `-m 8 --connect-timeout 4 -s -g --anyauth -u "${creds.username}:${creds.password}"`;
               let cctvData = { channels: '?', storageStatus: 'Desconhecido', uptime: 'Desconhecido', camerasOk: 0, camerasDown: 0 };
               
               try {
@@ -1288,16 +1289,38 @@ app.get('/api/equipments/status', authenticateToken, async (req, res) => {
                   cctvData.uptime = `${days}d ${hours}h`;
                 }
 
-                // Canais
+                // Canais Totais
+                let totalCh = 0;
                 const chRes = await execPromise(`curl ${curlOpts} "${baseUrl}/configManager.cgi?action=getConfig&name=VideoInOptions"`).catch(() => ({ stdout: '' }));
                 if (chRes.stdout.includes('table.VideoInOptions')) {
                   const matches = [...chRes.stdout.matchAll(/table\.VideoInOptions\[(\d+)\]/g)];
                   if (matches.length > 0) {
                     const max = Math.max(...matches.map(m => parseInt(m[1], 10)));
-                    cctvData.channels = String(max + 1);
+                    totalCh = max + 1;
+                    cctvData.channels = String(totalCh);
                   }
                 } else if (eq.type === 'IP_CAMERA') {
+                  totalCh = 1;
                   cctvData.channels = '1';
+                }
+                
+                // Câmeras Ativas (Video Loss status)
+                if (totalCh > 0) {
+                  const lossRes = await execPromise(`curl ${curlOpts} "${baseUrl}/videoStat.cgi?action=getLoss"`).catch(() => ({ stdout: '' }));
+                  if (lossRes.stdout) {
+                     let losses = 0;
+                     let ok = 0;
+                     // Ex: loss[0]=0, loss[1]=1... (1 = sem sinal)
+                     const lossMatches = [...lossRes.stdout.matchAll(/loss\[\d+\]=(\d)/g)];
+                     if (lossMatches.length > 0) {
+                       for (const m of lossMatches) {
+                         if (m[1] === '1') losses++;
+                         else ok++;
+                       }
+                       // Se o array loss não cobrir todos os canais (ex: IP cameras no DVR), assumimos ok para o resto
+                       cctvData.channels = `${ok} ativas / ${totalCh}`;
+                     }
+                  }
                 }
 
                 item.cctvData = cctvData;
