@@ -1273,8 +1273,14 @@ app.get('/api/equipments/status', authenticateToken, async (req, res) => {
                 }
                 
                 // Uptime
-                const upRes = await execPromise(`curl ${curlOpts} "${baseUrl}/magicBox.cgi?action=getSystemInfo"`).catch(() => ({ stdout: '' }));
-                const uptimeMatch = upRes.stdout.match(/UpTime=(\d+)/);
+                const upRes = await execPromise(`curl ${curlOpts} "${baseUrl}/global.cgi?action=getSystemInfo"`).catch(() => ({ stdout: '' }));
+                let uptimeMatch = upRes.stdout.match(/UpTime=(\d+)/i);
+                if (!uptimeMatch) {
+                  // Fallback to magicBox
+                  const upRes2 = await execPromise(`curl ${curlOpts} "${baseUrl}/magicBox.cgi?action=getSystemInfo"`).catch(() => ({ stdout: '' }));
+                  uptimeMatch = upRes2.stdout.match(/UpTime=(\d+)/i);
+                }
+                
                 if (uptimeMatch) {
                   const secs = parseInt(uptimeMatch[1], 10);
                   const days = Math.floor(secs / 86400);
@@ -1285,8 +1291,11 @@ app.get('/api/equipments/status', authenticateToken, async (req, res) => {
                 // Canais
                 const chRes = await execPromise(`curl ${curlOpts} "${baseUrl}/configManager.cgi?action=getConfig&name=VideoInOptions"`).catch(() => ({ stdout: '' }));
                 if (chRes.stdout.includes('table.VideoInOptions')) {
-                  const blocks = chRes.stdout.split('table.VideoInOptions[');
-                  cctvData.channels = String(blocks.length - 1);
+                  const matches = [...chRes.stdout.matchAll(/table\.VideoInOptions\[(\d+)\]/g)];
+                  if (matches.length > 0) {
+                    const max = Math.max(...matches.map(m => parseInt(m[1], 10)));
+                    cctvData.channels = String(max + 1);
+                  }
                 } else if (eq.type === 'IP_CAMERA') {
                   cctvData.channels = '1';
                 }
