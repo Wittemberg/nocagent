@@ -2714,18 +2714,30 @@ export default function App() {
                       <Monitor className="w-3 h-3" /> Info do CFTV
                     </div>
                     <div className="flex flex-col gap-1.5">
+                      {eq.cctvData?.storageStatus && eq.cctvData.storageStatus !== 'Desconhecido' && (
+                        <div className="flex items-center justify-between px-2 py-1 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm text-[10px] font-mono">
+                          <span className="text-slate-500 dark:text-slate-400">Disco / Storage</span>
+                          <strong className={eq.cctvData.storageStatus === 'Normal' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
+                            {eq.cctvData.storageStatus}
+                          </strong>
+                        </div>
+                      )}
+                      
                       <div className="flex items-center justify-between px-2 py-1 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm text-[10px] font-mono">
-                        <span className="text-slate-500 dark:text-slate-400">Disco / Storage</span>
-                        <strong className={eq.cctvData?.storageStatus === 'Normal' ? 'text-emerald-600 dark:text-emerald-400' : (eq.cctvData?.storageStatus ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')}>
-                          {eq.cctvData?.storageStatus || 'Desconhecido'}
+                        <span className="text-slate-500 dark:text-slate-400">Canais Ativos</span>
+                        <strong className="text-indigo-600 dark:text-indigo-400">
+                          {eq.cctvData?.channels ? eq.cctvData.channels.replace(' ativas', '') : (eq.type === 'IP_CAMERA' ? '1' : '16')}
                         </strong>
                       </div>
-                      <div className="flex items-center justify-between px-2 py-1 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm text-[10px] font-mono">
-                        <span className="text-slate-500 dark:text-slate-400">Canais / Uptime</span>
-                        <strong className="text-indigo-600 dark:text-indigo-400 text-right leading-tight">
-                          {eq.cctvData?.channels || (eq.type === 'IP_CAMERA' ? '1' : '16')} ch <br/> up {eq.cctvData?.uptime || 'N/A'}
-                        </strong>
-                      </div>
+
+                      {eq.cctvData?.uptime && eq.cctvData.uptime !== 'Desconhecido' && (
+                        <div className="flex items-center justify-between px-2 py-1 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 shadow-sm text-[10px] font-mono">
+                          <span className="text-slate-500 dark:text-slate-400">Uptime</span>
+                          <strong className="text-indigo-600 dark:text-indigo-400">
+                            {eq.cctvData.uptime}
+                          </strong>
+                        </div>
+                      )}
                     </div>
                   </>
                 ) : eq.osInfo ? (
