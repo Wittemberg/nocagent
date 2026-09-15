@@ -2,8 +2,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Dependências do sistema para o core, rede, timezone Brasil e compatibilidade OpenSSL com Prisma
-RUN apk add --no-cache curl python3 py3-pip bash iputils openssl libc6-compat tzdata
+# Dependências do sistema para o core, rede, timezone Brasil, compatibilidade OpenSSL com Prisma e conversão de vídeo DAV→MP4
+RUN apk add --no-cache curl python3 py3-pip bash iputils openssl libc6-compat tzdata ffmpeg
 ENV TZ="America/Sao_Paulo"
 
 COPY package*.json ./
