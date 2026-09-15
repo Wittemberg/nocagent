@@ -2310,6 +2310,23 @@ export default function App() {
     }
   };
 
+  const handleConfirmSshHostKey = async (equipment) => {
+    try {
+      const discovery = await axios.post(`/api/equipments/${equipment.id}/host-key/discover`);
+      const fingerprint = discovery.data?.fingerprint;
+      const confirmation = window.prompt(
+        `Confirme o fingerprint SSH exibido no console do equipamento antes de confiar nele:\n\n${fingerprint}\n\nCole o fingerprint para confirmar.`,
+        ''
+      );
+      if (confirmation === null) return;
+      await axios.post(`/api/equipments/${equipment.id}/host-key/confirm`, { fingerprint: confirmation.trim() });
+      alert(`Fingerprint SSH de ${equipment.name} confirmado com sucesso.`);
+      await fetchEquipments();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Não foi possível confirmar o fingerprint SSH.');
+    }
+  };
+
   // Busca auditoria real de backups
   const fetchBackups = async () => {
     setLoadingBackups(true);
@@ -2898,6 +2915,15 @@ export default function App() {
                               <span className="text-sky-700 dark:text-sky-400 font-mono text-[8.5px] px-1 py-0.2 rounded bg-sky-50 dark:bg-sky-950/80 border border-sky-200 dark:border-sky-800/70" title="Agente Host Outbound">
                                 Agente
                               </span>
+                            )}
+                            {eq.type === 'LINUX_SERVER' && ['SUPERADMIN', 'TENANT_MASTER'].includes(currentUser?.role) && (
+                              <button
+                                onClick={() => handleConfirmSshHostKey(eq)}
+                                title="Descobrir e confirmar fingerprint SSH"
+                                className="p-1.5 text-slate-400 hover:text-amber-300 hover:bg-amber-950/40 rounded-lg transition"
+                              >
+                                <ShieldCheck className="w-4 h-4" />
+                              </button>
                             )}
                             {eq.tags && Array.isArray(eq.tags) && eq.tags.length > 0 && (
                               <span className="text-[8.5px] text-slate-500 font-mono hidden xl:inline truncate max-w-[90px]">

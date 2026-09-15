@@ -194,7 +194,7 @@ FASE 5: Enterprise Engine, Observabilidade & Feature Flags (Pennant + Telescope 
 ## 📌 FASE 6: EXPANSÕES E VETORES DE ATAQUE FUTUROS (A Definir)
 > **Status:** Mapeados durante sessão de arquitetura. Aguardando priorização.
 
-### Vetor 1: Segurança Zero-Trust para Agentes (Proxy de Execução) 🔥 PRIORIDADE
+### Vetor 1: Segurança Zero-Trust para Agentes (Proxy de Execução) 🔥 PRIORIDADE — Fase 06/01 em implementação
 - **Objetivo:** Isolar o Agent de senhas em texto puro e proteger contra interceptações.
 - **Ação:** Implementação do Proxy de Execução para acesso a equipamentos. Adição do mecanismo Trust On First Use (TOFU) para SSH/APIs com capacidade de reset manual (Anti-MitM). Criação de skill rigorosa e documentação mercadológica focada em Zero-Knowledge AI.
 

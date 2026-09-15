@@ -15,6 +15,9 @@ const { getMikrotikMetrics } = require('./drivers/mikrotik');
 const { getPfSenseMetrics } = require('./drivers/pfsense');
 const { getZabbixActiveTriggers } = require('./drivers/zabbix');
 const { MCP_TOOLS_DEFINITIONS, executeMcpTool } = require('./agent/toolRegistry');
+const { getPublicActionDefinitions } = require('./security/executionPolicy');
+const { requestExecution, approveExecution } = require('./security/executionService');
+const { captureHostFingerprint } = require('./security/proxy');
 const {
   hashPassword,
   verifyPassword,
@@ -146,6 +149,19 @@ function getTenantFilter(req) {
     return req.query?.tenantId ? { tenantId: req.query.tenantId } : {};
   }
   return { tenantId: req.user?.tenantId || 'unassigned-tenant' };
+}
+
+async function getEquipmentForActor(equipmentId, actor) {
+  const equipment = await prisma.equipment.findUnique({ where: { id: equipmentId } });
+  if (!equipment || (actor.role !== 'SUPERADMIN' && equipment.tenantId !== actor.tenantId)) return null;
+  return equipment;
+}
+
+function requireExecutionApprover(req, res, next) {
+  if (!['SUPERADMIN', 'TENANT_MASTER'].includes(req.user?.role)) {
+    return res.status(403).json({ error: 'Ação restrita ao Tenant Master ou Superadmin.', code: 'FORBIDDEN_EXECUTION_APPROVER' });
+  }
+  next();
 }
 
 /**
@@ -697,6 +713,8 @@ app.get('/api/users', authenticateToken, requireTenantMasterOrSuperAdmin, async 
         role: true,
         phone: true,
         active: true,
+        knownHostKey: true,
+        pendingHostKey: true,
         totpEnabled: true,
         lastLoginAt: true,
         createdAt: true,
@@ -922,6 +940,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
       senderName: senderName || req.user?.name || 'Operador Web',
       tenantId: req.user?.role === 'SUPERADMIN' ? (req.body?.tenantId || null) : req.user?.tenantId,
       role: req.user?.role || 'OPERATOR',
+      actorId: req.user?.id,
       dashboardContext
     });
 
@@ -1528,7 +1547,7 @@ app.get('/api/equipments', authenticateToken, async (req, res) => {
         } catch {}
       }
 
-      const { encryptedCredentials, iv, authTag, ...restEq } = eq;
+      const { encryptedCredentials, iv, authTag, knownHostKey, pendingHostKey, ...restEq } = eq;
       return {
         ...restEq,
         username,
@@ -1539,6 +1558,7 @@ app.get('/api/equipments', authenticateToken, async (req, res) => {
         tags: eq.tags || [],
         osInfo,
         proxmoxData: proxmoxData || undefined,
+        sshTrustStatus: knownHostKey ? 'CONFIRMED' : pendingHostKey ? 'PENDING_CONFIRMATION' : 'UNVERIFIED',
       };
     });
 
@@ -2499,7 +2519,7 @@ app.post('/api/equipments/:id/reset-tofu', authenticateToken, async (req, res) =
     const { id } = req.params;
 
     // Apenas operadores L2, L3 e SUPERADMIN podem resetar fingerprints
-    const allowedRoles = ['SUPERADMIN', 'TENANT_MASTER', 'L3_ADMIN', 'L2_OPERATOR'];
+    const allowedRoles = ['SUPERADMIN', 'TENANT_MASTER'];
     if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({ error: 'Acesso negado: apenas operadores L2/L3 podem resetar fingerprints TOFU.' });
     }
@@ -2515,7 +2535,7 @@ app.post('/api/equipments/:id/reset-tofu', authenticateToken, async (req, res) =
 
     await prisma.equipment.update({
       where: { id },
-      data: { knownHostKey: null },
+      data: { knownHostKey: null, pendingHostKey: null, pendingHostKeyAt: null },
     });
 
     try {
@@ -2541,6 +2561,41 @@ app.post('/api/equipments/:id/reset-tofu', authenticateToken, async (req, res) =
   } catch (error) {
     console.error('Erro ao resetar TOFU:', error);
     return res.status(500).json({ error: `Falha ao resetar fingerprint: ${error.message}` });
+  }
+});
+
+app.post('/api/equipments/:id/host-key/discover', authenticateToken, requireExecutionApprover, async (req, res) => {
+  try {
+    const equipment = await getEquipmentForActor(req.params.id, req.user);
+    if (!equipment) return res.status(404).json({ error: 'Equipamento não encontrado.' });
+    const result = await captureHostFingerprint(equipment);
+    await prisma.auditLog.create({
+      data: { action: 'DISCOVER_SSH_HOST_KEY', target: equipment.name, status: 'PENDING_CONFIRMATION', source: 'WEB_DASHBOARD', details: { equipmentId: equipment.id, actorId: req.user.id } },
+    });
+    return res.status(202).json({ status: 'pending_confirmation', fingerprint: result.fingerprint });
+  } catch (error) {
+    return res.status(422).json({ error: 'Não foi possível descobrir o fingerprint SSH.', code: error.message });
+  }
+});
+
+app.post('/api/equipments/:id/host-key/confirm', authenticateToken, requireExecutionApprover, async (req, res) => {
+  try {
+    const { fingerprint } = req.body;
+    const equipment = await getEquipmentForActor(req.params.id, req.user);
+    if (!equipment) return res.status(404).json({ error: 'Equipamento não encontrado.' });
+    if (!fingerprint || equipment.pendingHostKey !== fingerprint) {
+      return res.status(409).json({ error: 'Fingerprint pendente não corresponde ao valor informado.', code: 'HOST_KEY_MISMATCH' });
+    }
+    await prisma.equipment.update({
+      where: { id: equipment.id },
+      data: { knownHostKey: fingerprint, pendingHostKey: null, pendingHostKeyAt: null },
+    });
+    await prisma.auditLog.create({
+      data: { action: 'CONFIRM_SSH_HOST_KEY', target: equipment.name, status: 'SUCCESS', source: 'WEB_DASHBOARD', details: { equipmentId: equipment.id, actorId: req.user.id } },
+    });
+    return res.json({ status: 'confirmed', message: 'Fingerprint SSH confirmado com sucesso.' });
+  } catch (error) {
+    return res.status(500).json({ error: 'Falha ao confirmar fingerprint SSH.' });
   }
 });
 
@@ -2611,17 +2666,42 @@ app.get('/api/mcp/tools', (req, res) => {
 /**
  * Execução de Ferramenta MCP Direta
  */
-app.post('/api/mcp/execute', async (req, res) => {
+app.post('/api/mcp/execute', authenticateToken, async (req, res) => {
   try {
     const { toolName, args } = req.body;
     if (!toolName) {
       return res.status(400).json({ error: 'toolName é obrigatório.' });
     }
-    const result = await executeMcpTool(toolName, args);
+    if (toolName !== 'execute_registered_ssh_action') {
+      return res.status(403).json({ error: 'Execução MCP direta é restrita a ações SSH registradas.', code: 'MCP_DIRECT_EXECUTION_RESTRICTED' });
+    }
+    const result = await executeMcpTool(toolName, args, { actor: req.user });
     return res.json({ status: 'ok', toolName, result });
   } catch (error) {
     console.error('Erro ao executar ferramenta MCP:', error);
     return res.status(500).json({ error: error.message || 'Falha na execução da ferramenta MCP.' });
+  }
+});
+
+app.get('/api/execution-actions', authenticateToken, (req, res) => {
+  return res.json({ status: 'ok', data: getPublicActionDefinitions() });
+});
+
+app.post('/api/executions', authenticateToken, async (req, res) => {
+  try {
+    const result = await requestExecution({ ...req.body, actor: req.user });
+    return res.status(result.pendingApproval ? 202 : 200).json({ status: 'ok', ...result });
+  } catch (error) {
+    return res.status(422).json({ error: error.message, code: 'EXECUTION_REQUEST_REJECTED' });
+  }
+});
+
+app.post('/api/executions/:id/approval', authenticateToken, requireExecutionApprover, async (req, res) => {
+  try {
+    const result = await approveExecution({ executionId: req.params.id, approvalCode: req.body.approvalCode, actor: req.user });
+    return res.json({ status: 'ok', ...result });
+  } catch (error) {
+    return res.status(422).json({ error: error.message, code: 'EXECUTION_APPROVAL_REJECTED' });
   }
 });
 

@@ -28,7 +28,7 @@ if (fs.existsSync(toolsDir)) {
 /**
  * Executor unificado de chamadas MCP com medição APM e trava de segurança Kill-Switch
  */
-async function executeMcpTool(toolName, args = {}) {
+async function executeMcpTool(toolName, args = {}, context = {}) {
   // Trava de segurança imediata: Se Kill-Switch estiver ativo, bloquear ações ativas/destrutivas
   if (isGlobalKillSwitchActive()) {
     if (toolName === 'proxmox_restart_vm' || toolName.includes('reboot') || toolName.includes('restart') || toolName.includes('delete')) {
@@ -53,7 +53,7 @@ async function executeMcpTool(toolName, args = {}) {
   let result = null;
 
   try {
-    result = await tool.handler(args);
+    result = await tool.handler(args, context);
     return result;
   } catch (err) {
     statusCode = err.response?.status || 500;

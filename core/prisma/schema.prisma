@@ -46,6 +46,16 @@ enum ApprovalStatus {
   REJECTED
 }
 
+enum ExecutionStatus {
+  PENDING_APPROVAL
+  APPROVED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  REJECTED
+  EXPIRED
+}
+
 enum UserRole {
   SUPERADMIN     // Acesso global irrestrito, gerencia tenants e sistema
   TENANT_MASTER  // Gerente do tenant, cadastra usuários para o seu próprio tenant
@@ -177,6 +187,8 @@ model Equipment {
   osInfo               Json?         // Informações de SO, CPU, RAM, Disco e Uptime reportadas pelo agente
   // Trust On First Use (TOFU) - Fingerprint SSH/API
   knownHostKey         String?       // Armazena a chave pública/fingerprint. Bloqueia conexão se mudar.
+  pendingHostKey       String?       // Fingerprint aguardando confirmação humana no primeiro acesso.
+  pendingHostKeyAt     DateTime?
 
   // Vínculo Multi-Tenant
   tenantId             String?
@@ -195,11 +207,63 @@ model Equipment {
   incidents            Incident[]
   backupAudits         BackupAudit[]
   mcpTraces            McpTrace[]
+  executionRequests    ExecutionRequest[]
 
   @@index([tenantId])
   @@index([group])
   @@index([subgroup])
   @@map("equipments")
+}
+
+model ExecutionRequest {
+  id                String          @id @default(uuid())
+  equipmentId       String
+  equipment         Equipment       @relation(fields: [equipmentId], references: [id], onDelete: Restrict)
+  tenantId          String
+  actionKey         String
+  risk              String
+  status            ExecutionStatus @default(PENDING_APPROVAL)
+  requestedByUserId String
+  approvedByUserId  String?
+  idempotencyKey    String          @unique
+  output            String?
+  error             String?
+  expiresAt         DateTime?
+  approvedAt        DateTime?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  approval          ExecutionApproval?
+
+  @@index([tenantId, status])
+  @@index([equipmentId, createdAt])
+  @@map("execution_requests")
+}
+
+model ExecutionApproval {
+  id            String           @id @default(uuid())
+  executionId   String           @unique
+  execution     ExecutionRequest @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  code          String           @unique
+  requestedById String
+  approvedById  String?
+  expiresAt     DateTime
+  approvedAt    DateTime?
+  createdAt     DateTime         @default(now())
+
+  @@index([expiresAt])
+  @@map("execution_approvals")
+}
+
+model ExecutionLock {
+  resourceKey String   @id
+  executionId String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([expiresAt])
+  @@map("execution_locks")
 }
 
 model AuditLog {
@@ -317,4 +381,3 @@ model SystemMetric {
   @@index([timestamp])
   @@map("system_metrics")
 }
-

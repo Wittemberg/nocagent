@@ -580,7 +580,7 @@ function autonomousDiagnosticReasoner({ text, normalized, matchedEquipment, tele
 /**
  * Roteamento para Provedores LLM com RAG de Telemetria
  */
-async function callLlmReasoning({ systemPrompt, telemetryContext, userPrompt, senderName }) {
+async function callLlmReasoning({ systemPrompt, telemetryContext, userPrompt, senderName, executionContext }) {
   const enrichedUserPrompt = `${telemetryContext}\n\n[SOLICITAÇÃO DO OPERADOR (${senderName || 'Técnico'})]\n${userPrompt}`;
 
   // 1. Anthropic Claude (Com suporte a Tool Calling)
@@ -616,7 +616,7 @@ async function callLlmReasoning({ systemPrompt, telemetryContext, userPrompt, se
           for (const block of response.content) {
             if (block.type === 'tool_use') {
               try {
-                const toolResult = await executeMcpTool(block.name, block.input);
+                const toolResult = await executeMcpTool(block.name, block.input, executionContext);
                 toolResultsContent.push({
                   type: 'tool_result',
                   tool_use_id: block.id,
@@ -676,7 +676,7 @@ async function callLlmReasoning({ systemPrompt, telemetryContext, userPrompt, se
           for (const tc of replyMsg.tool_calls) {
             try {
               const args = JSON.parse(tc.function.arguments || '{}');
-              const toolResult = await executeMcpTool(tc.function.name, args);
+              const toolResult = await executeMcpTool(tc.function.name, args, executionContext);
               messages.push({
                 role: 'tool',
                 tool_call_id: tc.id,
@@ -752,7 +752,7 @@ async function callLlmReasoning({ systemPrompt, telemetryContext, userPrompt, se
 /**
  * Processador principal de mensagens do Hermes AI Engine com Telemetria RAG e Raciocínio Diagnóstico
  */
-async function processMessage({ text, senderPhone, senderName, tenantId = null, role = 'OPERATOR', dashboardContext = '' }) {
+async function processMessage({ text, senderPhone, senderName, tenantId = null, role = 'OPERATOR', actorId = null, dashboardContext = '' }) {
   const normalized = (text || '').toLowerCase().trim();
 
   // 0. Trava de Emergência Global (Emergency Kill-Switch)
@@ -827,6 +827,7 @@ async function processMessage({ text, senderPhone, senderName, tenantId = null, 
     telemetryContext,
     userPrompt: text,
     senderName,
+    executionContext: { actor: actorId ? { id: actorId, role, tenantId } : null },
   });
 
   if (llmResponse) {
