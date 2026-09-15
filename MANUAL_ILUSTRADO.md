@@ -209,39 +209,56 @@ sequenceDiagram
 
 ---
 
-### 🔹 Cenário 5: O Cofre de Senhas (Como seus acessos são protegidos)
+### 🔹 Cenário 5: Segurança Absoluta (A Analogia do "Porteiro Blindado")
 
-Muitas pessoas têm medo de colocar senhas de roteadores em sistemas de IA. Aqui está **exatamente como funciona o isolamento**:
+Muitas empresas têm receio justificado de colocar senhas de roteadores e servidores na mão de uma Inteligência Artificial. Aqui está **exatamente como nossa arquitetura resolve isso usando o conceito de Proxy de Execução Zero-Trust (Conhecimento Zero)**.
+
+Para entender fácil, pense na seguinte analogia:
+
+Imagine que a IA é um funcionário que precisa checar um servidor. 
+- **No modelo antigo (Inseguro):** Você entrega a chave-mestra (senha) na mão do funcionário. Ele vai até a sala, destranca e faz o que precisa. O risco? Ele está andando com a chave no bolso. Pode anotar num papel (vazar a senha no chat) ou ser enganado e entregar a chave para a pessoa errada.
+- **No nosso modelo (O Porteiro Blindado):** A IA nunca recebe a chave! Quando ela precisa checar o servidor, ela escreve um bilhete para o nosso "Porteiro Blindado" (o Proxy do NOC-Agent): *"Por favor, teste a conexão do Roteador X e me dê a resposta"*. A IA passa o bilhete por debaixo da porta. O Porteiro, que fica trancado e isolado, pega a chave no cofre criptografado, acessa o roteador, anota o resultado e devolve **apenas o papel com a resposta** para a IA. 
+
+A IA nunca toca, não vê e não tem a menor ideia de qual é a senha.
 
 ```mermaid
 flowchart LR
-    subgraph WEB["Painel Web"]
-        Form["Você digita a API Key / Senha do pfSense"]
+    subgraph WEB["Painel Web NOC"]
+        Form["Operador cadastra a Senha / API Key"]
     end
 
-    subgraph BACKEND["Backend Seguro"]
-        Enc["Motor de Criptografia AES-256-GCM"]
-        ChaveMestra["Chave Mestra (.env do servidor)"]
+    subgraph BACKEND["O Porteiro Blindado (Proxy)"]
+        Enc["Criptografia AES-256-GCM"]
+        Proxy["Proxy de Execução Seguro"]
+        TOFU["Validador de Assinatura (Anti-MitM)"]
     end
 
-    subgraph BANCO["Banco PostgreSQL"]
+    subgraph BANCO["Banco de Dados"]
         DB[(Dados Cifrados:\n9f8a7c6e5b4d...)]
     end
 
-    subgraph LLM_BOX["Inteligência Artificial (Claude/OpenAI)"]
-        AI["IA nunca vê as senhas! Ela só pede:\n'Execute o teste no pfSense'"]
+    subgraph LLM_BOX["Inteligência Artificial (Hermes)"]
+        AI["A IA NUNCA vê a senha!\nEla apenas envia 'bilhetes'."]
     end
 
-    Form -->|Tráfego HTTPS| Enc
-    ChaveMestra --> Enc
-    Enc -->|Grava apenas o hash cifrado| DB
+    subgraph EQUIPAMENTO["Roteador / Servidor"]
+        Target["Equipamento do Cliente"]
+    end
+
+    Form -->|Gravação| Enc
+    Enc --> DB
     
-    AI -.->|Sem acesso às chaves| BACKEND
+    AI -->|Passa o Bilhete| Proxy
+    Proxy -->|Pega chave no cofre| TOFU
+    TOFU -->|Destranca o equipamento| Target
+    Target -->|Retorna apenas o Log/Resposta| Proxy
+    Proxy -->|Devolve o resultado final| AI
 ```
 
-1. **A IA nunca sabe a sua senha:** Quando o Claude ou GPT-4o estão conversando com você, eles **não têm acesso aos seus tokens**. A IA apenas diz *"chame a função de checar gateways"*.
-2. **Descriptografia instantânea:** O backend busca o registro no banco, usa a chave mestra para abrir a credencial na memória RAM apenas pelo tempo da requisição HTTPS (alguns milissegundos) e depois descarta.
-3. **Dump do banco inútil:** Se alguém roubar o arquivo `.sql` do seu banco de dados, só encontrará textos indecifráveis.
+#### 🛡️ Diferenciais de Mercado (Segurança Nível Bancário):
+1. **Inteligência Artificial "Zero-Knowledge" (Conhecimento Zero):** Se a IA tentar fazer algo errado, for induzida ao erro por um hacker (prompt injection) ou "alucinar", ela fisicamente não tem como vazar as senhas da sua empresa, pois ela não possui acesso ao banco de dados onde elas estão guardadas.
+2. **Anti-MitM Integrado (Trust On First Use - TOFU):** Se o seu equipamento for hackeado, clonado, ou o tráfego for interceptado por um invasor no meio do caminho (Man-in-the-Middle), o NOC-Agent detectará a mudança silenciosa na assinatura do servidor e **bloqueará o acesso imediatamente**. Ele soa o alarme no seu WhatsApp em vez de entregar as credenciais para o equipamento falso.
+3. **Criptografia AES-256-GCM:** A chave mestra que tranca o cofre fica fora do banco de dados (injetada direto na memória do servidor em nuvem). Se um cibercriminoso conseguir roubar um backup do seu banco de dados, ele só levará um arquivo inútil e impossível de ser decifrado.
 
 ---
 

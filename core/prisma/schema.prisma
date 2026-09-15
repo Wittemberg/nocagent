@@ -175,6 +175,8 @@ model Equipment {
   agentToken           String?       // Token persistente após auto-registro
   agentVersion         String?
   osInfo               Json?         // Informações de SO, CPU, RAM, Disco e Uptime reportadas pelo agente
+  // Trust On First Use (TOFU) - Fingerprint SSH/API
+  knownHostKey         String?       // Armazena a chave pública/fingerprint. Bloqueia conexão se mudar.
 
   // Vínculo Multi-Tenant
   tenantId             String?

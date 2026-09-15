@@ -103,31 +103,52 @@ module.exports = {
       }
       
       // ---------------------------------------------------------
-      // CONVERSÃO DE DAV PARA MP4 USANDO FFMPEG
+      // CONVERSÃO DE DAV PARA MP4 USANDO FFMPEG (3 tentativas progressivas)
+      // O formato .dav da Dahua/Intelbras é proprietário e mal-formado.
+      // Estratégia 1: cópia direta do stream (mais rápido, sem re-encode).
+      // Estratégia 2: forçar input como H.264 raw (para .dav sem cabeçalho correto).
+      // Estratégia 3: re-encode completo com libx264 (fallback final).
       // ---------------------------------------------------------
       let ffmpegSuccess = false;
-      try {
-        // Removemos -c:a aac porque se a câmera não tiver microfone, o ffmpeg falhava.
-        // O .dav da Dahua costuma ser mal formatado no final, fazendo o ffmpeg dar exit code != 0, 
-        // então não podemos confiar apenas no throw do execPromise.
-        const ffmpegCmd = `ffmpeg -y -i "${filePathDav}" -c:v libx264 -crf 24 -preset fast "${filePathMp4}"`;
+
+      const ffmpegStrategies = [
+        {
+          label: 'stream-copy',
+          cmd: `ffmpeg -y -i "${filePathDav}" -c copy "${filePathMp4}"`,
+        },
+        {
+          label: 'h264-raw',
+          cmd: `ffmpeg -y -f h264 -i "${filePathDav}" -c copy "${filePathMp4}"`,
+        },
+        {
+          label: 're-encode',
+          cmd: `ffmpeg -y -i "${filePathDav}" -c:v libx264 -crf 24 -preset fast -an "${filePathMp4}"`,
+        },
+      ];
+
+      for (const strategy of ffmpegStrategies) {
         try {
-          await execPromise(ffmpegCmd, { timeout: 60000 });
-        } catch (e) {
-          console.warn('FFmpeg retornou erro/warning, mas vamos verificar se o arquivo mp4 foi gerado.', e.message);
+          // Limpa mp4 anterior de tentativa falha antes de tentar novamente
+          if (fs.existsSync(filePathMp4)) fs.unlinkSync(filePathMp4);
+
+          await execPromise(strategy.cmd, { timeout: 90000 }).catch((e) => {
+            // O ffmpeg pode retornar exit code != 0 mesmo gerando arquivo válido (bug com .dav)
+            console.warn(`FFmpeg [${strategy.label}] aviso (não fatal):`, e.message?.slice(0, 200));
+          });
+
+          if (fs.existsSync(filePathMp4) && fs.statSync(filePathMp4).size > 10 * 1024) {
+            ffmpegSuccess = true;
+            console.log(`FFmpeg conversão bem-sucedida com estratégia: ${strategy.label}`);
+            if (fs.existsSync(filePathDav)) fs.unlinkSync(filePathDav);
+            break;
+          }
+        } catch (strategyErr) {
+          console.warn(`FFmpeg [${strategy.label}] falhou:`, strategyErr.message?.slice(0, 200));
         }
-        
-        // Verifica se o MP4 foi realmente gerado e tem um tamanho razoável (ex: > 10KB)
-        if (fs.existsSync(filePathMp4) && fs.statSync(filePathMp4).size > 10 * 1024) {
-           ffmpegSuccess = true;
-           if (fs.existsSync(filePathDav)) fs.unlinkSync(filePathDav); // Apaga o .dav
-        } else {
-           throw new Error("Arquivo MP4 não foi gerado ou está vazio.");
-        }
-        
-      } catch (ffmpegErr) {
-        console.error('Erro na conversão FFmpeg:', ffmpegErr.message);
-        // Mesmo se falhar a conversão, envia o arquivo .dav para o usuário baixar
+      }
+
+      if (!ffmpegSuccess) {
+        console.error('Todas as estratégias FFmpeg falharam. Entregando .dav original.');
         return {
           success: true,
           message: 'Gravação obtida (.dav), mas falhou a conversão para mp4.',

@@ -198,14 +198,18 @@ FASE 5: Enterprise Engine, Observabilidade & Feature Flags (Pennant + Telescope 
 - **Objetivo:** Materializar o "Cofre de Storages Ativo".
 - **Ação:** Criar rotinas (Cron Jobs) autônomas que acessam Mikrotiks e pfSenses, realizam os dumps/exports de configuração, criptografam e enviam automaticamente para buckets S3/MinIO vinculados aos equipamentos.
 
-### Vetor 2: Super-Poderes de CFTV para a IA (Hermes Skills)
+### Vetor 2: Segurança Zero-Trust para Agentes (Proxy de Execução)
+- **Objetivo:** Isolar o Agent de senhas em texto puro e proteger contra interceptações.
+- **Ação:** Implementação do Proxy de Execução para acesso a equipamentos. Adição do mecanismo Trust On First Use (TOFU) para SSH/APIs com capacidade de reset manual (Anti-MitM). Criação de skill rigorosa e documentação mercadológica focada em Zero-Knowledge AI.
+
+### Vetor 3: Super-Poderes de CFTV para a IA (Hermes Skills)
 - **Objetivo:** Habilitar a IA para atuar ativamente em DVRs e NVRs.
 - **Ação:** Implementar ferramentas MCP (`cctv_get_snapshot` e diagnósticos baseados na heurística de `AutoSignalType`) para que a IA consiga extrair fotos ao vivo e auditar câmeras remotamente via WhatsApp.
 
-### Vetor 3: Auto-Remediação Proativa (Zabbix -> Hermes)
+### Vetor 4: Auto-Remediação Proativa (Zabbix -> Hermes)
 - **Objetivo:** Tornar o NOC ativo a incidentes sem intervenção inicial.
 - **Ação:** Conectar Webhooks do Zabbix diretamente ao Agent. Quando um alerta (ex: CPU alta no Proxmox) disparar, o Hermes é ativado, investiga a causa raiz e solicita aprovação no WhatsApp (L2/L3) para intervir.
 
-### Vetor 4: NetAgent Daemon Remoto (Golang)
+### Vetor 5: NetAgent Daemon Remoto (Golang)
 - **Objetivo:** Substituir scripts de telemetria por um binário nativo.
 - **Ação:** Desenvolver um agente compilado ultra-leve em Go para rodar nas filiais (Linux/Windows) como serviço, enviando telemetria periódica via HTTP (outbound) sem exigir portas abertas no firewall do cliente.
