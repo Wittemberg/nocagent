@@ -2490,6 +2490,61 @@ app.delete('/api/equipments/:id', authenticateToken, async (req, res) => {
 });
 
 /**
+ * Reset do Fingerprint TOFU (Anti-MitM) — Apenas L2/L3
+ * Deve ser usado quando o equipamento foi legitimamente reformatado/trocado
+ * e a chave SSH mudou por motivo válido (não por ataque).
+ */
+app.post('/api/equipments/:id/reset-tofu', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Apenas operadores L2, L3 e SUPERADMIN podem resetar fingerprints
+    const allowedRoles = ['SUPERADMIN', 'TENANT_MASTER', 'L3_ADMIN', 'L2_OPERATOR'];
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Acesso negado: apenas operadores L2/L3 podem resetar fingerprints TOFU.' });
+    }
+
+    const equipment = await prisma.equipment.findUnique({ where: { id } });
+    if (!equipment) {
+      return res.status(404).json({ error: 'Equipamento não encontrado.' });
+    }
+
+    if (req.user.role !== 'SUPERADMIN' && equipment.tenantId !== req.user.tenantId) {
+      return res.status(403).json({ error: 'Acesso negado: este equipamento pertence a outra organização.' });
+    }
+
+    await prisma.equipment.update({
+      where: { id },
+      data: { knownHostKey: null },
+    });
+
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: 'RESET_TOFU_FINGERPRINT',
+          target: `${equipment.name} (${equipment.type})`,
+          status: 'SUCCESS',
+          source: 'WEB_DASHBOARD',
+          details: {
+            equipmentId: id,
+            resetBy: req.user.email || req.user.id,
+            reason: req.body.reason || 'Não informado',
+          },
+        },
+      });
+    } catch {}
+
+    return res.json({
+      status: 'tofu_reset',
+      message: `Fingerprint TOFU de "${equipment.name}" resetado com sucesso. O próximo acesso SSH irá registrar o novo fingerprint automaticamente.`,
+    });
+  } catch (error) {
+    console.error('Erro ao resetar TOFU:', error);
+    return res.status(500).json({ error: `Falha ao resetar fingerprint: ${error.message}` });
+  }
+});
+
+/**
  * Auditoria REAL de Backups salvos no Storage S3 (com Isolamento Multi-Tenant)
  */
 app.get('/api/backups', authenticateToken, async (req, res) => {

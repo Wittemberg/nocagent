@@ -194,13 +194,13 @@ FASE 5: Enterprise Engine, Observabilidade & Feature Flags (Pennant + Telescope 
 ## 📌 FASE 6: EXPANSÕES E VETORES DE ATAQUE FUTUROS (A Definir)
 > **Status:** Mapeados durante sessão de arquitetura. Aguardando priorização.
 
-### Vetor 1: Automação de Backups em Nuvem (Integração S3/MinIO)
-- **Objetivo:** Materializar o "Cofre de Storages Ativo".
-- **Ação:** Criar rotinas (Cron Jobs) autônomas que acessam Mikrotiks e pfSenses, realizam os dumps/exports de configuração, criptografam e enviam automaticamente para buckets S3/MinIO vinculados aos equipamentos.
-
-### Vetor 2: Segurança Zero-Trust para Agentes (Proxy de Execução)
+### Vetor 1: Segurança Zero-Trust para Agentes (Proxy de Execução) 🔥 PRIORIDADE
 - **Objetivo:** Isolar o Agent de senhas em texto puro e proteger contra interceptações.
 - **Ação:** Implementação do Proxy de Execução para acesso a equipamentos. Adição do mecanismo Trust On First Use (TOFU) para SSH/APIs com capacidade de reset manual (Anti-MitM). Criação de skill rigorosa e documentação mercadológica focada em Zero-Knowledge AI.
+
+### Vetor 2: Automação de Backups em Nuvem (Integração S3/MinIO)
+- **Objetivo:** Materializar o "Cofre de Storages Ativo".
+- **Ação:** Criar rotinas (Cron Jobs) autônomas que acessam Mikrotiks e pfSenses, realizam os dumps/exports de configuração, criptografam e enviam automaticamente para buckets S3/MinIO vinculados aos equipamentos.
 
 ### Vetor 3: Super-Poderes de CFTV para a IA (Hermes Skills)
 - **Objetivo:** Habilitar a IA para atuar ativamente em DVRs e NVRs.
